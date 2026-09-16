@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OMERTA AGENT — HTTP/WebSocket server (FastAPI/uvicorn).
+OMERTA AGENT — HTTP server (FastAPI/uvicorn).
 
 Same agent as the CLI; reachable from phone, desktop, or the Electron shell.
 All request logic lives in `core/api.py` so this file and the pure-stdlib
@@ -16,7 +16,6 @@ from fastapi.staticfiles import StaticFiles
 from core import config, auth, mcp, api
 
 app = FastAPI(title="OMERTA AGENT")
-HERE = config.RES_DIR
 api.boot()
 
 
@@ -93,6 +92,11 @@ def chat(payload: dict):
 @app.post("/api/model")
 def set_model(payload: dict):
     return _json(api.set_model(payload))
+
+
+@app.post("/api/mode")
+def set_mode(payload: dict):
+    return api.set_mode(payload)
 
 
 @app.get("/api/memory")

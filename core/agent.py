@@ -271,8 +271,24 @@ class Agent:
                 return {"status": "error", "reason": str(e)}
         return {"status": "error", "reason": f"unknown tool '{name}'"}
 
+    def _trim_history(self):
+        """Bound the in-context history so conversations can run forever.
+
+        Chats are unlimited; this only controls how much of the tail is replayed
+        to the model each turn. Older turns are already distilled into long-term
+        memory by _learn(), and memory.context_block() surfaces the relevant
+        parts back into the system prompt, so trimming loses no durable state.
+        """
+        lim = config.HISTORY_LIMIT
+        if lim and len(self.history) > lim:
+            self.history = self.history[-lim:]
+            # never begin the replayed window on a dangling assistant turn
+            while self.history and self.history[0]["role"] != "user":
+                self.history.pop(0)
+
     # ── main loop ────────────────────────────────────────────────────────
     def _loop(self, max_iters=None):
+        self._trim_history()
         max_iters = max_iters or config.MAX_TOOL_ITERS
         tool_log = []
         last = {}

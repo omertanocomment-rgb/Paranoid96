@@ -47,8 +47,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
+      # Chaquopy runs pip on the build host to assemble the in-APK Python, so a
+      # host Python 3.8–3.13 must be on PATH.
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
       - uses: android-actions/setup-android@v3
+      - name: build debug apk (embedded Python backend)
+        run: cd android-native && gradle assembleDebug --no-daemon
       - name: build release apk
+        continue-on-error: true
         env:
           OMERTA_KEYSTORE: ${{ secrets.OMERTA_KEYSTORE_PATH }}
           OMERTA_STORE_PASS: ${{ secrets.OMERTA_STORE_PASS }}

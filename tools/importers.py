@@ -122,10 +122,10 @@ def import_repo(directory, project=None):
                           "AndroidManifest.xml", "Package.swift"):
                 entry.append(str(f.relative_to(d)))
     top = sorted(exts.items(), key=lambda x: -x[1])[:10]
-    summary = (f"Repo '{project}' at {d}: "
-               f"{sum(exts.values())} files. "
-               f"Main types: {', '.join(f'{e or 'noext'}({c})' for e, c in top)}. "
-               f"Build files: {', '.join(entry[:10]) or 'none found'}.")
+    main_types = ", ".join(f"{e or 'noext'}({c})" for e, c in top)
+    build_files = ", ".join(entry[:10]) or "none found"
+    summary = (f"Repo '{project}' at {d}: {sum(exts.values())} files. "
+               f"Main types: {main_types}. Build files: {build_files}.")
     memory.remember(summary, project=project, kind="fact", tags="repo-scan", weight=2.0)
     return {"status": "ok", "source": "repo", "project": project, "summary": summary}
 

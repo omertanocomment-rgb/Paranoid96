@@ -48,6 +48,7 @@ def status_payload() -> dict:
     return {
         "providers": router.provider_status(),
         "active": config.get("OMERTA_PROVIDER", config.ACTIVE_PROVIDER),
+        "mode": config._norm_mode(config.get("OMERTA_MODE", config.MODE)),
         "always_ask": config.ALWAYS_ASK,
         "memory": memory.stats(),
         "skills": [{"name": s["name"], "description": s["description"]}
@@ -75,6 +76,12 @@ def set_model(payload: dict) -> dict:
         return {"error": "unknown provider", "_status": 400}
     config.set_setting("OMERTA_PROVIDER", pid)
     return {"ok": True, "provider": pid}
+
+
+def set_mode(payload: dict) -> dict:
+    mode = config._norm_mode((payload or {}).get("mode", "auto"))
+    config.set_setting("OMERTA_MODE", mode)
+    return {"ok": True, "mode": mode}
 
 
 def reload_plugins() -> dict:

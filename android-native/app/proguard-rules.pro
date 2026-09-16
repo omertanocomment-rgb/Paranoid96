@@ -1,7 +1,10 @@
-# The Activity is referenced from the manifest only — keep it and its
-# lifecycle callbacks, or R8 will strip the entry point.
+# Entry points referenced from the manifest — keep them or R8 strips them.
 -keep class com.omerta.agent.MainActivity { *; }
+-keep class com.omerta.agent.BackendService { *; }
 -keep class com.omerta.agent.BackendLauncher { *; }
+-keep class com.omerta.agent.OmertaPython { *; }
+-keep class com.omerta.agent.OmertaAssets { *; }
+
 -keepclassmembers class * extends android.app.Activity {
     public void *(android.view.View);
 }
@@ -10,3 +13,7 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 -dontwarn android.webkit.**
+
+# Chaquopy runtime + native bridge
+-keep class com.chaquo.python.** { *; }
+-dontwarn com.chaquo.python.**

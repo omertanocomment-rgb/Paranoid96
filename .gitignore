@@ -20,5 +20,5 @@ local.properties
 
 # build output
 artifacts/
-build_pkg/dist/
+build_pkg/
 android-native/app/build/

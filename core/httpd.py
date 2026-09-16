@@ -154,6 +154,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.chat(self._body()))
         if path == "/api/model":
             return self._json(api.set_model(self._body()))
+        if path == "/api/mode":
+            return self._json(api.set_mode(self._body()))
         if path == "/api/sync/push":
             return self._json(api.sync_push(self._body()))
         if path == "/api/sync/run":

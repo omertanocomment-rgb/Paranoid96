@@ -1,10 +1,15 @@
 package com.omerta.agent;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -21,32 +26,31 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.os.Handler;
-import android.os.Looper;
 
 /**
- * OMERTA AGENT — thin shell around the agent's web UI.
+ * OMERTA AGENT — self-contained app.
  *
- * The agent itself runs as a Python backend (Termux on this phone, or a
- * machine on the LAN). An APK sandbox can't spawn git/adb/fastboot or a
- * build toolchain, so the brain deliberately stays where it has a shell —
- * this is the interface, not the agent.
+ * The agent backend runs INSIDE this app (Chaquopy + BackendService). On
+ * launch we start it, wait for it to answer on loopback, then load its web UI
+ * in the WebView. No Termux, no terminal, nothing to install. Power users can
+ * still point the app at a backend on another machine over the LAN.
  */
 public class MainActivity extends Activity {
 
     private static final String PREFS = "omerta";
     private static final String K_HOST = "host";
     private static final String K_TOKEN = "token";
+    private static final String LOCAL = "127.0.0.1:" + OmertaPython.PORT;
 
     private static final int AMBER = Color.parseColor("#ffb020");
     private static final int BG = Color.parseColor("#0b0a08");
     private static final int PANEL = Color.parseColor("#141210");
-    private static final int BORDER = Color.parseColor("#2a2620");
     private static final int TEXT = Color.parseColor("#e8ddc8");
     private static final int MUTED = Color.parseColor("#8a8272");
 
     private WebView web;
-    private View connectScreen;
+    private View statusScreen;
+    private View remoteScreen;
     private TextView status;
     private SharedPreferences prefs;
 
@@ -65,62 +69,78 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         web.setVisibility(View.GONE);
 
-        connectScreen = buildConnectScreen();
-        holder.addView(connectScreen, new ViewGroup.LayoutParams(
+        statusScreen = buildStatusScreen();
+        holder.addView(statusScreen, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        String host = prefs.getString(K_HOST, "127.0.0.1:8787");
-        autoStart(host, prefs.getString(K_TOKEN, ""));
+        remoteScreen = buildRemoteScreen();
+        remoteScreen.setVisibility(View.GONE);
+        holder.addView(remoteScreen, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        maybeAskNotifications();
+
+        // If the user previously pinned a remote backend, honour it; otherwise
+        // run the embedded one.
+        String host = prefs.getString(K_HOST, LOCAL);
+        if (host.equals(LOCAL)) {
+            startEmbedded();
+        } else {
+            connectRemote(host, prefs.getString(K_TOKEN, ""));
+        }
     }
 
-    /**
-     * Tap-the-icon flow: if the backend isn't up, ask Termux to start it,
-     * poll until it answers, then load the UI. No terminal, no typing.
-     */
-    private void autoStart(final String host, final String token) {
-        final boolean local = host.startsWith("127.0.0.1") || host.startsWith("localhost");
-        status.setText("checking backend…");
+    private void maybeAskNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+        }
+    }
+
+    /** Start the in-app backend and wait for it to come up. */
+    private void startEmbedded() {
+        showStatus();
+        status.setText("starting agent…");
+        BackendLauncher.start(this);
         new Thread(() -> {
-            if (BackendLauncher.isUp(host, 1500)) {
-                ui(() -> connect(host, token));
-                return;
-            }
-            if (!local) {                       // remote box: nothing we can start
-                ui(() -> { showConnect(); status.setText(""); });
-                return;
-            }
-            if (!BackendLauncher.termuxInstalled(MainActivity.this)) {
-                ui(() -> { showConnect();
-                    status.setText("Termux not installed — it runs the agent backend."); });
-                return;
-            }
-            ui(() -> status.setText("starting backend via Termux…"));
-            final boolean sent = BackendLauncher.start(MainActivity.this, 8787);
-            // give it time to boot python + import the agent
-            for (int i = 0; i < 40; i++) {
-                try { Thread.sleep(750); } catch (InterruptedException ignored) {}
-                if (BackendLauncher.isUp(host, 1200)) {
-                    ui(() -> connect(host, token));
+            // first launch extracts Python + payload and compiles bytecode,
+            // so give it a generous window.
+            for (int i = 0; i < 120; i++) {
+                if (BackendLauncher.isUp(LOCAL, 1200)) {
+                    ui(() -> connect(OmertaPython.baseUrl()));
                     return;
                 }
-                final int sec = (i * 750) / 1000;
-                ui(() -> status.setText("starting backend… " + sec + "s"));
+                final int sec = i;
+                ui(() -> status.setText("starting agent… " + sec + "s\n"
+                        + "(first launch unpacks Python — this is a one-time step)"));
+                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
             }
-            ui(() -> {
-                showConnect();
-                status.setText(sent
-                        ? "Backend didn't come up. In Termux run:  omerta serve\n"
-                          + "If nothing happens, set allow-external-apps=true in\n"
-                          + "~/.termux/termux.properties and restart Termux."
-                        : "Termux refused the start request. Set\n"
-                          + "allow-external-apps=true in ~/.termux/termux.properties.");
-            });
-        }).start();
+            ui(() -> status.setText("Backend didn't come up.\n"
+                    + "Reopen the app, or use Advanced to connect to a LAN backend."));
+        }, "omerta-wait").start();
+    }
+
+    private void connectRemote(final String host, final String token) {
+        showStatus();
+        status.setText("connecting to " + host + "…");
+        new Thread(() -> {
+            if (BackendLauncher.isUp(host, 2500)) {
+                ui(() -> {
+                    String url = "http://" + host + "/";
+                    if (token != null && !token.isEmpty())
+                        url += "?token=" + android.net.Uri.encode(token);
+                    connect(url);
+                });
+            } else {
+                ui(() -> { showRemote();
+                    status.setText("Couldn't reach " + host); });
+            }
+        }, "omerta-remote").start();
     }
 
     private void ui(Runnable r) { new Handler(Looper.getMainLooper()).post(r); }
 
-    /** Simple FrameLayout substitute so we avoid any support-library dependency. */
     private static class FrameHolder extends android.widget.FrameLayout {
         FrameHolder(android.content.Context c) { super(c); setBackgroundColor(BG); }
     }
@@ -129,7 +149,7 @@ public class MainActivity extends Activity {
     private void configureWebView() {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);          // the UI keeps state in localStorage
+        s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
@@ -140,16 +160,19 @@ public class MainActivity extends Activity {
             @Override
             public void onReceivedError(WebView v, WebResourceRequest req, WebResourceError err) {
                 if (req != null && req.isForMainFrame()) {
-                    showConnect();
+                    showStatus();
+                    status.setText("Lost the backend — retrying…");
                     Toast.makeText(MainActivity.this,
-                            "Can't reach the backend — is `omerta serve` running?",
-                            Toast.LENGTH_LONG).show();
+                            "Reconnecting to the agent backend…", Toast.LENGTH_SHORT).show();
+                    ui(() -> new Handler(Looper.getMainLooper()).postDelayed(
+                            () -> startEmbedded(), 1500));
                 }
             }
         });
     }
 
-    private View buildConnectScreen() {
+    // ── status / splash screen ───────────────────────────────────────────
+    private View buildStatusScreen() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
@@ -165,18 +188,60 @@ public class MainActivity extends Activity {
         title.setLetterSpacing(0.18f);
         root.addView(title);
 
+        status = new TextView(this);
+        status.setTextColor(MUTED);
+        status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(0, dp(18), 0, 0);
+        root.addView(status);
+
+        Button advanced = new Button(this);
+        advanced.setText("ADVANCED — CONNECT TO A LAN BACKEND");
+        advanced.setAllCaps(true);
+        advanced.setTextColor(MUTED);
+        advanced.setBackgroundColor(PANEL);
+        advanced.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(28);
+        advanced.setLayoutParams(lp);
+        advanced.setOnClickListener(v -> showRemote());
+        root.addView(advanced);
+
+        return root;
+    }
+
+    // ── remote (LAN) connect screen ──────────────────────────────────────
+    private View buildRemoteScreen() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER);
+        root.setBackgroundColor(BG);
+        int pad = dp(24);
+        root.setPadding(pad, pad, pad, pad);
+
+        TextView title = new TextView(this);
+        title.setText("CONNECT TO A BACKEND");
+        title.setTextColor(AMBER);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        title.setGravity(Gravity.CENTER);
+        title.setLetterSpacing(0.14f);
+        root.addView(title);
+
         TextView sub = new TextView(this);
-        sub.setText("\nConnect to your agent backend.\nTermux on this phone, or any machine on your network.\n");
+        sub.setText("\nRun `omerta serve` on another machine and enter its LAN "
+                + "address and token. Or go back to use the built-in agent.\n");
         sub.setTextColor(MUTED);
-        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         sub.setGravity(Gravity.CENTER);
         root.addView(sub);
 
-        final EditText host = field("127.0.0.1:8787", prefs.getString(K_HOST, "127.0.0.1:8787"));
+        final EditText host = field("192.168.1.42:8787", prefs.getString(K_HOST, ""));
         root.addView(label("BACKEND ADDRESS"));
         root.addView(host);
 
-        final EditText token = field("token (blank for localhost)", prefs.getString(K_TOKEN, ""));
+        final EditText token = field("token from the server console",
+                prefs.getString(K_TOKEN, ""));
         token.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
         root.addView(label("ACCESS TOKEN"));
         root.addView(token);
@@ -195,43 +260,24 @@ public class MainActivity extends Activity {
             if (h.isEmpty()) return;
             String t = token.getText().toString().trim();
             prefs.edit().putString(K_HOST, h).putString(K_TOKEN, t).apply();
-            connect(h, t);
+            connectRemote(h, t);
         });
         root.addView(go);
 
-        status = new TextView(this);
-        status.setTextColor(AMBER);
-        status.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        status.setGravity(Gravity.CENTER);
-        status.setPadding(0, dp(12), 0, 0);
-        root.addView(status);
-
-        Button retry = new Button(this);
-        retry.setText("START BACKEND IN TERMUX");
-        retry.setTextColor(AMBER);
-        retry.setBackgroundColor(PANEL);
-        retry.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        Button back = new Button(this);
+        back.setText("USE BUILT-IN AGENT");
+        back.setTextColor(AMBER);
+        back.setBackgroundColor(PANEL);
+        back.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rp.topMargin = dp(8);
-        retry.setLayoutParams(rp);
-        retry.setOnClickListener(v -> {
-            if (!BackendLauncher.termuxInstalled(this)) {
-                BackendLauncher.openTermux(this);
-                return;
-            }
-            autoStart(prefs.getString(K_HOST, "127.0.0.1:8787"),
-                      prefs.getString(K_TOKEN, ""));
+        rp.topMargin = dp(10);
+        back.setLayoutParams(rp);
+        back.setOnClickListener(v -> {
+            prefs.edit().putString(K_HOST, LOCAL).putString(K_TOKEN, "").apply();
+            startEmbedded();
         });
-        root.addView(retry);
-
-        TextView hint = new TextView(this);
-        hint.setText("\nOn this phone: run  omerta serve  in Termux and keep "
-                + "127.0.0.1:8787 — localhost needs no token.\n\n"
-                + "Remote machine: use its LAN IP and the token the server printed.");
-        hint.setTextColor(MUTED);
-        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        root.addView(hint);
+        root.addView(back);
 
         return root;
     }
@@ -258,17 +304,23 @@ public class MainActivity extends Activity {
         return e;
     }
 
-    private void connect(String hostPort, String token) {
-        String url = "http://" + hostPort + "/";
-        if (token != null && !token.isEmpty()) url += "?token=" + android.net.Uri.encode(token);
-        connectScreen.setVisibility(View.GONE);
+    private void connect(String url) {
+        statusScreen.setVisibility(View.GONE);
+        remoteScreen.setVisibility(View.GONE);
         web.setVisibility(View.VISIBLE);
         web.loadUrl(url);
     }
 
-    private void showConnect() {
+    private void showStatus() {
         web.setVisibility(View.GONE);
-        connectScreen.setVisibility(View.VISIBLE);
+        remoteScreen.setVisibility(View.GONE);
+        statusScreen.setVisibility(View.VISIBLE);
+    }
+
+    private void showRemote() {
+        web.setVisibility(View.GONE);
+        statusScreen.setVisibility(View.GONE);
+        remoteScreen.setVisibility(View.VISIBLE);
     }
 
     private int dp(int v) {
@@ -280,8 +332,6 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (web.getVisibility() == View.VISIBLE && web.canGoBack()) {
             web.goBack();
-        } else if (web.getVisibility() == View.VISIBLE) {
-            showConnect();                      // back out to the connect screen
         } else {
             super.onBackPressed();
         }

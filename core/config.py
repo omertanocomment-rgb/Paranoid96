@@ -274,11 +274,30 @@ OFFLINE_FALLBACK = get("OMERTA_OFFLINE_FALLBACK", "ollama")
 CONNECTIVITY_TIMEOUT = 2.5
 MAX_TOKENS = int(get("OMERTA_MAX_TOKENS", 4096))
 
+# Explicit network mode, independent of which provider is chosen:
+#   auto    — online if reachable, otherwise local; switches on its own
+#   offline — local models only, never touches the network (true unlimited)
+#   online  — cloud providers only
+# This is what the UI's OFFLINE / ONLINE / AUTO switch sets.
+def _norm_mode(v):
+    v = str(v or "auto").lower()
+    return v if v in ("auto", "offline", "online") else "auto"
+
+
+MODE = _norm_mode(get("OMERTA_MODE", "auto"))
+
 # ── Task persistence ─────────────────────────────────────────────────────
 # "Tries its hardest": how many times the executor re-plans after a failure
 # before giving up and reporting honestly.
 MAX_TOOL_ITERS = int(get("OMERTA_MAX_TOOL_ITERS", 12))
 MAX_RETRY_STRATEGIES = int(get("OMERTA_MAX_RETRIES", 4))
+
+# Chats are unlimited — there is no cap on how many messages a conversation can
+# hold. To keep an endless conversation from eventually overflowing the model's
+# context window, only the most recent turns are kept "in context"; everything
+# older has already been distilled into long-term memory (see Agent._learn), so
+# nothing is lost. 0 disables trimming entirely.
+HISTORY_LIMIT = int(get("OMERTA_HISTORY_LIMIT", 60))
 
 # ── Small-model / low-RAM mode ────────────────────────────────────────────
 # A 1.5B model on a 4GB phone cannot hold the full system prompt (persona +

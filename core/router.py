@@ -58,9 +58,23 @@ def _try(pid, messages, system, max_tokens, stream_cb):
             "offline": not spec.get("needs_internet", False)}
 
 
+def _mode():
+    return config._norm_mode(config.get("OMERTA_MODE", config.MODE))
+
+
+def _apply_mode(order, mode):
+    """Restrict provider order to the requested network mode."""
+    if mode == "offline":
+        return [p for p in order if not config.PROVIDERS[p].get("needs_internet")]
+    if mode == "online":
+        return [p for p in order if config.PROVIDERS[p].get("needs_internet")]
+    return order
+
+
 def complete(messages, system="", max_tokens=None, stream_cb=None) -> dict:
     max_tokens = max_tokens or config.MAX_TOKENS
     active = config.get("OMERTA_PROVIDER", config.ACTIVE_PROVIDER)
+    mode = _mode()
     errors = []
 
     if active != "auto" and active in config.PROVIDERS:
@@ -69,11 +83,20 @@ def complete(messages, system="", max_tokens=None, stream_cb=None) -> dict:
         if fb and fb != active and fb in config.PROVIDERS:
             order.append(fb)
     else:
-        net = has_internet()
+        net = has_internet() if mode != "offline" else False
         order = [p for p in config.ROUTING_ORDER if p in config.PROVIDERS]
         if not net:
             order = [p for p in order
                      if not config.PROVIDERS[p].get("needs_internet")]
+
+    order = _apply_mode(order, mode)
+    if not order:
+        raise ProviderError(
+            f"No provider fits '{mode}' mode.\n"
+            + ("  offline mode needs a local model — start Ollama or llama.cpp, "
+               "or switch to Auto/Online.\n" if mode == "offline"
+               else "  online mode needs an API key — set one in Settings, "
+                    "or switch to Auto/Offline.\n"))
 
     for pid in order:
         try:

@@ -1,1 +1,6 @@
-plugins { id 'com.android.application' version '8.5.2' apply false }
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+    // Chaquopy embeds a full CPython + our pip deps into the APK, so the agent
+    // backend runs in-process — no Termux, no external runtime to install.
+    id 'com.chaquo.python' version '16.0.0' apply false
+}

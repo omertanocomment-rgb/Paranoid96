@@ -71,6 +71,9 @@ select{background:var(--bg);color:var(--text);border:1px solid var(--border);pad
 .thinking{color:var(--muted);font-style:italic}
 .tool{font-size:.7rem;color:var(--muted);align-self:flex-start;padding:4px 9px;
   border-left:2px solid var(--amber-dim);background:var(--panel)}
+.modebtn{flex:1;padding:8px;border:1px solid var(--border);background:var(--bg);
+  color:var(--muted);border-radius:6px;font-family:inherit;font-size:.72rem;cursor:pointer}
+.modebtn.on{border-color:var(--amber);color:var(--amber);background:var(--panel2)}
 </style>
 </head>
 <body>
@@ -92,6 +95,14 @@ select{background:var(--bg);color:var(--text);border:1px solid var(--border);pad
 
 <div id="panel" onclick="if(event.target.id==='panel')closePanel()">
   <div id="panelInner">
+    <h3>MODE</h3>
+    <div id="modeSel" style="display:flex;gap:6px">
+      <button class="modebtn" data-mode="auto" onclick="setMode('auto')">AUTO</button>
+      <button class="modebtn" data-mode="offline" onclick="setMode('offline')">OFFLINE</button>
+      <button class="modebtn" data-mode="online" onclick="setMode('online')">ONLINE</button>
+    </div>
+    <div style="font-size:.66rem;color:var(--muted);margin-top:5px">
+      Offline = local models only, unlimited. Online = cloud APIs. Auto switches.</div>
     <h3>BRAIN</h3>
     <select id="providerSel" onchange="setProvider()"></select>
     <div id="providers"></div>
@@ -206,6 +217,7 @@ async function loadStatus(){
   const s=await (await fetch('/api/status')).json();
   document.getElementById('askPill').textContent = s.always_ask?'ASKS FIRST':'AUTO-RUN';
   document.getElementById('askPill').className = 'pill'+(s.always_ask?' on':'');
+  if(s.mode) paintMode(s.mode);
   const sel=document.getElementById('providerSel');
   sel.innerHTML='<option value="auto">auto (best available)</option>'+
     Object.entries(s.providers).map(([k,v])=>
@@ -226,6 +238,16 @@ async function loadStatus(){
   (s.memory.projects||[]).forEach(p=>{if(!have.includes(p)){
     const o=document.createElement('option');o.value=o.textContent=p;ps.appendChild(o);}});
   ps.value=project;
+}
+function paintMode(m){
+  document.querySelectorAll('.modebtn').forEach(b=>
+    b.classList.toggle('on', b.dataset.mode===m));
+}
+async function setMode(m){
+  paintMode(m);
+  await fetch('/api/mode'+tokenParam(),{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({mode:m})});
+  loadStatus();
 }
 async function setProvider(){
   const v=document.getElementById('providerSel').value;
