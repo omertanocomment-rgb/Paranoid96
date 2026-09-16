@@ -108,6 +108,21 @@ class Memory:
         return self.teach(key, value, scope="project",
                           type="SUCCESS" if ok else "FAILURE", source=source)
 
+    def learned_context(self, limit: int = 40) -> str:
+        """Format durable teachings (RULE/LESSON/FACT/PROCEDURE) for the system prompt,
+        so the model applies what the operator has taught it."""
+        rows = self.conn.execute(
+            "SELECT scope,type,key,value FROM memory "
+            "WHERE status='active' AND type IN ('RULE','LESSON','FACT','PROCEDURE') "
+            "ORDER BY CASE type WHEN 'RULE' THEN 0 WHEN 'PROCEDURE' THEN 1 "
+            "WHEN 'FACT' THEN 2 ELSE 3 END, created_at DESC LIMIT ?", (limit,)).fetchall()
+        if not rows:
+            return ""
+        lines = ["Operator-taught knowledge (apply unless it conflicts with safety):"]
+        for r in rows:
+            lines.append(f"- [{r['type']}] {r['key']}: {r['value']}")
+        return "\n".join(lines)
+
     @staticmethod
     def _row(r: sqlite3.Row) -> MemoryItem:
         return MemoryItem(

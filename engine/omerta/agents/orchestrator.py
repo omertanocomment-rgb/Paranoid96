@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from ..models.base import Message
 from ..models.router import Router
+from ..memory.db import Memory
 from .. import constitution
 
 ROLES = {
@@ -33,9 +34,16 @@ class AgentResult:
 
 
 class Orchestrator:
-    def __init__(self, router: Router | None = None):
+    def __init__(self, router: Router | None = None, memory: Memory | None = None):
         self.router = router or Router()
         self.constitution = constitution.load()
+        self._memory = memory
+        self._owns_memory = memory is None
+
+    def _mem(self) -> Memory:
+        if self._memory is None:
+            self._memory = Memory()
+        return self._memory
 
     def _system(self, role: str) -> str:
         persona = ROLES.get(role, ROLES["developer"])
@@ -45,11 +53,13 @@ class Orchestrator:
         parts = [base, persona]
         if self.constitution:
             parts.append("Project constitution:\n" + self.constitution)
+        taught = self._mem().learned_context()
+        if taught:
+            parts.append(taught)
         return "\n\n".join(parts)
 
     def run(self, role: str, task: str, category: str = "coding") -> AgentResult:
-        provider = self.router.provider()
-        model = self.router.model_for(category)
+        provider, model = self.router.resolve(self.router.model_for(category))
         comp = provider.complete(
             [Message("user", task)], model=model,
             system=self._system(role), effort=self.router.config.effort,

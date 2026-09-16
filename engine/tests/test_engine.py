@@ -72,7 +72,31 @@ def test_router_reports_provider_status(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     r = Router(Config())
     status = dict((n, ok) for n, ok, _ in r.status())
-    assert "anthropic" in status
+    # All three providers are registered ("all different AI").
+    assert {"anthropic", "openai", "ollama"} <= set(status)
     # No key -> anthropic reports unavailable (honest degradation).
     assert status["anthropic"] is False
     assert "planning" in CATEGORIES
+
+
+def test_router_resolves_provider_model(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMERTA_HOME", str(tmp_path))
+    r = Router(Config())
+    p, m = r.resolve("openai:gpt-4o")
+    assert p.name == "openai" and m == "gpt-4o"
+    p, m = r.resolve("ollama:llama3.1")
+    assert p.name == "ollama" and m == "llama3.1"
+    # Bare id -> default provider (anthropic), model passed through.
+    p, m = r.resolve("claude-opus-5")
+    assert p.name == "anthropic" and m == "claude-opus-5"
+
+
+def test_memory_learned_context_injects_rules(tmp_path):
+    mem = Memory(db_path=tmp_path / "m.db")
+    mem.teach("style", "always answer in bullet points", scope="global", type="RULE")
+    mem.teach("fact.board", "target is a Pixel 6", scope="project", type="FACT")
+    ctx = mem.learned_context()
+    assert "bullet points" in ctx and "Pixel 6" in ctx
+    # RULE ranked before FACT.
+    assert ctx.index("bullet points") < ctx.index("Pixel 6")
+    mem.close()

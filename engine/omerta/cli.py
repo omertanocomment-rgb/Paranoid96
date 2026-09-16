@@ -26,17 +26,31 @@ def cmd_doctor(_args):
     _p(doctor.render(doctor.run()))
 
 
+def _chat_system() -> str:
+    """Constitution + operator-taught memory, so chat applies what you teach."""
+    parts = []
+    con = constitution.load()
+    if con:
+        parts.append(con)
+    mem = Memory()
+    taught = mem.learned_context()
+    mem.close()
+    if taught:
+        parts.append(taught)
+    return "\n\n".join(parts)
+
+
 def cmd_chat(args):
     router = Router()
-    provider = router.provider()
+    provider, model = router.resolve(args.model)
     ok, reason = provider.available()
     if not ok:
-        _p(f"[UNKNOWN] provider unavailable: {reason}")
+        _p(f"[UNKNOWN] provider '{provider.name}' unavailable: {reason}")
         return 2
-    system = constitution.load()
+    system = _chat_system()
     msgs = [Message("user", args.prompt)] if args.prompt else None
     if msgs is None:
-        _p("omerta chat — type a message (Ctrl-D to exit)")
+        _p(f"omerta chat [{provider.name}:{model}] — type a message (Ctrl-D to exit)")
         history: list[Message] = []
         while True:
             try:
@@ -48,17 +62,24 @@ def cmd_chat(args):
             history.append(Message("user", line))
             sys.stdout.write("omerta> ")
             acc = ""
-            for chunk in provider.stream(history, model=router.config.default_model,
+            for chunk in provider.stream(history, model=model,
                                          system=system, effort=router.config.effort):
                 sys.stdout.write(chunk); sys.stdout.flush(); acc += chunk
             _p()
             history.append(Message("assistant", acc))
         return 0
-    for chunk in provider.stream(msgs, model=router.config.default_model,
-                                 system=system, effort=router.config.effort):
+    for chunk in provider.stream(msgs, model=model, system=system, effort=router.config.effort):
         sys.stdout.write(chunk); sys.stdout.flush()
     _p()
     return 0
+
+
+def cmd_learn(args):
+    """Teach a durable rule by command — the model applies it in future turns."""
+    mem = Memory()
+    mid = mem.teach(args.key, args.value, scope=args.scope, type="RULE")
+    mem.close()
+    _p(f"[CONFIRMED] learned RULE #{mid} [{args.scope}] {args.key}: {args.value}")
 
 
 def cmd_agent(args):
@@ -215,7 +236,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="detect dependencies").set_defaults(fn=cmd_doctor)
 
     c = sub.add_parser("chat", help="chat with the model"); c.add_argument("prompt", nargs="?")
+    c.add_argument("--model", help="provider:model, e.g. openai:gpt-4o, ollama:llama3.1")
     c.set_defaults(fn=cmd_chat)
+
+    ln = sub.add_parser("learn", help="teach a durable rule the model will apply")
+    ln.add_argument("key"); ln.add_argument("value")
+    ln.add_argument("--scope", default="global"); ln.set_defaults(fn=cmd_learn)
 
     a = sub.add_parser("agent", help="run a task through agents")
     a.add_argument("task"); a.add_argument("--role", choices=sorted(ROLES))

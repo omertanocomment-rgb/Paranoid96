@@ -17,7 +17,8 @@ strength of a model response.
 | 2 | Configuration | ✅ COMPLETE | `config.py` (TOML in `~/.config/omerta`); test `test_config_roundtrip` |
 | 3 | CLI | ✅ COMPLETE | `cli.py` (all documented commands); smoke-verified |
 | 3 | Web UI + API | ✅ COMPLETE | `web/server.py` (`/health`, `/api/config`, `/api/chat[/stream]`, `/api/agent`, UI); verified |
-| 4 | Model providers / router | ✅ Anthropic; ⚠️ OpenAI/local stubbed | `models/` — router degrades honestly; test `test_router_reports_provider_status` |
+| 4 | Model providers / router | ✅ Anthropic + OpenAI + local Ollama (all real) | `models/` — `provider:model` routing, honest degradation; tests |
+| 5b | Teach / learn by command | ✅ COMPLETE | `omerta learn/teach` → `Memory.learned_context()` injected into chat + agents |
 | 5 | Learning & memory | ✅ COMPLETE | `memory/db.py` (SQLite, teach/forget/show/search, SUCCESS/FAILURE); 2 tests |
 | 6 | Codebase intelligence | ✅ COMPLETE | `codebase/index.py` (files+symbols, ripgrep/py search); test `test_index_and_symbol_search` |
 | 7 | Tool system | ✅ COMPLETE | `tools/controller.py` (typed tools, permissions, approval gate) |
