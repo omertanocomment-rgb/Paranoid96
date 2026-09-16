@@ -405,6 +405,7 @@ def build():
                "omerta serve | doctor | sync | version<br/>"
                "omerta teach \"rule\" | memory show | rules | role &lt;name&gt;<br/>"
                "omerta index | search \"q\" | symbol Name | deps | calls Name<br/>"
+               "omerta git status|diff|log|review | evidence add &lt;conf&gt; \"claim\"<br/>"
                "omerta plan/review/build/test/debug \"...\" | sandbox snapshot|rollback<br/>"
                "omerta workflow &lt;pipeline&gt; \"task\"<br/>"
                "omerta firmware inspect &lt;img&gt; | analyze &lt;dtb|dtbo|boot.img&gt; | extract &lt;img&gt; | report &lt;dir&gt;", CODE))
