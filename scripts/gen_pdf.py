@@ -361,7 +361,7 @@ def build():
                "omerta --project omerta-beats<br/>"
                "omerta serve | doctor | sync | version<br/>"
                "omerta teach \"rule\" | memory show | rules | index | search \"q\"<br/>"
-               "omerta firmware analyze &lt;dtb&gt; | report &lt;dir&gt; | plan", CODE))
+               "omerta firmware inspect &lt;img&gt; | analyze &lt;dtb|dtbo|boot.img&gt; | report &lt;dir&gt; | plan", CODE))
 
     # Firmware / device bring-up
     S.append(P("Firmware &amp; device bring-up", H1))
@@ -372,7 +372,8 @@ def build():
                "rather than guess a GPIO, regulator or panel timing.", BODY))
     S.append(table([
         ["Read-only tool (Level 0)", "What it does"],
-        ["analyze_dtb(path)", "Decode a .dtb with a pure-Python FDT parser (no dtc) into model/SoC/CPU/display/touch/regulators, each with a confidence."],
+        ["inspect_image(path)", "Identify a boot / vendor_boot / dtbo image or raw .dtb; report header version (v0–v4), sizes, cmdline, os_version, and dt-table entries."],
+        ["analyze_dtb(path)", "Decode a device tree with a pure-Python FDT parser (no dtc) — a raw .dtb, a dtbo/dt_table entry, or the DTB embedded in a boot.img — into model/SoC/CPU/display/touch/regulators, each with a confidence."],
         ["board_report(dir)", "Fuse an adb evidence dir (getprop/cpuinfo/meminfo/partitions/dmesg + optional .dtb) into a BOARD REPORT with per-field confidence."],
         ["collect_evidence_plan()", "The ordered, read-only adb commands to gather evidence."],
     ], [1.9 * inch, 5.1 * inch]))
