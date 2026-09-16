@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omerta-ai"
+version = "1.0.0"
+description = "OMERTA AI — evidence-backed engineering / coding / firmware agent"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "OMERTA" }]
+# Core engine uses only the standard library (stdlib http.server, urllib, sqlite3),
+# so the packaged binary stays small and dependency-free.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+omerta = "omerta.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["omerta*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

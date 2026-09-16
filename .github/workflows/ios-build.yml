@@ -1,0 +1,39 @@
+name: Build Omerta AI IPA (iOS)
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["ios/**", ".github/workflows/ios-build.yml"]
+  workflow_dispatch:
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    defaults: { run: { working-directory: ios } }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build (unsigned archive)
+        run: |
+          xcodebuild \
+            -project OmertaAI.xcodeproj \
+            -scheme OmertaAI \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/OmertaAI.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - name: Package unsigned IPA
+        run: |
+          cd build/OmertaAI.xcarchive/Products/Applications
+          mkdir -p Payload
+          cp -R OmertaAI.app Payload/
+          zip -qr "$GITHUB_WORKSPACE/ios/OmertaAI-unsigned.ipa" Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omerta-ai-ipa-unsigned
+          path: ios/OmertaAI-unsigned.ipa
+          if-no-files-found: error

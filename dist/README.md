@@ -1,12 +1,13 @@
-# Prebuilt Omerta AI APKs
+# Prebuilt Omerta AI artifacts
 
-- `OmertaAI-release.apk` — R8-minified, signed release build (`ai.omerta.assistant`).
+| File | Platform | Notes |
+|------|----------|-------|
+| `OmertaAI-release.apk` | Android | Signed console. Install, add API key in Settings. |
+| `omerta-ai_1.0.0_amd64.deb` | Debian/Ubuntu/Mint | Engine. `sudo dpkg -i omerta-ai_1.0.0_amd64.deb` → `omerta doctor`. |
+| `OmertaAI-1.0.0-x86_64.AppImage` | Linux (portable) | Engine. `chmod +x *.AppImage && ./OmertaAI-1.0.0-x86_64.AppImage doctor`. |
 
-Before installing, point it at your backend: either rebuild with
-`./gradlew :app:assembleRelease -PomertaBackendUrl=https://your-backend`, or install
-this APK and set the backend URL in the app's **Settings** screen.
+Windows `.exe` and iOS `.ipa` are produced by CI (Actions → *Build OMERTA AI Engine* /
+*Build Omerta AI IPA*) — see the repo README.
 
-Install: `adb install -r OmertaAI-release.apk`
-
-This APK is signed with a self-signed development key. For distribution, rebuild with
-your own keystore (see `CLAUDE.md`) or the CI signing secrets (see root `README.md`).
+Engine usage: set `ANTHROPIC_API_KEY`, then `omerta chat`, `omerta agent "task"`,
+`omerta web`. Full command list in `engine/README.md`.

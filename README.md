@@ -1,6 +1,32 @@
 # Omerta AI
 
-**Operator-grade AI assistant — a native Android app wired to a Claude-powered backend.**
+Two parts of one project:
+
+1. **OMERTA AI Engine** (`engine/`) — an evidence-backed engineering / coding / firmware
+   agent (Phases 1–15 spec). CLI + web/API, SQLite memory, codebase intelligence,
+   sandboxed build/test/debug loop, multi-agent orchestration, firmware inspection.
+   Ships as **`.deb`**, **AppImage**, and Windows **`.exe`**. See
+   [`engine/README.md`](engine/README.md) and status in
+   [`docs/OMERTA_AI_SPEC.md`](docs/OMERTA_AI_SPEC.md).
+2. **Omerta AI Consoles** — mobile front-ends: **Android `.apk`** (`android/`) and
+   **iOS `.ipa`** (`ios/`). Each runs EMBEDDED (calls Claude directly) or REMOTE
+   (talks to the engine / Node backend over the same API).
+
+### Executable targets
+
+| Format | Part | Built |
+|--------|------|-------|
+| `.deb` | engine | ✅ verified in-session · `engine/packaging/deb` |
+| AppImage | engine | ✅ verified in-session · `engine/packaging/appimage` |
+| `.exe` | engine | ⚙️ CI `windows-latest` · `.github/workflows/engine-build.yml` |
+| `.apk` | Android console | ✅ verified in-session · `dist/OmertaAI-release.apk` |
+| `.ipa` | iOS console | ⚙️ CI `macos-latest`, unsigned · `.github/workflows/ios-build.yml` |
+
+---
+
+## Omerta AI Console (mobile)
+
+**Operator-grade AI assistant — a native app with Claude built in (or wired to the engine).**
 
 Omerta AI is the conversational front-end for the OMERTA toolkit — a Kotlin/Jetpack
 Compose Android app (dark operator console, amber accent, JetBrains Mono) powered by

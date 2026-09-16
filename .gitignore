@@ -26,3 +26,18 @@ backend/out/
 *.log
 .DS_Store
 out/
+
+# ---- OMERTA engine (Python) build artifacts ----
+engine/.venv/
+engine/build/
+engine/dist/
+engine/*.egg-info/
+**/__pycache__/
+*.pyc
+**/.omerta/
+# ---- iOS build artifacts ----
+ios/build/
+ios/OmertaAI.xcodeproj/
+ios/*.ipa
+ios/Payload/
+engine/omerta.spec
