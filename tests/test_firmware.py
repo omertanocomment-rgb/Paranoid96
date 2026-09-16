@@ -369,6 +369,46 @@ def test_super_from_sparse():
     print("  ✓ sparse super.img unsparsed transparently and listed")
 
 
+def test_super_repack_roundtrip():
+    """super_extract -> super_repack -> super_list/extract recovers every byte,
+    and the rebuilt metadata carries valid SHA-256 checksums."""
+    import hashlib
+    parts = {"system": b"SYS-" + b"A" * 600, "vendor": b"VEN-" + b"B" * 200}
+    d = tempfile.mkdtemp()
+    src = os.path.join(d, "in")
+    os.makedirs(src)
+    for n, b in parts.items():
+        open(os.path.join(src, n + ".img"), "wb").write(b)
+
+    out = os.path.join(d, "super.img")
+    r = fw.super_repack({"dir": src, "out": out})
+    assert r["status"] == "ok" and len(r["partitions"]) == 2, r
+
+    lst = fw.super_list({"path": out})
+    assert lst["status"] == "ok" and lst["partition_count"] == 2, lst
+    assert {p["name"] for p in lst["partitions"]} == {"system", "vendor"}
+
+    ex = os.path.join(d, "out")
+    fw.super_extract({"path": out, "out": ex})
+    for n, b in parts.items():
+        got = open(os.path.join(ex, n + ".img"), "rb").read()
+        assert got[:len(b)] == b, f"{n} bytes not preserved"
+
+    # checksums must actually verify (geometry + header + tables)
+    img = open(out, "rb").read()
+    geo = img[4096:4096 + 52]
+    geo_zero = geo[:8] + b"\x00" * 32 + geo[40:]
+    assert hashlib.sha256(geo_zero).digest() == geo[8:40], "bad geometry checksum"
+    slot0 = 4096 + 2 * 4096
+    hdr = img[slot0:slot0 + 128]
+    hdr_zero = hdr[:12] + b"\x00" * 32 + hdr[44:]
+    assert hashlib.sha256(hdr_zero).digest() == hdr[12:44], "bad header checksum"
+    tables_size = struct.unpack_from("<I", hdr, 44)[0]
+    tables = img[slot0 + 128:slot0 + 128 + tables_size]
+    assert hashlib.sha256(tables).digest() == hdr[48:80], "bad tables checksum"
+    print("  ✓ super repack round-trip; geometry/header/tables SHA-256 verify")
+
+
 def test_plan_is_readonly():
     r = fw.collect_evidence_plan({})
     assert r["status"] == "ok" and r["level"].startswith("0")
@@ -388,5 +428,6 @@ if __name__ == "__main__":
     test_unsparse()
     test_super_list_and_extract()
     test_super_from_sparse()
+    test_super_repack_roundtrip()
     test_plan_is_readonly()
     print("\nFIRMWARE TESTS PASSED")

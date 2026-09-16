@@ -58,7 +58,7 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Classic boot image **repack** (v0–v2) | Implemented | `repack_image` rebuilds the image + recomputes the SHA1 id; round-trip tested |
 | vendor_boot repack (v3/v4) | Implemented | `repack_image` rebuilds vendor_boot (ramdisk/dtb/table/bootconfig); round-trip tested |
 | super.img unpack (sparse decode + LP metadata) | Implemented | `unsparse` + `parse_super`/`super_list`/`super_extract`; `omerta firmware super`/`unsparse`; `tests/test_firmware.py` |
-| super.img repack (lpmake) | Planned | unpack/extract done; rebuilding LP metadata + super is a follow-up |
+| super.img repack (lpmake) | Implemented | `lpmake`/`super_repack` rebuild LP geometry+metadata with valid SHA-256 checksums; `omerta firmware superpack`; round-trip tested |
 
 ## Interfaces, security, packaging
 
@@ -77,7 +77,6 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 
 ## Not yet built (tracked, not claimed)
 
-- super.img **repack** (lpmake-style); unpack/extract + sparse decode are done.
 - Fat AppImage bundling its own Python (a thin, host-python recipe exists).
 
 These are honest gaps. OMERTA should say so rather than imply they exist.

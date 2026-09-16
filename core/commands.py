@@ -71,6 +71,10 @@ def _firmware(argv):
                 {"path": rest[0], "out": rest[1],
                  "name": rest[2] if len(rest) > 2 else None}))
         return 0
+    if sub == "superpack" and rest:
+        _emit(_plugin_tool("super_repack")(
+            {"dir": rest[0], "out": rest[1] if len(rest) > 1 else ""}))
+        return 0
     if sub == "unsparse" and rest:
         _emit(_plugin_tool("unsparse_image")(
             {"path": rest[0], "out": rest[1] if len(rest) > 1 else ""}))
@@ -81,7 +85,7 @@ def _firmware(argv):
         return 0
     print("usage: omerta firmware <inspect <img> | analyze <dtb|dtbo|boot.img> | "
           "extract <img> [out] | repack <dir> [out] | super <img> [out] | "
-          "unsparse <img> [out] | report <dir> | plan>")
+          "superpack <dir> [out] | unsparse <img> [out] | report <dir> | plan>")
     return 0
 
 

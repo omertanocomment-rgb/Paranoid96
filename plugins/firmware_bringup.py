@@ -778,6 +778,116 @@ def super_extract(args: dict) -> dict:
                     "individually (flashing stays gated)."}
 
 
+def _sha256(b):
+    return hashlib.sha256(b).digest()
+
+
+def lpmake(partitions, block_size=4096, slot_count=1, group="default",
+           dev_name="super"):
+    """Build a raw super image (LP metadata + linear partitions) from
+    {name: bytes}. Recomputes geometry/header/tables SHA-256 checksums so real
+    liblp tooling accepts it. Returns the image bytes."""
+    parts = list(partitions.items())
+    # ---- tables ----
+    ext_entries, part_entries = [], []
+    meta_max = 4096
+    meta_region = 4096 + 2 * LP_GEOMETRY_SIZE + 2 * (slot_count * meta_max)
+    first_sector = meta_region // SECTOR
+    cur = first_sector
+    layout = []
+    for i, (name, blob) in enumerate(parts):
+        nsec = (len(blob) + SECTOR - 1) // SECTOR
+        ext_entries.append(struct.pack("<QIQI", nsec, 0, cur, 0))  # LINEAR, source 0
+        nm = name.encode()[:36]
+        nm = nm + b"\x00" * (36 - len(nm))
+        part_entries.append(nm + struct.pack("<IIII", 0, i, 1, 0))  # 1 extent, group 0
+        layout.append((cur, blob, nsec))
+        cur += nsec
+    total_sectors = cur
+    total_bytes = total_sectors * SECTOR
+
+    gname = group.encode()[:36]
+    gname = gname + b"\x00" * (36 - len(gname))
+    group_entries = [gname + struct.pack("<IQ", 0, 0)]              # flags, max_size 0
+    dname = dev_name.encode()[:36]
+    dname = dname + b"\x00" * (36 - len(dname))
+    bdev_entries = [struct.pack("<QIIQ", first_sector, block_size, 0, total_bytes)
+                    + dname + struct.pack("<I", 0)]
+
+    p_tbl = b"".join(part_entries)
+    e_tbl = b"".join(ext_entries)
+    g_tbl = b"".join(group_entries)
+    b_tbl = b"".join(bdev_entries)
+    tables = p_tbl + e_tbl + g_tbl + b_tbl
+    p_off, e_off = 0, len(p_tbl)
+    g_off, b_off = e_off + len(e_tbl), e_off + len(e_tbl) + len(g_tbl)
+
+    def descriptor(off, entries, entry_size):
+        return struct.pack("<III", off, len(entries), entry_size)
+
+    tables_checksum = _sha256(tables)
+    header_wo = (struct.pack("<IHHI", LP_HEADER_MAGIC, 10, 2, 128)
+                 + b"\x00" * 32                                     # header_checksum (zeroed)
+                 + struct.pack("<I", len(tables)) + tables_checksum
+                 + descriptor(p_off, part_entries, 52)
+                 + descriptor(e_off, ext_entries, 24)
+                 + descriptor(g_off, group_entries, 48)
+                 + descriptor(b_off, bdev_entries, 64))
+    header_checksum = _sha256(header_wo)
+    header = header_wo[:12] + header_checksum + header_wo[44:]
+    metadata = header + tables
+
+    # ---- geometry ----
+    geo_wo = struct.pack("<II", LP_GEOMETRY_MAGIC, 52) + b"\x00" * 32 \
+        + struct.pack("<III", meta_max, slot_count, block_size)
+    geo_checksum = _sha256(geo_wo)
+    geometry = geo_wo[:8] + geo_checksum + geo_wo[40:]
+    geometry = geometry + b"\x00" * (LP_GEOMETRY_SIZE - len(geometry))
+
+    # ---- assemble ----
+    img = bytearray(total_bytes)
+    off = LP_GEOMETRY_OFFSET
+    img[off:off + LP_GEOMETRY_SIZE] = geometry
+    img[off + LP_GEOMETRY_SIZE:off + 2 * LP_GEOMETRY_SIZE] = geometry
+    slot_base = LP_GEOMETRY_OFFSET + 2 * LP_GEOMETRY_SIZE
+    for s in range(slot_count):                                    # primary slots
+        img[slot_base + s * meta_max:slot_base + s * meta_max + len(metadata)] = metadata
+    backup_base = slot_base + slot_count * meta_max
+    for s in range(slot_count):                                    # backup slots
+        img[backup_base + s * meta_max:backup_base + s * meta_max + len(metadata)] = metadata
+    for start_sector, blob, _n in layout:
+        o = start_sector * SECTOR
+        img[o:o + len(blob)] = blob
+    return bytes(img)
+
+
+def super_repack(args: dict) -> dict:
+    """Rebuild a super.img from a directory of partition images (name.img), e.g.
+    one produced by super_extract. Writes a new super image."""
+    d = args.get("dir") or ""
+    out = args.get("out") or (os.path.join(d, "repacked-super.img") if d else "")
+    if not d or not os.path.isdir(d):
+        return {"status": "error", "reason": f"no such dir: {d}"}
+    skip = {"repacked-super.img"}
+    parts = {}
+    for fn in sorted(os.listdir(d)):
+        if fn.endswith(".img") and fn not in skip:
+            parts[fn[:-4]] = open(os.path.join(d, fn), "rb").read()
+    if not parts:
+        return {"status": "error",
+                "reason": "no <name>.img partition files in dir (run super_extract first)"}
+    try:
+        img = lpmake(parts, block_size=int(args.get("block_size", 4096)))
+    except (struct.error, ValueError) as e:
+        return {"status": "error", "reason": f"lpmake failed: {e}"}
+    with open(out, "wb") as f:
+        f.write(img)
+    return {"status": "ok", "out": out, "bytes": len(img),
+            "partitions": [{"name": n, "bytes": len(b)} for n, b in parts.items()],
+            "note": "Rebuilt super.img with fresh LP metadata + checksums. Verify "
+                    "with super_list before flashing (flashing stays gated)."}
+
+
 def unsparse_image(args: dict) -> dict:
     """Convert an Android sparse image to a raw image. Writes a file."""
     path = args.get("path") or ""
@@ -962,6 +1072,11 @@ def register():
                           "args": {"path": "super.img", "out": "output dir",
                                    "name": "optional single partition"},
                           "side_effects": True},
+        "super_repack": {"fn": super_repack, "description":
+                         "Rebuild a super.img from a dir of <name>.img partitions "
+                         "(fresh LP metadata + SHA-256 checksums). Writes a file.",
+                         "args": {"dir": "dir of partition images", "out": "output super.img"},
+                         "side_effects": True},
         "unsparse_image": {"fn": unsparse_image, "description":
                            "Convert an Android sparse image to a raw image. Writes a file.",
                            "args": {"path": "sparse image", "out": "output raw path"},
