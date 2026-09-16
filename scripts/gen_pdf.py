@@ -362,8 +362,10 @@ def build():
                "<font face='Courier'>build</font> / <font face='Courier'>test</font> "
                "/ <font face='Courier'>debug</font>, and Firmware / Security / Docs "
                "/ Researcher / Developer. <font face='Courier'>omerta role &lt;name&gt;</font> "
-               "sets a default. (Parallel multi-agent orchestration is a documented "
-               "Planned item — today the roles focus a single agent.)", BODY))
+               "sets a default. <font face='Courier'>omerta workflow</font> chains roles "
+               "(plan→review) or runs a <b>team concurrently</b> "
+               "(<font face='Courier'>workflow team</font>) — thread-isolated, "
+               "read-only, aggregating independent findings.", BODY))
     S.append(P("Sandbox &amp; recovery", H2))
     S.append(P("<font face='Courier'>omerta sandbox snapshot</font> copies a "
                "workspace before a risky change and <font face='Courier'>rollback</font> "
