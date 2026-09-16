@@ -23,7 +23,9 @@ hard-deny list.
 """
 import os
 import re
+import json
 import struct
+import hashlib
 
 MANIFEST = {
     "name": "firmware_bringup",
@@ -311,20 +313,28 @@ def parse_bootimg(data: bytes) -> dict:
                 "cmdline": cmd, "has_dtb": False,
                 "note": "boot v3+/vendor_boot holds the DTB in vendor_boot.img"}
     # classic v0/v1/v2
-    (kernel_size, _ka, ramdisk_size, _ra, second_size, _sa, _tags,
+    (kernel_size, ka, ramdisk_size, ra, second_size, sa, tags,
      page_size) = struct.unpack_from("<IIIIIIII", data, 8)
     os_ver = struct.unpack_from("<I", data, 44)[0]
+    name = data[48:48 + 16].split(b"\x00", 1)[0].decode("utf-8", "replace")
     cmd = data[64:64 + 512].split(b"\x00", 1)[0].decode("utf-8", "replace")
     extra = data[608:608 + 1024].split(b"\x00", 1)[0].decode("utf-8", "replace")
     out = {"type": "boot", "header_version": header_version, "page_size": page_size,
            "kernel_size": kernel_size, "ramdisk_size": ramdisk_size,
            "second_size": second_size, "os_version": _os_version(os_ver),
            "cmdline": (cmd + " " + extra).strip(), "has_dtb": False}
+    # fields needed to rebuild the image byte-faithfully (hidden from inspect)
+    raw = {"header_version": header_version, "page_size": page_size,
+           "kernel_addr": ka, "ramdisk_addr": ra, "second_addr": sa,
+           "tags_addr": tags, "os_version": os_ver, "name": name,
+           "cmdline": cmd, "extra_cmdline": extra}
     recovery_dtbo_size = 0
     if header_version >= 1:
         recovery_dtbo_size = struct.unpack_from("<I", data, 1632)[0]
+        raw["header_size"] = struct.unpack_from("<I", data, 1644)[0]
     if header_version >= 2:
         dtb_size = struct.unpack_from("<I", data, 1648)[0]
+        raw["dtb_addr"] = struct.unpack_from("<Q", data, 1652)[0]
         out["dtb_size"] = dtb_size
         out["has_dtb"] = dtb_size > 0
         if dtb_size:
@@ -332,6 +342,7 @@ def parse_bootimg(data: bytes) -> dict:
             off = (_round(p, p) + _round(kernel_size, p) + _round(ramdisk_size, p)
                    + _round(second_size, p) + _round(recovery_dtbo_size, p))
             out["_dtb_offset"], out["_dtb_size"] = off, dtb_size
+    out["_raw"] = raw
     return out
 
 
@@ -431,6 +442,11 @@ def extract_image(args: dict) -> dict:
                 if info.get("_dtb_size"):
                     dump("dtb.dtb", data[info["_dtb_offset"]:
                                         info["_dtb_offset"] + info["_dtb_size"]])
+                # manifest so repack_image can rebuild the header faithfully
+                manifest = os.path.join(out, "bootimg.json")
+                with open(manifest, "w") as f:
+                    json.dump(info.get("_raw", {}), f, indent=2)
+                written.append({"file": manifest, "bytes": os.path.getsize(manifest)})
             else:
                 return {"status": "error",
                         "reason": "extract supports classic boot v0–v2; boot v3+/"
@@ -449,6 +465,84 @@ def extract_image(args: dict) -> dict:
             "written": written, "count": len(written),
             "note": "Extracted read-only from the image. Analyze any .dtb with "
                     "analyze_dtb. Repack is not implemented (Planned)."}
+
+
+def repack_image(args: dict) -> dict:
+    """Rebuild a classic Android boot image (v0–v2) from a directory produced by
+    extract_image (kernel/ramdisk/second/dtb.dtb + bootimg.json). Writes a new
+    image; the standard SHA1 id is recomputed. Boot v3+/vendor_boot repack is not
+    supported (returns an honest error)."""
+    d = args.get("dir") or args.get("in") or ""
+    out = args.get("out") or (os.path.join(d, "repacked-boot.img") if d else "")
+    manifest = os.path.join(d, "bootimg.json")
+    if not d or not os.path.isfile(manifest):
+        return {"status": "error",
+                "reason": f"no bootimg.json in {d} — run extract_image on a classic "
+                          "boot image first (v3+/vendor_boot repack is unsupported)"}
+    raw = json.loads(open(manifest).read())
+    hv = int(raw.get("header_version", 0))
+    if hv > 2:
+        return {"status": "error", "reason": "only classic boot v0–v2 repack is supported"}
+    page = int(raw.get("page_size", 2048))
+
+    def rd(name):
+        p = os.path.join(d, name)
+        return open(p, "rb").read() if os.path.isfile(p) else b""
+
+    kernel, ramdisk, second, dtb = (rd("kernel"), rd("ramdisk"), rd("second"),
+                                    rd("dtb.dtb"))
+
+    def pad(b):
+        return b + b"\x00" * ((_round(len(b), page)) - len(b))
+
+    # standard mkbootimg SHA1 id over the pieces (+ their sizes)
+    sha = hashlib.sha1()
+    for part, size in ((kernel, len(kernel)), (ramdisk, len(ramdisk)),
+                       (second, len(second))):
+        sha.update(part); sha.update(struct.pack("<I", size))
+    if hv >= 2:
+        sha.update(dtb); sha.update(struct.pack("<I", len(dtb)))
+    img_id = (sha.digest() + b"\x00" * 32)[:32]
+
+    hdr = bytearray(_round(1660, page) if page < 1660 else page)
+    hdr[0:8] = b"ANDROID!"
+    struct.pack_into("<IIIIIIII", hdr, 8,
+                     len(kernel), int(raw.get("kernel_addr", 0)),
+                     len(ramdisk), int(raw.get("ramdisk_addr", 0)),
+                     len(second), int(raw.get("second_addr", 0)),
+                     int(raw.get("tags_addr", 0)), page)
+    struct.pack_into("<I", hdr, 40, hv)
+    struct.pack_into("<I", hdr, 44, int(raw.get("os_version", 0)))
+    nm = raw.get("name", "").encode()[:16]
+    hdr[48:48 + len(nm)] = nm
+    cm = raw.get("cmdline", "").encode()[:512]
+    hdr[64:64 + len(cm)] = cm
+    hdr[576:576 + 32] = img_id
+    ex = raw.get("extra_cmdline", "").encode()[:1024]
+    hdr[608:608 + len(ex)] = ex
+    if hv >= 1:
+        struct.pack_into("<I", hdr, 1632, 0)          # recovery_dtbo_size
+        struct.pack_into("<Q", hdr, 1636, 0)          # recovery_dtbo_offset
+        struct.pack_into("<I", hdr, 1644, int(raw.get("header_size", 1648)))
+    if hv >= 2:
+        struct.pack_into("<I", hdr, 1648, len(dtb))
+        struct.pack_into("<Q", hdr, 1652, int(raw.get("dtb_addr", 0)))
+
+    blob = bytes(hdr[:page]) if len(hdr) >= page else pad(bytes(hdr))
+    for part in (kernel, ramdisk, second):
+        if part:
+            blob += pad(part)
+    if hv >= 2 and dtb:
+        blob += pad(dtb)
+
+    with open(out, "wb") as f:
+        f.write(blob)
+    return {"status": "ok", "out": out, "bytes": len(blob),
+            "header_version": hv, "id_sha1": img_id[:20].hex(),
+            "parts": {"kernel": len(kernel), "ramdisk": len(ramdisk),
+                      "second": len(second), "dtb": len(dtb)},
+            "note": "Rebuilt classic boot image with a recomputed SHA1 id. Verify "
+                    "with inspect_image before flashing; flashing stays gated."}
 
 
 # ── evidence-directory → BOARD REPORT ───────────────────────────────────────
@@ -593,6 +687,11 @@ def register():
                           "Writes files.",
                           "args": {"path": "image path", "out": "output dir"},
                           "side_effects": True},
+        "repack_image": {"fn": repack_image, "description":
+                         "Rebuild a classic boot image (v0–v2) from an extracted "
+                         "dir (+ bootimg.json), recomputing the SHA1 id. Writes a file.",
+                         "args": {"dir": "extracted dir", "out": "output image"},
+                         "side_effects": True},
         "inspect_image": {"fn": inspect_image, "description":
                           "Identify and structurally inspect a firmware image "
                           "(boot / vendor_boot / dtbo table / raw dtb): header "

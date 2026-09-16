@@ -27,8 +27,10 @@ Self-contained mobile app and a normal, dependency-free backend.
   DTB/FDT parser (`analyze_dtb`, no `dtc` needed), Android **boot/vendor_boot/
   dtbo image inspection** (`inspect_image`, header v0–v4 + dt_table) with
   embedded-DTB extraction, evidence→BOARD REPORT (`board_report`), and a
-  read-only adb evidence plan — every field tagged CONFIRMED/LIKELY/INFERRED/
-  UNKNOWN, never guessed. `tests/test_firmware.py`.
+  read-only adb evidence plan, plus **extract** (image parts to disk) and
+  **repack** of a classic boot image (v0–v2, SHA1 id recomputed, round-trip
+  tested) — every field tagged CONFIRMED/LIKELY/INFERRED/UNKNOWN, never guessed.
+  `tests/test_firmware.py`.
 - **`firmware-bringup` skill** and a **TCL T509K starter device tree**
   (`firmware/t509k/`): AOSP makefiles, discovery-only DTS, evidence/build
   scripts, hardware/firmware/kernel KB, and a device constitution.

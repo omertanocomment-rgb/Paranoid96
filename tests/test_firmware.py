@@ -190,6 +190,49 @@ def test_extract_bootimg():
     print("  ✓ boot.img extracted (kernel/ramdisk/dtb) and extracted DTB decodes")
 
 
+def test_repack_roundtrip():
+    dtb = _simple_dtb()
+    page = 2048
+    kernel, ramdisk = b"KERNELDATA-1234", b"RAMDISKXY"
+    dtb_off = page * 3
+    img = bytearray(dtb_off + len(dtb))
+    img[0:8] = b"ANDROID!"
+    struct.pack_into("<IIIIIIII", img, 8, len(kernel), 0x8000, len(ramdisk), 0x1000000,
+                     0, 0, 0x100, page)
+    struct.pack_into("<I", img, 40, 2)
+    struct.pack_into("<I", img, 44, 0x9abc)           # os_version raw
+    img[64:64 + 11] = b"cmd=verify"
+    struct.pack_into("<I", img, 1648, len(dtb))
+    img[page:page + len(kernel)] = kernel
+    img[2 * page:2 * page + len(ramdisk)] = ramdisk
+    img[dtb_off:dtb_off + len(dtb)] = dtb
+    d = tempfile.mkdtemp()
+    ipath = os.path.join(d, "boot.img")
+    open(ipath, "wb").write(img)
+
+    ex = os.path.join(d, "ex")
+    assert fw.extract_image({"path": ipath, "out": ex})["status"] == "ok"
+    assert os.path.isfile(os.path.join(ex, "bootimg.json"))
+
+    out = os.path.join(d, "repacked.img")
+    r = fw.repack_image({"dir": ex, "out": out})
+    assert r["status"] == "ok" and r["header_version"] == 2, r
+    assert r["parts"]["kernel"] == len(kernel)
+
+    # the rebuilt image must inspect + decode identically
+    info = fw.inspect_image({"path": out})
+    assert info["container"] == "boot" and info["info"]["kernel_size"] == len(kernel)
+    a = fw.analyze_dtb({"path": out})
+    assert a["status"] == "ok" and a["report"]["soc"]["confidence"] == "CONFIRMED"
+    # extracting the repacked image yields byte-identical kernel/ramdisk/dtb
+    ex2 = os.path.join(d, "ex2")
+    fw.extract_image({"path": out, "out": ex2})
+    assert open(os.path.join(ex2, "kernel"), "rb").read() == kernel
+    assert open(os.path.join(ex2, "ramdisk"), "rb").read() == ramdisk
+    assert open(os.path.join(ex2, "dtb.dtb"), "rb").read() == dtb
+    print("  ✓ repack round-trip: extract→repack→extract preserves parts + decodes")
+
+
 def test_plan_is_readonly():
     r = fw.collect_evidence_plan({})
     assert r["status"] == "ok" and r["level"].startswith("0")
@@ -204,5 +247,6 @@ if __name__ == "__main__":
     test_bootimg_v2_embedded_dtb()
     test_dt_table()
     test_extract_bootimg()
+    test_repack_roundtrip()
     test_plan_is_readonly()
     print("\nFIRMWARE TESTS PASSED")

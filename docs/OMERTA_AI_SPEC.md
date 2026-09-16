@@ -55,7 +55,8 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | `omerta firmware inspect` boot/vendor_boot/dtbo images | Implemented | `plugins/firmware_bringup.py` `inspect_image` (header v0–v4, dt_table); `tests/test_firmware.py` |
 | Analyze DTB embedded in boot.img (v2) / dtbo entry | Implemented | `analyze_dtb` container dispatch; `tests/test_firmware.py` |
 | Extract image parts to disk (kernel/ramdisk/dtb, per-entry dtb) | Implemented | `extract_image`; `omerta firmware extract`; `tests/test_firmware.py` |
-| Full boot/vendor_boot/super **repack** | Planned | inspect/decode/extract done; writing a new image back is a follow-up |
+| Classic boot image **repack** (v0–v2) | Implemented | `repack_image` rebuilds the image + recomputes the SHA1 id; round-trip tested |
+| vendor_boot / super repack | Planned | classic boot repack done; the newer/multi-part formats are a follow-up |
 
 ## Interfaces, security, packaging
 
@@ -74,7 +75,7 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 ## Not yet built (tracked, not claimed)
 
 - Parallel multi-agent orchestration (roles focus a single agent today).
-- Firmware image **repack** (writing a modified boot/vendor_boot back out; inspect, decode and extract are done).
+- vendor_boot / super **repack** (classic boot v0–v2 repack is done).
 - Fat AppImage bundling its own Python (a thin, host-python recipe exists).
 
 These are honest gaps. OMERTA should say so rather than imply they exist.
