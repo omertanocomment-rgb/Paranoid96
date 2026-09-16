@@ -39,7 +39,7 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Tool system with risk levels & audit record | Implemented | `core/agent.py` tiers; `data/command_log.jsonl` |
 | Sandbox: approvals, backups/snapshots, tiered exec | Implemented | approval gate + `tools/fileops.py` backups + `core/checkpoint.py` + `core/isolate.py` workspace snapshot/rollback |
 | Sandbox: isolation + resource limits (opt-in) | Implemented | `core/isolate.py` — ulimit + bubblewrap/firejail wrap, net denied by default; `OMERTA_ISOLATE=1`; `tests/test_isolate.py` |
-| Git intelligence (status/diff/commit/…); git safety | Partial | via shell `git` tool through the gate; `git push --force`/`reset --hard` are HIGH_RISK |
+| Git intelligence (status/diff/log/branch/review); git safety | Implemented | `core/gitx.py` read-only structured queries + `plugins/git_tools.py` + `omerta git`; mutating git (commit/reset/push) stays HIGH_RISK behind the gate; `tests/test_gitx.py` |
 | Build / test discovery + fix loop | Implemented | `tools/devtools.py`, executor retry loop, skills |
 | Codebase index / search / symbol / deps / calls | Implemented | `core/index.py` — ast symbols + import graph + Python call graph (py), regex symbols for js/ts/go/rust/jvm/c/shell; `omerta index/search/symbol/deps/calls`; `plugins/code_index.py`; `tests/test_index.py` |
 

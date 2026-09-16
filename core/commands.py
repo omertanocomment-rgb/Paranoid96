@@ -17,7 +17,7 @@ import sys
 HANDLED = {"firmware", "teach", "learn", "memory", "forget", "rules",
            "index", "search", "symbol", "deps", "sandbox",
            "agent", "plan", "review", "build", "test", "debug", "role", "calls",
-           "workflow"}
+           "workflow", "git"}
 
 
 def _plugin_tool(name):
@@ -300,6 +300,29 @@ def _workflow(argv):
     return 0
 
 
+def _git(argv):
+    from . import gitx
+    sub = argv[0] if argv else "status"
+    rest = argv[1:]
+    fns = {"status": gitx.status, "diff": gitx.diff, "log": gitx.log,
+           "branch": gitx.branches, "branches": gitx.branches,
+           "show": gitx.show, "review": gitx.review}
+    if sub not in fns:
+        print("usage: omerta git <status|diff|log|branch|show <ref>|review>\n"
+              "(mutating git — commit/reset/push — goes through the agent's gate)")
+        return 1
+    a = {}
+    if sub == "show" and rest:
+        a["ref"] = rest[0]
+    if sub == "diff" and rest and rest[0] in ("--staged", "staged"):
+        a["staged"] = True
+    try:
+        _emit(fns[sub](a))
+    except Exception as e:  # noqa: BLE001
+        print(f"git error: {e}"); return 1
+    return 0
+
+
 def _role(argv):
     from . import roles, config
     if not argv:
@@ -344,4 +367,5 @@ def dispatch(argv):
         "debug": _debug,
         "role": _role,
         "workflow": _workflow,
+        "git": _git,
     }[verb](rest)

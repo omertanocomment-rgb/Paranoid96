@@ -58,8 +58,25 @@ def resolve(role):
     return ALIASES.get(role.lower(), role.lower())
 
 
+# Process-scoped active role, set explicitly (e.g. by the orchestrator) so a
+# stage's role doesn't depend on env/settings precedence and never leaks into
+# subprocesses the agent runs. Takes priority over OMERTA_ROLE.
+_ACTIVE = None
+
+
+def set_active(role):
+    global _ACTIVE
+    _ACTIVE = resolve(role) or None
+    return _ACTIVE
+
+
+def active():
+    return _ACTIVE
+
+
 def block(role=None):
-    """The focus block for the current role (arg, else OMERTA_ROLE), or ''. """
-    r = resolve(role or config.get("OMERTA_ROLE", ""))
+    """The focus block for the current role: explicit arg, else the active role,
+    else OMERTA_ROLE. Returns '' when no role applies."""
+    r = resolve(role) or _ACTIVE or resolve(config.get("OMERTA_ROLE", ""))
     body = ROLES.get(r)
     return f"[{body}]" if body else ""

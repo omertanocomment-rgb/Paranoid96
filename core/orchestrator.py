@@ -34,22 +34,18 @@ def run(task, pipeline="default", project="general", max_stages=6):
                           f"try: {', '.join(sorted(PIPELINES))}"}
     transcript = []
     context = ""
-    import os
     for role in stages[:max_stages]:
         agent = Agent(project=project)
-        seed = (f"[pipeline role: {role}]\n"
+        seed = (f"[pipeline stage: {role}]\n"
                 + (f"Prior stage output:\n{context}\n\n" if context else "")
                 + f"Task: {task}")
-        # apply the role for this stage only
-        prev = os.environ.get("OMERTA_ROLE")
-        os.environ["OMERTA_ROLE"] = role
+        # apply the role for this stage only (no env mutation → no subprocess leak)
+        prev = roles.active()
+        roles.set_active(role)
         try:
             res = agent.turn(seed)
         finally:
-            if prev is None:
-                os.environ.pop("OMERTA_ROLE", None)
-            else:
-                os.environ["OMERTA_ROLE"] = prev
+            roles.set_active(prev)
         entry = {"role": role, "text": res.get("text", ""),
                  "pending": res.get("pending"), "provider": res.get("provider")}
         transcript.append(entry)
