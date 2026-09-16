@@ -15,7 +15,7 @@ import json
 import sys
 
 HANDLED = {"firmware", "teach", "learn", "memory", "forget", "rules",
-           "index", "search"}
+           "index", "search", "symbol", "deps"}
 
 
 def _plugin_tool(name):
@@ -123,26 +123,55 @@ def _rules(argv):
     return 0
 
 
-# ── index / search ───────────────────────────────────────────────────────────
+# ── code index / search / symbol / deps ──────────────────────────────────────
 def _index(argv):
-    from tools import importers
+    from . import index
     path = argv[0] if argv else "."
-    res = importers.auto(path, project="general")
-    _emit(res)
-    return 0 if res.get("status") == "ok" else 1
+    idx = index.build(path, save=True)
+    print(f"indexed {idx['counts']['files']} files, "
+          f"{idx['counts']['symbols']} symbols "
+          f"({', '.join(f'{k}:{v}' for k, v in sorted(idx['languages'].items()))})")
+    # also let the agent's memory learn the repo shape
+    try:
+        from tools import importers
+        importers.auto(path, project="general")
+    except Exception:  # noqa: BLE001
+        pass
+    return 0
 
 
 def _search(argv):
     q = " ".join(argv).strip()
     if not q:
-        print('usage: omerta search "query"'); return 1
-    from . import memory
-    hits = memory.recall(q, top_k=25)
-    if not hits:
-        print("no matches in the index/memory. Run `omerta index` first.")
+        print('usage: omerta search "symbol-or-file"'); return 1
+    from . import index
+    r = index.search(q)
+    for s in r["symbols"]:
+        print(f"  {s['file']}:{s['line']}  {s['kind']} {s['name']}")
+    for f in r["files"]:
+        print(f"  {f}")
+    if not r["symbols"] and not r["files"]:
+        print("no code matches. Run `omerta index` first, or try `omerta memory search`.")
+    return 0
+
+
+def _symbol(argv):
+    name = " ".join(argv).strip()
+    if not name:
+        print('usage: omerta symbol "Name"'); return 1
+    from . import index
+    r = index.symbol(name)
+    if not r["definitions"]:
+        print(f"no definition of '{name}' found (run `omerta index` first)")
         return 0
-    for h in hits:
-        print(f"- ({h['kind']}) {h['content']}")
+    for s in r["definitions"]:
+        print(f"  {s['file']}:{s['line']}  {s['kind']} {s['name']}")
+    return 0
+
+
+def _deps(argv):
+    from . import index
+    _emit(index.deps(argv[0] if argv else None))
     return 0
 
 
@@ -163,4 +192,6 @@ def dispatch(argv):
         "rules": _rules,
         "index": _index,
         "search": _search,
+        "symbol": _symbol,
+        "deps": _deps,
     }[verb](rest)
