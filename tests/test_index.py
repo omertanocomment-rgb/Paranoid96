@@ -51,8 +51,23 @@ def test_self_index():
           f"{idx['counts']['symbols']} symbols, found class Agent")
 
 
+def test_call_graph():
+    d = tempfile.mkdtemp()
+    open(os.path.join(d, "m.py"), "w").write(
+        "def helper():\n    return 1\n\n"
+        "def main():\n    helper()\n    print('go')\n")
+    idx = index.build(d, save=True)
+    assert idx["counts"]["call_edges"] >= 2, idx["counts"]
+    c = index.calls("main", root=d)
+    assert "helper" in [x for e in c["defines_calls_to"] for x in e["callees"]]
+    who = index.calls("helper", root=d)
+    assert any(e["caller"] == "main" for e in who["called_by"]), who
+    print("  ✓ call graph: main→helper edge and helper←main caller found")
+
+
 if __name__ == "__main__":
     test_python_symbols_and_imports()
     test_cache_roundtrip()
+    test_call_graph()
     test_self_index()
     print("\nINDEX TESTS PASSED")

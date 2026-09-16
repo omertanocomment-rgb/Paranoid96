@@ -20,7 +20,8 @@ from pathlib import Path
 from . import config
 
 SKIP_DIRS = {".git", "node_modules", "build", "dist", "__pycache__", ".gradle",
-             "venv", ".venv", ".idea", "out", "target", ".mypy_cache", "artifacts"}
+             "venv", ".venv", ".idea", "out", "target", ".mypy_cache", "artifacts",
+             "build_pkg"}
 MAX_FILE = 400_000
 INDEX_DIR = config.DATA_DIR / "index"
 
@@ -70,27 +71,44 @@ def _index_path(root: Path) -> Path:
     return INDEX_DIR / f"{h}.json"
 
 
+def _callees(func_node):
+    """Names called inside a function body (best-effort: Name/Attribute)."""
+    out = set()
+    for n in ast.walk(func_node):
+        if isinstance(n, ast.Call):
+            f = n.func
+            if isinstance(f, ast.Name):
+                out.add(f.id)
+            elif isinstance(f, ast.Attribute):
+                out.add(f.attr)
+    return sorted(out)
+
+
 def _py_symbols(text):
-    syms, imports = [], set()
+    syms, imports, calls = [], set(), {}
     try:
         tree = ast.parse(text)
     except SyntaxError:
-        return None, None
+        return None, None, None
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             syms.append(("function", node.name, node.lineno))
+            calls[node.name] = sorted(set(calls.get(node.name, []))
+                                      | set(_callees(node)))
         elif isinstance(node, ast.ClassDef):
             syms.append(("class", node.name, node.lineno))
             for b in node.body:
                 if isinstance(b, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    syms.append(("method", f"{node.name}.{b.name}", b.lineno))
+                    q = f"{node.name}.{b.name}"
+                    syms.append(("method", q, b.lineno))
+                    calls[q] = _callees(b)
         elif isinstance(node, ast.Import):
             for a in node.names:
                 imports.add(a.name.split(".")[0])
         elif isinstance(node, ast.ImportFrom):
             if node.module:
                 imports.add(node.module.split(".")[0])
-    return syms, sorted(imports)
+    return syms, sorted(imports), calls
 
 
 def _regex_symbols(lang, text):
@@ -108,7 +126,7 @@ def _regex_symbols(lang, text):
 
 def build(root=".", save=True) -> dict:
     root = Path(root).resolve()
-    files, symbols, deps = [], [], {}
+    files, symbols, deps, calls = [], [], {}, []
     lang_counts = {}
     for p in root.rglob("*"):
         if not p.is_file():
@@ -131,9 +149,13 @@ def build(root=".", save=True) -> dict:
         files.append(str(rel))
         lang_counts[lang] = lang_counts.get(lang, 0) + 1
         if lang == "python":
-            syms, imports = _py_symbols(text)
+            syms, imports, fcalls = _py_symbols(text)
             if syms is None:
-                syms, imports = [], []
+                syms, imports, fcalls = [], [], {}
+            for caller, callees in (fcalls or {}).items():
+                if callees:
+                    calls.append({"caller": caller, "file": str(rel),
+                                  "callees": callees})
         else:
             syms, imports = _regex_symbols(lang, text)
         for kind, name, line in syms:
@@ -144,8 +166,9 @@ def build(root=".", save=True) -> dict:
 
     idx = {"root": str(root), "built_at": time.time(),
            "files": sorted(files), "symbols": symbols, "deps": deps,
-           "languages": lang_counts,
-           "counts": {"files": len(files), "symbols": len(symbols)}}
+           "calls": calls, "languages": lang_counts,
+           "counts": {"files": len(files), "symbols": len(symbols),
+                      "call_edges": sum(len(c["callees"]) for c in calls)}}
     if save:
         INDEX_DIR.mkdir(parents=True, exist_ok=True)
         _index_path(root).write_text(json.dumps(idx))
@@ -198,3 +221,25 @@ def deps(target=None, root="."):
     top = sorted(freq.items(), key=lambda kv: -kv[1])[:30]
     return {"files_with_imports": len(idx["deps"]),
             "top_imports": [{"module": m, "used_by": n} for m, n in top]}
+
+
+def calls(name, root=".", limit=60):
+    """Python call graph: who calls `name`, and what `name` calls.
+
+    Best-effort (name-based, not fully resolved), so treat it as LIKELY, not
+    proof — matching functions by short or qualified name."""
+    idx = _ensure(root)
+    edges = idx.get("calls", [])
+    short = name.split(".")[-1]
+    callees = []
+    for e in edges:
+        if e["caller"] == name or e["caller"].endswith("." + name) \
+                or e["caller"] == short:
+            callees.append({"caller": e["caller"], "file": e["file"],
+                            "callees": e["callees"]})
+    callers = [{"caller": e["caller"], "file": e["file"]}
+               for e in edges if short in e["callees"]]
+    return {"name": name, "confidence": "LIKELY (name-based)",
+            "defines_calls_to": callees[:limit],
+            "called_by": callers[:limit],
+            "counts": {"as_caller": len(callees), "as_callee": len(callers)}}

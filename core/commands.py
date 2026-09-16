@@ -16,7 +16,7 @@ import sys
 
 HANDLED = {"firmware", "teach", "learn", "memory", "forget", "rules",
            "index", "search", "symbol", "deps", "sandbox",
-           "agent", "plan", "review", "build", "test", "debug", "role"}
+           "agent", "plan", "review", "build", "test", "debug", "role", "calls"}
 
 
 def _plugin_tool(name):
@@ -176,6 +176,15 @@ def _deps(argv):
     return 0
 
 
+def _calls(argv):
+    name = " ".join(argv).strip()
+    if not name:
+        print('usage: omerta calls "FunctionName"'); return 1
+    from . import index
+    _emit(index.calls(name))
+    return 0
+
+
 # ── sandbox (isolation + snapshots) ──────────────────────────────────────────
 def _sandbox(argv):
     from . import isolate
@@ -297,6 +306,7 @@ def dispatch(argv):
         "symbol": _symbol,
         "deps": _deps,
         "sandbox": _sandbox,
+        "calls": _calls,
         "agent": _agent,
         "plan": _plan,
         "review": _review,

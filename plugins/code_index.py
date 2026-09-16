@@ -33,6 +33,10 @@ def code_deps(args):
     return _idx().deps(args.get("target"), root=args.get("path", "."))
 
 
+def code_calls(args):
+    return _idx().calls(args.get("name", ""), root=args.get("path", "."))
+
+
 def register():
     return {
         "code_index": {"fn": code_index, "description":
@@ -51,4 +55,9 @@ def register():
                       "Show the import/dependency graph, or imports of one file.",
                       "args": {"target": "optional file substring", "path": "repo root"},
                       "side_effects": False},
+        "code_calls": {"fn": code_calls, "description":
+                       "Python call graph: who calls a function and what it calls "
+                       "(name-based, LIKELY).",
+                       "args": {"name": "function name", "path": "repo root"},
+                       "side_effects": False},
     }
