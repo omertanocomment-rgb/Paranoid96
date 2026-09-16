@@ -27,6 +27,13 @@ data class OmertaSettings(
     val systemPrompt: String,
     val effort: String,
     val streaming: Boolean,
+    val maxTokens: Int,
+    val webSearch: Boolean,
+    val codeExecution: Boolean,
+    val mcpName: String,
+    val mcpUrl: String,
+    val agentMode: Boolean,
+    val autoApprove: Boolean,
 ) {
     val embedded: Boolean get() = engineMode == EngineMode.EMBEDDED
 }
@@ -42,6 +49,13 @@ class SettingsStore(private val context: Context) {
         val SYSTEM_PROMPT = stringPreferencesKey("system_prompt")
         val EFFORT = stringPreferencesKey("effort")
         val STREAMING = booleanPreferencesKey("streaming")
+        val MAX_TOKENS = androidx.datastore.preferences.core.intPreferencesKey("max_tokens")
+        val WEB_SEARCH = booleanPreferencesKey("web_search")
+        val CODE_EXEC = booleanPreferencesKey("code_exec")
+        val MCP_NAME = stringPreferencesKey("mcp_name")
+        val MCP_URL = stringPreferencesKey("mcp_url")
+        val AGENT_MODE = booleanPreferencesKey("agent_mode")
+        val AUTO_APPROVE = booleanPreferencesKey("auto_approve")
     }
 
     companion object {
@@ -67,6 +81,13 @@ class SettingsStore(private val context: Context) {
             systemPrompt = p[Keys.SYSTEM_PROMPT] ?: DEFAULT_SYSTEM,
             effort = p[Keys.EFFORT] ?: DEFAULT_EFFORT,
             streaming = p[Keys.STREAMING] ?: true,
+            maxTokens = p[Keys.MAX_TOKENS] ?: 8192,
+            webSearch = p[Keys.WEB_SEARCH] ?: false,
+            codeExecution = p[Keys.CODE_EXEC] ?: false,
+            mcpName = p[Keys.MCP_NAME] ?: "",
+            mcpUrl = p[Keys.MCP_URL] ?: "",
+            agentMode = p[Keys.AGENT_MODE] ?: false,
+            autoApprove = p[Keys.AUTO_APPROVE] ?: false,
         )
     }
 
@@ -79,6 +100,13 @@ class SettingsStore(private val context: Context) {
         systemPrompt: String? = null,
         effort: String? = null,
         streaming: Boolean? = null,
+        maxTokens: Int? = null,
+        webSearch: Boolean? = null,
+        codeExecution: Boolean? = null,
+        mcpName: String? = null,
+        mcpUrl: String? = null,
+        agentMode: Boolean? = null,
+        autoApprove: Boolean? = null,
     ) {
         context.dataStore.edit { p ->
             engineMode?.let { p[Keys.ENGINE_MODE] = it }
@@ -89,6 +117,13 @@ class SettingsStore(private val context: Context) {
             systemPrompt?.let { p[Keys.SYSTEM_PROMPT] = it }
             effort?.let { p[Keys.EFFORT] = it }
             streaming?.let { p[Keys.STREAMING] = it }
+            maxTokens?.let { p[Keys.MAX_TOKENS] = it }
+            webSearch?.let { p[Keys.WEB_SEARCH] = it }
+            codeExecution?.let { p[Keys.CODE_EXEC] = it }
+            mcpName?.let { p[Keys.MCP_NAME] = it.trim() }
+            mcpUrl?.let { p[Keys.MCP_URL] = it.trim() }
+            agentMode?.let { p[Keys.AGENT_MODE] = it }
+            autoApprove?.let { p[Keys.AUTO_APPROVE] = it }
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,9 +15,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,9 +60,28 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
 
     val settings by vm.settings.collectAsStateWithLifecycle()
     val needsKey = settings?.let { it.embedded && it.anthropicApiKey.isBlank() } ?: false
+    val approval by vm.approval.collectAsStateWithLifecycle()
+
+    approval?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { vm.resolveApproval(false) },
+            containerColor = OmertaSurface,
+            title = { Text("Allow tool?", color = OmertaAmber, style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Text("Agent wants to run:\n\n${pending.name}\n${pending.input}",
+                    color = OmertaTextPrimary, style = MaterialTheme.typography.bodyMedium)
+            },
+            confirmButton = { TextButton(onClick = { vm.resolveApproval(true) }) {
+                Text("ALLOW", color = OmertaAmber) } },
+            dismissButton = { TextButton(onClick = { vm.resolveApproval(false) }) {
+                Text("DENY", color = OmertaTextSecondary) } },
+        )
+    }
 
     Scaffold(
         containerColor = OmertaBlack,
+        // Top bar keeps its own status-bar inset; the input bar handles nav-bar + IME.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             OmertaTopBar(
                 connection = state.connection,

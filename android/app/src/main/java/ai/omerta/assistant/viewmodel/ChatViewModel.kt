@@ -3,13 +3,18 @@ package ai.omerta.assistant.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import ai.omerta.assistant.data.agent.DeviceTools
 import ai.omerta.assistant.data.local.OmertaSettings
 import ai.omerta.assistant.data.local.SettingsStore
 import ai.omerta.assistant.data.model.ChatItem
 import ai.omerta.assistant.data.model.Role
+import ai.omerta.assistant.data.remote.AnthropicClient
 import ai.omerta.assistant.data.remote.StreamEvent
 import ai.omerta.assistant.data.repository.ChatRepository
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,9 +39,27 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settingsStore = SettingsStore(app)
     private val repo = ChatRepository()
+    private val deviceTools = DeviceTools(app)
 
     val settings: StateFlow<OmertaSettings?> =
         settingsStore.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** A pending device-tool action awaiting the operator's approval (Agent mode). */
+    data class PendingApproval(
+        val name: String,
+        val input: Map<String, String>,
+        val deferred: CompletableDeferred<Boolean>,
+    )
+
+    private val _approval = MutableStateFlow<PendingApproval?>(null)
+    val approval: StateFlow<PendingApproval?> = _approval.asStateFlow()
+
+    fun resolveApproval(allow: Boolean) {
+        _approval.value?.deferred?.complete(allow)
+        _approval.value = null
+    }
+
+    fun hasAllFilesAccess(): Boolean = deviceTools.hasAllFilesAccess()
 
     private val _ui = MutableStateFlow(ChatUiState())
     val ui: StateFlow<ChatUiState> = _ui.asStateFlow()
@@ -69,6 +92,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun stop() {
+        _approval.value?.deferred?.complete(false)
+        _approval.value = null
         streamJob?.cancel()
         finalizeStreaming(interrupted = true)
     }
@@ -93,7 +118,55 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private fun dispatch() {
         val s = settings.value ?: return
         val history = _ui.value.messages.map { it.toWire() }
-        if (s.streaming) streamResponse(s, history) else sendResponse(s, history)
+        when {
+            s.agentMode && s.embedded -> runAgent(s, history)
+            s.streaming -> streamResponse(s, history)
+            else -> sendResponse(s, history)
+        }
+    }
+
+    /** Autonomous, permission-gated tool-use loop (Agent mode). */
+    private fun runAgent(s: OmertaSettings, history: List<ai.omerta.assistant.data.model.WireMessage>) {
+        _ui.update { it.copy(isSending = true) }
+        streamJob = viewModelScope.launch {
+            val handle: suspend (String, Map<String, String>) -> AnthropicClient.ToolOutcome = { name, input ->
+                val allowed = if (s.autoApprove) true else {
+                    val d = CompletableDeferred<Boolean>()
+                    _approval.value = PendingApproval(name, input, d)
+                    d.await()
+                }
+                if (!allowed) AnthropicClient.ToolOutcome("denied by operator", isError = true)
+                else withContext(Dispatchers.IO) {
+                    runCatching { AnthropicClient.ToolOutcome(deviceTools.execute(name, input)) }
+                        .getOrElse { AnthropicClient.ToolOutcome(it.message ?: "tool error", isError = true) }
+                }
+            }
+            try {
+                repo.agent(s, history, DeviceTools.schemas(), handle) { ev ->
+                    when (ev) {
+                        is AnthropicClient.AgentEvent.Text ->
+                            if (ev.text.isNotBlank()) appendAssistant(ev.text)
+                        is AnthropicClient.AgentEvent.ToolStart ->
+                            appendAssistant("⚙ ${ev.name} ${ev.input}")
+                        is AnthropicClient.AgentEvent.ToolEnd ->
+                            appendAssistant("↳ ${ev.result.take(800)}", isError = ev.isError)
+                        is AnthropicClient.AgentEvent.Done -> { /* text already emitted */ }
+                        is AnthropicClient.AgentEvent.Failure -> appendError(ev.message)
+                    }
+                }
+            } catch (e: Exception) {
+                appendError(e.message ?: "agent error")
+            } finally {
+                _approval.value = null
+                _ui.update { it.copy(isSending = false) }
+            }
+        }
+    }
+
+    private fun appendAssistant(text: String, isError: Boolean = false) {
+        _ui.update {
+            it.copy(messages = it.messages + ChatItem(role = Role.ASSISTANT, content = text, isError = isError))
+        }
     }
 
     private fun sendResponse(s: OmertaSettings, history: List<ai.omerta.assistant.data.model.WireMessage>) {
@@ -198,11 +271,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         engineMode: String? = null, anthropicApiKey: String? = null,
         backendUrl: String? = null, appToken: String? = null, model: String? = null,
         systemPrompt: String? = null, effort: String? = null, streaming: Boolean? = null,
+        maxTokens: Int? = null, webSearch: Boolean? = null, codeExecution: Boolean? = null,
+        mcpName: String? = null, mcpUrl: String? = null,
+        agentMode: Boolean? = null, autoApprove: Boolean? = null,
     ) {
         viewModelScope.launch {
             settingsStore.update(
                 engineMode, anthropicApiKey, backendUrl, appToken,
                 model, systemPrompt, effort, streaming,
+                maxTokens, webSearch, codeExecution, mcpName, mcpUrl,
+                agentMode, autoApprove,
             )
             checkConnection()
         }

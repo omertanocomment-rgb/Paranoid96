@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -53,9 +55,32 @@ class AnthropicClient {
         .retryOnConnectionFailure(true)
         .build()
 
-    private fun Request.Builder.anthropic(key: String) = apply {
+    private fun Request.Builder.anthropic(key: String, betas: List<String> = emptyList()) = apply {
         header("x-api-key", key)
         header("anthropic-version", API_VERSION)
+        if (betas.isNotEmpty()) header("anthropic-beta", betas.joinToString(","))
+    }
+
+    /** Beta headers required by the enabled capabilities. */
+    private fun betasFor(req: ChatRequest): List<String> {
+        val b = mutableListOf<String>()
+        if (req.codeExecution) b += "code-execution-2025-08-25"
+        if (!req.mcpUrl.isNullOrBlank()) b += "mcp-client-2025-11-20"
+        return b
+    }
+
+    /** Server-side tools/skills + MCP connector, per the enabled capabilities. */
+    private fun tools(req: ChatRequest) = buildJsonArray {
+        if (req.webSearch) add(buildJsonObject {
+            put("type", "web_search_20260209"); put("name", "web_search")
+        })
+        if (req.codeExecution) add(buildJsonObject {
+            put("type", "code_execution_20260521"); put("name", "code_execution")
+        })
+        if (!req.mcpUrl.isNullOrBlank()) add(buildJsonObject {
+            put("type", "mcp_toolset")
+            put("mcp_server_name", req.mcpName?.ifBlank { "connector" } ?: "connector")
+        })
     }
 
     private fun thinking(model: String, stream: Boolean): JsonObject = buildJsonObject {
@@ -70,13 +95,23 @@ class AnthropicClient {
 
     private fun body(req: ChatRequest, stream: Boolean): String {
         val model = req.model ?: "claude-opus-5"
+        val defaultMax = if (stream) 32000 else 16000
+        val toolsArr = tools(req)
         val obj = buildJsonObject {
             put("model", model)
-            put("max_tokens", if (stream) 32000 else 16000)
+            put("max_tokens", req.maxTokens ?: defaultMax)
             put("thinking", thinking(model, stream))
             putJsonObject("output_config") { put("effort", req.effort ?: "high") }
             req.system?.takeIf { it.isNotBlank() }?.let { put("system", it) }
             if (stream) put("stream", true)
+            if (toolsArr.isNotEmpty()) put("tools", toolsArr)
+            if (!req.mcpUrl.isNullOrBlank()) putJsonArray("mcp_servers") {
+                add(buildJsonObject {
+                    put("type", "url")
+                    put("url", req.mcpUrl)
+                    put("name", req.mcpName?.ifBlank { "connector" } ?: "connector")
+                })
+            }
             putJsonArray("messages") {
                 req.messages.forEach { m ->
                     add(buildJsonObject {
@@ -103,7 +138,7 @@ class AnthropicClient {
     suspend fun chat(key: String, request: ChatRequest): Result<ChatResponse> = runCatching {
         if (key.isBlank()) error("No Anthropic API key set")
         val payload = body(request, stream = false)
-        val req = Request.Builder().url(MESSAGES_URL).anthropic(key)
+        val req = Request.Builder().url(MESSAGES_URL).anthropic(key, betasFor(request))
             .post(payload.toRequestBody(jsonMedia)).build()
         client.newCall(req).execute().use { resp ->
             val bodyStr = resp.body?.string().orEmpty()
@@ -132,7 +167,7 @@ class AnthropicClient {
             return@flow
         }
         val payload = body(request, stream = true)
-        val req = Request.Builder().url(MESSAGES_URL).anthropic(key)
+        val req = Request.Builder().url(MESSAGES_URL).anthropic(key, betasFor(request))
             .header("Accept", "text/event-stream")
             .post(payload.toRequestBody(jsonMedia)).build()
 
@@ -192,6 +227,110 @@ class AnthropicClient {
             emit(StreamEvent.Done(model, stopReason))
         }
     }.flowOn(Dispatchers.IO)
+
+    // ---------------------------------------------------------------------------
+    // Agent mode — autonomous tool-use loop. Device tools are approved + executed by
+    // the caller (ViewModel) via [handleTool]; server tools (web/code/MCP) run server-side.
+    // ---------------------------------------------------------------------------
+    data class ToolOutcome(val content: String, val isError: Boolean = false)
+
+    sealed interface AgentEvent {
+        data class Text(val text: String) : AgentEvent
+        data class ToolStart(val name: String, val input: Map<String, String>) : AgentEvent
+        data class ToolEnd(val name: String, val result: String, val isError: Boolean) : AgentEvent
+        data class Done(val text: String) : AgentEvent
+        data class Failure(val message: String) : AgentEvent
+    }
+
+    suspend fun agent(
+        key: String,
+        request: ChatRequest,
+        deviceTools: JsonArray,
+        handleTool: suspend (name: String, input: Map<String, String>) -> ToolOutcome,
+        emit: suspend (AgentEvent) -> Unit,
+        maxSteps: Int = 12,
+    ) {
+        if (key.isBlank()) { emit(AgentEvent.Failure("No Anthropic API key set")); return }
+        val model = request.model ?: "claude-opus-5"
+        // Mutable conversation as JSON message objects.
+        val messages = request.messages.map { m ->
+            buildJsonObject { put("role", m.role); put("content", m.content) } as JsonElement
+        }.toMutableList()
+
+        val toolSchemas = buildJsonArray {
+            deviceTools.forEach { add(it) }
+            tools(request).forEach { add(it) }  // server tools too, if enabled
+        }
+
+        repeat(maxSteps) {
+            val body = buildJsonObject {
+                put("model", model)
+                put("max_tokens", request.maxTokens ?: 16000)
+                put("thinking", thinking(model, false))
+                putJsonObject("output_config") { put("effort", request.effort ?: "high") }
+                request.system?.takeIf { it.isNotBlank() }?.let { put("system", it) }
+                if (toolSchemas.isNotEmpty()) put("tools", toolSchemas)
+                if (!request.mcpUrl.isNullOrBlank()) putJsonArray("mcp_servers") {
+                    add(buildJsonObject {
+                        put("type", "url"); put("url", request.mcpUrl)
+                        put("name", request.mcpName?.ifBlank { "connector" } ?: "connector")
+                    })
+                }
+                put("messages", buildJsonArray { messages.forEach { add(it) } })
+            }
+            val payload = json.encodeToString(JsonObject.serializer(), body)
+            val req = Request.Builder().url(MESSAGES_URL).anthropic(key, betasFor(request))
+                .post(payload.toRequestBody(jsonMedia)).build()
+
+            val root = try {
+                client.newCall(req).execute().use { resp ->
+                    val b = resp.body?.string().orEmpty()
+                    if (!resp.isSuccessful) { emit(AgentEvent.Failure("HTTP ${resp.code}: ${b.take(300)}")); return }
+                    json.parseToJsonElement(b).jsonObject
+                }
+            } catch (e: Exception) { emit(AgentEvent.Failure(e.message ?: "request failed")); return }
+
+            val content = root["content"]?.jsonArray ?: buildJsonArray {}
+            val text = content.mapNotNull {
+                val o = it.jsonObject
+                if (o["type"]?.jsonPrimitive?.contentOrNullSafe() == "text") o["text"]?.jsonPrimitive?.content else null
+            }.joinToString("")
+            if (text.isNotBlank()) emit(AgentEvent.Text(text))
+
+            val stop = root["stop_reason"]?.jsonPrimitive?.contentOrNullSafe()
+            val toolUses = content.filter {
+                it.jsonObject["type"]?.jsonPrimitive?.contentOrNullSafe() == "tool_use"
+            }
+            if (stop != "tool_use" || toolUses.isEmpty()) { emit(AgentEvent.Done(text)); return }
+
+            // Record the assistant turn verbatim (required for the follow-up).
+            messages.add(buildJsonObject { put("role", "assistant"); put("content", content) })
+
+            // Execute each tool call (client-side device tools) and collect results.
+            val results = buildJsonArray {
+                for (tu in toolUses) {
+                    val o = tu.jsonObject
+                    val id = o["id"]?.jsonPrimitive?.contentOrNullSafe() ?: continue
+                    val name = o["name"]?.jsonPrimitive?.contentOrNullSafe() ?: continue
+                    val inputObj = o["input"]?.jsonObject ?: buildJsonObject {}
+                    val input = inputObj.mapValues { (_, v) ->
+                        (v as? kotlinx.serialization.json.JsonPrimitive)?.content ?: v.toString()
+                    }
+                    emit(AgentEvent.ToolStart(name, input))
+                    val outcome = handleTool(name, input)
+                    emit(AgentEvent.ToolEnd(name, outcome.content, outcome.isError))
+                    add(buildJsonObject {
+                        put("type", "tool_result")
+                        put("tool_use_id", id)
+                        put("content", outcome.content)
+                        if (outcome.isError) put("is_error", true)
+                    })
+                }
+            }
+            messages.add(buildJsonObject { put("role", "user"); put("content", results) })
+        }
+        emit(AgentEvent.Failure("agent stopped: reached step limit"))
+    }
 }
 
 // --- small JSON helpers ---

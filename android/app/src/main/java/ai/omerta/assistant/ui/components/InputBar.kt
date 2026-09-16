@@ -2,6 +2,8 @@ package ai.omerta.assistant.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -36,7 +38,7 @@ fun InputBar(
     onStop: () -> Unit,
     isSending: Boolean,
 ) {
-    Surface(color = OmertaBlack) {
+    Surface(color = OmertaBlack, modifier = Modifier.navigationBarsPadding().imePadding()) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,

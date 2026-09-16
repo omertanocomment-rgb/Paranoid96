@@ -34,6 +34,11 @@ class ChatRepository(
             system = s.systemPrompt.ifBlank { null },
             effort = s.effort,
             stream = stream,
+            maxTokens = s.maxTokens.takeIf { it > 0 },
+            webSearch = s.webSearch,
+            codeExecution = s.codeExecution,
+            mcpName = s.mcpName.ifBlank { null },
+            mcpUrl = s.mcpUrl.ifBlank { null },
         )
 
     suspend fun send(s: OmertaSettings, history: List<WireMessage>): Result<ChatResponse> {
@@ -46,5 +51,17 @@ class ChatRepository(
         val req = buildRequest(s, history, stream = true)
         return if (s.embedded) embedded.chatStream(s.anthropicApiKey, req)
         else remote.chatStream(s.backendUrl, s.appToken, req)
+    }
+
+    /** Agent mode (embedded only): autonomous tool-use loop with caller-supplied tools. */
+    suspend fun agent(
+        s: OmertaSettings,
+        history: List<WireMessage>,
+        deviceTools: kotlinx.serialization.json.JsonArray,
+        handleTool: suspend (String, Map<String, String>) -> AnthropicClient.ToolOutcome,
+        emit: suspend (AnthropicClient.AgentEvent) -> Unit,
+    ) {
+        embedded.agent(s.anthropicApiKey, buildRequest(s, history, stream = false),
+            deviceTools, handleTool, emit)
     }
 }

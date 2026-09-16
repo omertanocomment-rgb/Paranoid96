@@ -25,6 +25,12 @@ data class ChatRequest(
     val system: String? = null,
     val effort: String? = null,
     val stream: Boolean = false,
+    // Tech / capability controls (embedded engine honors these).
+    val maxTokens: Int? = null,
+    val webSearch: Boolean = false,
+    val codeExecution: Boolean = false,
+    val mcpName: String? = null,
+    val mcpUrl: String? = null,
 )
 
 @Serializable
