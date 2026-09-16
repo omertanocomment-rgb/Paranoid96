@@ -1,0 +1,9 @@
+.git
+__pycache__
+*.pyc
+build_pkg
+artifacts
+android-native/app/build
+desktop/node_modules
+desktop/dist
+data

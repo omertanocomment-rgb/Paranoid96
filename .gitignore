@@ -22,3 +22,6 @@ local.properties
 artifacts/
 build_pkg/
 android-native/app/build/
+
+# packaging output
+dist/

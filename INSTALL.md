@@ -6,7 +6,7 @@ up sync (`docs/SYNC.md`).
 ## 1. pip — works everywhere (Linux, macOS, Windows, Termux)
 
 ```bash
-pip install omerta_agent-1.0.0-py3-none-any.whl[all]
+pip install omerta_agent-1.1.0-py3-none-any.whl[all]
 omerta            # interactive
 omerta serve      # web UI on :8787
 omerta doctor     # what works, what's missing

@@ -34,7 +34,7 @@ that drives real backends.
 Prebuilt artifacts are in `artifacts/`. Full detail in `INSTALL.md`.
 
 ```bash
-pip install omerta_agent-1.0.0-py3-none-any.whl[all]   # any OS, incl. Termux
+pip install omerta_agent-1.1.0-py3-none-any.whl[all]   # any OS, incl. Termux
 omerta doctor
 ```
 

@@ -66,7 +66,8 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Self-contained mobile app (embedded Python, no Termux) | Implemented | `android-native/` (Chaquopy) |
 | Token auth, spoof-proof, on-device secrets | Implemented | `core/auth.py`; `docs/AUDIT.md`; tests on both servers |
 | Secret scanning in CI | Implemented | `.github/workflows/ci.yml` gitleaks |
-| Packaging: wheel/sdist, Electron, APK | Implemented | `scripts/build_all.sh`; Docker/.deb/AppImage = Planned |
+| Packaging: wheel/sdist, Electron, APK, Docker/OCI, .deb | Implemented | `scripts/build_all.sh`, `docker/Dockerfile`, `packaging/build-deb.sh` (built + validated) |
+| AppImage | Partial (recipe) | `packaging/build-appimage.sh` — thin AppImage, needs `appimagetool` |
 | Engineering roles (Architect/Developer/Reviewer/…) | Implemented (as focus profiles) | `core/roles.py` — 10 roles steer the one agent; `omerta plan/review/build/test/debug`, `omerta role`; `tests/test_roles.py` |
 | Parallel multi-agent orchestration | Planned | roles focus one agent; concurrent orchestrated agents are a follow-up |
 
@@ -75,6 +76,6 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 - Call-graph index (symbol + dependency graph are done; call edges are not).
 - Parallel multi-agent orchestration (roles focus a single agent today).
 - Firmware image **repack** (writing a modified boot/vendor_boot back out; inspect, decode and extract are done).
-- `.deb` / AppImage / OCI packaging targets.
+- Fat AppImage bundling its own Python (a thin, host-python recipe exists).
 
 These are honest gaps. OMERTA should say so rather than imply they exist.

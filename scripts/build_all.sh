@@ -68,7 +68,25 @@ else
   echo "  skipped — set ANDROID_HOME and install python3 (see android-native/README.md)"
 fi
 
-say "5/5  checksums"
+say "5/6  packages (docker / deb / appimage)"
+if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
+  docker build -t omerta-agent:latest -f docker/Dockerfile . && \
+    echo "  built docker image omerta-agent:latest"
+else
+  echo "  docker: skipped (no running daemon)"
+fi
+if command -v dpkg-deb >/dev/null; then
+  bash packaging/build-deb.sh && cp dist/omerta-agent_*_all.deb "$OUT"/ 2>/dev/null || true
+else
+  echo "  deb: skipped (install dpkg-deb)"
+fi
+if command -v appimagetool >/dev/null; then
+  bash packaging/build-appimage.sh && cp dist/OMERTA_AGENT-*.AppImage "$OUT"/ 2>/dev/null || true
+else
+  echo "  appimage: skipped (install appimagetool)"
+fi
+
+say "6/6  checksums"
 (cd "$OUT" && sha256sum * > SHA256SUMS 2>/dev/null || shasum -a 256 * > SHA256SUMS)
 ls -lh "$OUT"
 printf "\n\033[92mdone\033[0m — artifacts in %s\n" "$OUT"

@@ -42,7 +42,7 @@ def main():
             print("set OMERTA_SYNC_DIR, or: omerta sync <host:port|/path>")
         return 0
     if cmd in ("version", "--version", "-V"):
-        print("omerta-agent 1.0.0")
+        print("omerta-agent 1.1.0")
         return 0
     # firmware / teach / memory / index / search / rules
     from core import commands

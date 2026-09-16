@@ -6,7 +6,7 @@ rm -rf build_pkg/omerta_agent
 mkdir -p build_pkg/omerta_agent
 cp -r core tools skills plugins webui assets persona.yaml connectors.yaml build_pkg/omerta_agent/
 cp pyproject.toml README.md build_pkg/
-printf '"""OMERTA AGENT."""\n__version__ = "1.0.0"\n' > build_pkg/omerta_agent/__init__.py
+printf '"""OMERTA AGENT."""\n__version__ = "1.1.0"\n' > build_pkg/omerta_agent/__init__.py
 python3 - <<'PY'
 from pathlib import Path
 src = Path("cli.py").read_text().replace('if __name__ == "__main__":\n    sys.exit(main())', '')

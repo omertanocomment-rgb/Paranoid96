@@ -32,9 +32,22 @@ Self-contained mobile app and a normal, dependency-free backend.
 - **`firmware-bringup` skill** and a **TCL T509K starter device tree**
   (`firmware/t509k/`): AOSP makefiles, discovery-only DTS, evidence/build
   scripts, hardware/firmware/kernel KB, and a device constitution.
+- **Codebase index** (`core/index.py`): ast-accurate symbols + import graph for
+  Python, regex extractors for js/ts/go/rust/jvm/c/shell; `omerta index/search/
+  symbol/deps` and a `code_index` plugin. `tests/test_index.py`.
+- **Sandbox isolation + snapshots** (`core/isolate.py`): opt-in `ulimit` +
+  bubblewrap/firejail wrapping (network denied, key stores never mounted) and
+  workspace snapshot/rollback; `omerta sandbox …`. `tests/test_isolate.py`.
+- **Engineering roles** (`core/roles.py`): 10 focus profiles that steer the one
+  agent; `omerta agent/plan/review/build/test/debug` and `omerta role`.
+  `tests/test_roles.py`.
+- **Packaging**: `docker/Dockerfile` (OCI), `packaging/build-deb.sh` (built +
+  validated), and a thin `packaging/build-appimage.sh`; wired into
+  `scripts/build_all.sh`.
 - **New `omerta` verbs** (`core/commands.py`): `firmware`, `teach`, `memory`,
-  `forget`, `rules`, `index`, `search` — built on the existing memory/importer/
-  plugin systems.
+  `forget`, `rules`, `index`, `search`, `symbol`, `deps`, `sandbox`, `role`,
+  and the agent verbs above — built on the existing memory/importer/plugin/
+  index systems.
 - **`OMERTA.md`** project constitution and **`docs/OMERTA_AI_SPEC.md`** — an
   honest spec→implementation map (Implemented / Partial / Planned).
 - `docs/AUDIT.md` — security & correctness audit; `tests/test_httpd.py` and
