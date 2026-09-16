@@ -14,21 +14,21 @@ strength of a model response.
 | Phase | Area | Status | Where / evidence |
 |------|------|--------|------------------|
 | 1 | Installation / env | ✅ COMPLETE | `engine/scripts/install.sh`, `pyproject.toml`; `omerta doctor` verified |
-| 2 | Configuration | ✅ COMPLETE | `config.py` (TOML in `~/.config/omerta`); test `test_config_roundtrip` |
+| 2 | Configuration | ✅ COMPLETE | `config.py`: config.toml + providers.toml + policies.toml + project `.omerta/{artifacts,snapshots,reports}`; tests |
 | 3 | CLI | ✅ COMPLETE | `cli.py` (all documented commands); smoke-verified |
 | 3 | Web UI + API | ✅ COMPLETE | `web/server.py` (`/health`, `/api/config`, `/api/chat[/stream]`, `/api/agent`, UI); verified |
 | 4 | Model providers / router | ✅ Anthropic + OpenAI + local Ollama (all real) | `models/` — `provider:model` routing, honest degradation; tests |
 | 5b | Teach / learn by command | ✅ COMPLETE | `omerta learn/teach` → `Memory.learned_context()` injected into chat + agents |
 | 5 | Learning & memory | ✅ COMPLETE | `memory/db.py` (SQLite, teach/forget/show/search, SUCCESS/FAILURE); 2 tests |
 | 6 | Codebase intelligence | ✅ COMPLETE | `codebase/index.py` (files+symbols, ripgrep/py search); test `test_index_and_symbol_search` |
-| 7 | Tool system | ✅ COMPLETE | `tools/controller.py` (typed tools, permissions, approval gate) |
+| 7 | Tool system | ✅ COMPLETE — all groups | `tools/controller.py`: filesystem, terminal, process, search, git, build, test, package, firmware-analysis, device-io (typed, approval-gated); tests |
 | 8 | Sandbox | ✅ COMPLETE | `sandbox/runner.py` (docker/podman/bubblewrap detect + daemon check + honest fallback); verified |
 | 9 | Git engine | ✅ COMPLETE | `gitengine/engine.py` (status/branch/diff/log/snapshot); verified |
 | 10 | Multi-agent orchestration | ✅ core; ⚠️ shared-context depth basic | `agents/orchestrator.py` (roles + architect→dev→reviewer) |
 | 11 | Build/test/debug loop | ✅ COMPLETE | `buildloop/loop.py` (records cmd/exit/duration/artifact hashes); verified |
 | 12 | Evidence & recovery | ✅ COMPLETE | `evidence.py` + memory SUCCESS/FAILURE; tests |
 | 13 | App/software/firmware eng | ✅ scaffolding; depends on host toolchain | `firmware/inspect.py` + agent roles |
-| 17 | Firmware/device-tree tools | ✅ detection + inspect; ⚠️ deep build needs tools | `firmware/inspect.py` (dtc/fdtdump/mkbootimg/avbtool…) |
+| 17 | Firmware/device-tree tools | ✅ full detection + invocation + ops | `firmware/inspect.py`: detects the whole spec toolchain; `run_tool` invokes any of them; ops: unpack boot, AVB info, dtb↔dts, sparse→raw, lpunpack, extract; `omerta firmware <op>` |
 | 14 | Security & packaging | ✅ deb/AppImage/exe; secrets env-only | `engine/packaging/` + CI; deb install verified |
 | 15 | RC stress test | ⚠️ partial | unit tests + smoke; full 20-category matrix is future work |
 

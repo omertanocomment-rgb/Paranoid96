@@ -100,3 +100,38 @@ def test_memory_learned_context_injects_rules(tmp_path):
     # RULE ranked before FACT.
     assert ctx.index("bullet points") < ctx.index("Pixel 6")
     mem.close()
+
+
+def test_firmware_toolchain_covers_spec():
+    from omerta.firmware.inspect import toolchain, run_tool
+    tc = toolchain()
+    for t in ("dtc", "fdtdump", "mkbootimg", "unpack_bootimg", "avbtool",
+              "simg2img", "lpunpack", "adb", "fastboot", "repo", "make"):
+        assert t in tc, f"{t} missing from firmware toolchain detection"
+    # Missing tool is reported honestly, not guessed.
+    r = run_tool("definitely_not_a_real_tool_xyz", [])
+    assert r["available"] is False and r["evidence"] == "UNKNOWN"
+
+
+def test_tool_controller_has_all_phase7_groups(tmp_path):
+    from omerta.tools.controller import ToolController
+    tc = ToolController(root=tmp_path)
+    groups = {t.group for t in tc.list()}
+    for g in ("filesystem", "terminal", "process", "search", "git", "build",
+              "test", "package", "firmware-analysis", "device-io"):
+        assert g in groups, f"tool group {g} missing"
+    # Destructive device/build tools require approval.
+    names = {t.name: t for t in tc.list()}
+    assert names["device.fastboot"].requires_approval
+    assert names["build.run"].requires_approval
+
+
+def test_config_writes_companion_files(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMERTA_HOME", str(tmp_path))
+    from omerta.config import Config, scaffold_project
+    Config().save()
+    for f in ("config.toml", "providers.toml", "policies.toml"):
+        assert (tmp_path / f).exists(), f"{f} not written"
+    proj = scaffold_project(tmp_path)
+    for sub in ("artifacts", "snapshots", "reports"):
+        assert (proj / sub).is_dir()

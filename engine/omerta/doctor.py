@@ -11,7 +11,7 @@ from .sandbox.runner import detect_backend
 
 REQUIRED = ["git"]
 OPTIONAL = ["rg", "docker", "podman", "bwrap", "jq", "unzip", "zip", "clang", "gcc",
-            "ninja", "sqlite3"]
+            "ninja", "make", "sqlite3", "adb", "fastboot", "dtc", "avbtool", "repo"]
 
 
 @dataclass

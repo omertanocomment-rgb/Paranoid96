@@ -14,6 +14,7 @@ from .codebase.index import Index
 from .gitengine.engine import Git
 from .sandbox.runner import Sandbox
 from .buildloop.loop import BuildLoop
+from .firmware import inspect as fw
 from .firmware.inspect import inspect_image, toolchain
 from .agents.orchestrator import Orchestrator, ROLES
 
@@ -205,14 +206,35 @@ def cmd_review(_args):
     _p(f"[{r.role} · {r.model}]\n{r.text}")
 
 
+def _dump(d: dict):
+    for k, v in d.items():
+        _p(f"{k}: {v}")
+
+
 def cmd_firmware(args):
-    if args.what == "tools":
+    op = args.what
+    if op == "tools":
         for t, ok in toolchain().items():
             _p(f"[{'OK ' if ok else 'XX '}] {t}")
-    else:
-        info = inspect_image(args.image)
-        for k, v in info.items():
-            _p(f"{k}: {v}")
+        return
+    if op == "inspect":
+        _dump(inspect_image(args.image)); return
+    if op == "run":
+        _dump(fw.run_tool(args.image, args.args)); return
+    if op == "unpack":
+        _dump(fw.unpack_boot(args.image)); return
+    if op == "avb":
+        _dump(fw.avb_info(args.image)); return
+    if op == "dts":
+        _dump(fw.dtb_to_dts(args.image)); return
+    if op == "dtb":
+        _dump(fw.dts_to_dtb(args.image)); return
+    if op == "sparse":
+        _dump(fw.sparse_to_raw(args.image)); return
+    if op == "superunpack":
+        _dump(fw.super_unpack(args.image)); return
+    if op == "extract":
+        _dump(fw.extract(args.image)); return
 
 
 def cmd_web(args):
@@ -221,8 +243,14 @@ def cmd_web(args):
 
 
 def cmd_config(_args):
+    from .config import home_dir, scaffold_project
     cfg = Config.load(); path = cfg.save()
+    proj = scaffold_project()
     _p(f"[CONFIRMED] config at {path}")
+    d = home_dir()
+    for f in ("config.toml", "providers.toml", "policies.toml"):
+        _p(f"  {'OK ' if (d / f).exists() else 'XX '} {d / f}")
+    _p(f"[CONFIRMED] project scaffold at {proj} ({', '.join(p.name for p in sorted(proj.iterdir()))})")
     for k, v in cfg.__dict__.items():
         _p(f"  {k} = {v}")
 
@@ -281,9 +309,12 @@ def build_parser() -> argparse.ArgumentParser:
     d.set_defaults(fn=cmd_debug)
     sub.add_parser("review", help="review the working-tree diff").set_defaults(fn=cmd_review)
 
-    fw = sub.add_parser("firmware", help="inspect firmware / list tools")
-    fw.add_argument("what", choices=["inspect", "tools"])
-    fw.add_argument("image", nargs="?"); fw.set_defaults(fn=cmd_firmware)
+    fwp = sub.add_parser("firmware", help="inspect firmware, run toolchain, unpack images")
+    fwp.add_argument("what", choices=["tools", "inspect", "run", "unpack", "avb",
+                                      "dts", "dtb", "sparse", "superunpack", "extract"])
+    fwp.add_argument("image", nargs="?")
+    fwp.add_argument("args", nargs=argparse.REMAINDER, help="extra args for `run <tool>`")
+    fwp.set_defaults(fn=cmd_firmware)
 
     w = sub.add_parser("web", help="serve the web UI + API")
     w.add_argument("--host"); w.add_argument("--port", type=int); w.set_defaults(fn=cmd_web)
@@ -294,8 +325,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.cmd == "firmware" and args.what == "inspect" and not args.image:
-        _p("usage: omerta firmware inspect <image>"); return 2
+    if args.cmd == "firmware" and args.what != "tools" and not args.image:
+        _p(f"usage: omerta firmware {args.what} <image-or-tool>"); return 2
     rc = args.fn(args)
     return int(rc) if isinstance(rc, int) else 0
 
