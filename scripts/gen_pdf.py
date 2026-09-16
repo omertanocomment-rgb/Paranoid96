@@ -359,7 +359,31 @@ def build():
     S.append(P("omerta                       # interactive<br/>"
                "omerta -c \"audit this repo\"   # one-shot<br/>"
                "omerta --project omerta-beats<br/>"
-               "omerta serve | doctor | sync | version", CODE))
+               "omerta serve | doctor | sync | version<br/>"
+               "omerta teach \"rule\" | memory show | rules | index | search \"q\"<br/>"
+               "omerta firmware analyze &lt;dtb&gt; | report &lt;dir&gt; | plan", CODE))
+
+    # Firmware / device bring-up
+    S.append(P("Firmware &amp; device bring-up", H1))
+    S.append(P("OMERTA treats firmware the way a careful engineer does: evidence "
+               "first, no invented hardware values. Every field is tagged "
+               "<b>CONFIRMED &gt; LIKELY &gt; INFERRED &gt; UNKNOWN</b>; UNKNOWN is a "
+               "valid answer, so it says “UNKNOWN — evidence required” "
+               "rather than guess a GPIO, regulator or panel timing.", BODY))
+    S.append(table([
+        ["Read-only tool (Level 0)", "What it does"],
+        ["analyze_dtb(path)", "Decode a .dtb with a pure-Python FDT parser (no dtc) into model/SoC/CPU/display/touch/regulators, each with a confidence."],
+        ["board_report(dir)", "Fuse an adb evidence dir (getprop/cpuinfo/meminfo/partitions/dmesg + optional .dtb) into a BOARD REPORT with per-field confidence."],
+        ["collect_evidence_plan()", "The ordered, read-only adb commands to gather evidence."],
+    ], [1.9 * inch, 5.1 * inch]))
+    S.append(P("Safety levels map onto the approval gate: L0 read runs freely; "
+               "L1 build / L2 modify / L3 device I/O are proposed and approved; "
+               "L4 destructive (flash/erase/format) needs explicit approval and the "
+               "hard-deny list blocks the unrecoverable ones outright. "
+               "<font face='Courier'>firmware/t509k/</font> is a discovery-only TCL "
+               "T509K (MT6765) starter tree, and the <b>firmware-bringup</b> skill "
+               "drives the STOCK → EXTRACT → ANALYZE → RECONSTRUCT → "
+               "BUILD → BOOT-TEST loop, one subsystem at a time.", SMALL))
 
     # 12. Build
     S.append(P("Build & release", H2))
