@@ -44,6 +44,12 @@ def main():
     if cmd in ("version", "--version", "-V"):
         print("omerta-agent 1.0.0")
         return 0
+    # firmware / teach / memory / index / search / rules
+    from core import commands
+    if cmd in commands.HANDLED:
+        rc = commands.dispatch(argv)
+        if rc is not None:
+            return rc
     sys.argv = [sys.argv[0]] + argv
     import cli
     return cli.main()

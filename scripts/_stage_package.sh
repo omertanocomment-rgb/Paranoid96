@@ -57,6 +57,11 @@ def main():
         from omerta_agent import __version__
         print(f"omerta-agent {__version__}")
         return 0
+    from core import commands
+    if cmd in commands.HANDLED:
+        rc = commands.dispatch(argv)
+        if rc is not None:
+            return rc
     sys.argv = [sys.argv[0]] + argv
     from omerta_agent import cli_main
     return cli_main.main()

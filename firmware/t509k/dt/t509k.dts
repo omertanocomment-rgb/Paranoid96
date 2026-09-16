@@ -1,0 +1,32 @@
+/dts-v1/;
+
+/ {
+    model = "TCL T509K — OMERTA AI";
+    compatible = "tcl,t509k";
+
+    /*
+     * DISCOVERY-ONLY DEVICE TREE SKELETON
+     *
+     * Do not add guessed:
+     *
+     * GPIOs
+     * regulators
+     * clocks
+     * panel timings
+     * touchscreen controllers
+     * camera sensors
+     * PMIC configuration
+     * partition information
+     *
+     * The production DTS must be reconstructed from:
+     *
+     *   stock DTB
+     *   stock DTBO
+     *   stock boot.img
+     *   stock vendor_boot.img
+     *   matching kernel source/BSP
+     *   kernel logs
+     *   device-tree information
+     */
+
+};

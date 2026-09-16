@@ -23,6 +23,18 @@ Self-contained mobile app and a normal, dependency-free backend.
   bounded context window so endless sessions never overflow the model.
 - On-device **API-key / local-host storage** (`secrets.json`, `0600`) via a
   loopback-only, opt-in secret API surfaced in the web UI.
+- **Firmware bring-up tooling** (`plugins/firmware_bringup.py`): a pure-Python
+  DTB/FDT parser (`analyze_dtb`, no `dtc` needed), evidence→BOARD REPORT
+  (`board_report`), and a read-only adb evidence plan — every field tagged
+  CONFIRMED/LIKELY/INFERRED/UNKNOWN, never guessed. `tests/test_firmware.py`.
+- **`firmware-bringup` skill** and a **TCL T509K starter device tree**
+  (`firmware/t509k/`): AOSP makefiles, discovery-only DTS, evidence/build
+  scripts, hardware/firmware/kernel KB, and a device constitution.
+- **New `omerta` verbs** (`core/commands.py`): `firmware`, `teach`, `memory`,
+  `forget`, `rules`, `index`, `search` — built on the existing memory/importer/
+  plugin systems.
+- **`OMERTA.md`** project constitution and **`docs/OMERTA_AI_SPEC.md`** — an
+  honest spec→implementation map (Implemented / Partial / Planned).
 - `docs/AUDIT.md` — security & correctness audit; `tests/test_httpd.py` and
   `tests/test_mode_history.py`.
 

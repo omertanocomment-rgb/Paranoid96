@@ -1,0 +1,9 @@
+# OMERTA AI — TCL T509K proprietary blobs
+#
+# Do NOT invent blob paths.
+#
+# Generate this file from an actual stock firmware dump.
+#
+# Example syntax only:
+#
+# vendor/<path>/<file>:proprietary/vendor/<path>/<file>
