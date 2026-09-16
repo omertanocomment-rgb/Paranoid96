@@ -392,6 +392,65 @@ def inspect_image(args: dict) -> dict:
             "(not ANDROID!/VNDRBOOT/dt_table/FDT)"}
 
 
+def extract_image(args: dict) -> dict:
+    """Extract the parts of a firmware image to a directory (read the image,
+    write the pieces). Boot images yield kernel/ramdisk/second/dtb; dtbo/dt_table
+    images yield one .dtb per entry. Writes files, so it is a side-effecting tool
+    (approval-gated when the agent uses it)."""
+    path = args.get("path") or ""
+    out = args.get("out") or args.get("dir") or ""
+    if not path or not os.path.isfile(path):
+        return {"status": "error", "reason": f"no such file: {path}"}
+    if not out:
+        out = path + ".extracted"
+    data = open(path, "rb").read()
+    kind = _detect(data)
+    os.makedirs(out, exist_ok=True)
+    written = []
+
+    def dump(name, blob):
+        p = os.path.join(out, name)
+        with open(p, "wb") as f:
+            f.write(blob)
+        written.append({"file": p, "bytes": len(blob)})
+
+    try:
+        if kind == "bootimg":
+            info = parse_bootimg(data)
+            page = info.get("page_size", 4096)
+            if info.get("type") == "boot" and info.get("header_version", 9) <= 2:
+                ks, rs, ss = (info.get("kernel_size", 0), info.get("ramdisk_size", 0),
+                              info.get("second_size", 0))
+                off = _round(page, page)
+                if ks:
+                    dump("kernel", data[off:off + ks]); off += _round(ks, page)
+                if rs:
+                    dump("ramdisk", data[off:off + rs]); off += _round(rs, page)
+                if ss:
+                    dump("second", data[off:off + ss]); off += _round(ss, page)
+                if info.get("_dtb_size"):
+                    dump("dtb.dtb", data[info["_dtb_offset"]:
+                                        info["_dtb_offset"] + info["_dtb_size"]])
+            else:
+                return {"status": "error",
+                        "reason": "extract supports classic boot v0–v2; boot v3+/"
+                                  "vendor_boot repack is a Planned follow-up"}
+        elif kind == "dt_table":
+            for e in parse_dt_table(data):
+                dump(f"{e['index']:02d}_id{e['id']}_rev{e['rev']}.dtb",
+                     data[e["offset"]:e["offset"] + e["size"]])
+        elif kind == "dtb":
+            dump("copy.dtb", data)
+        else:
+            return {"status": "error", "reason": "unrecognized image"}
+    except (DTBError, struct.error) as e:
+        return {"status": "error", "reason": str(e)}
+    return {"status": "ok", "source": kind, "out": out,
+            "written": written, "count": len(written),
+            "note": "Extracted read-only from the image. Analyze any .dtb with "
+                    "analyze_dtb. Repack is not implemented (Planned)."}
+
+
 # ── evidence-directory → BOARD REPORT ───────────────────────────────────────
 def _read(d, name):
     p = os.path.join(d, name)
@@ -528,6 +587,12 @@ def register():
                         "args": {"path": "path to .dtb / dtbo.img / boot.img",
                                  "index": "dt_table entry index (default 0)"},
                         "side_effects": False},
+        "extract_image": {"fn": extract_image, "description":
+                          "Extract the parts of a firmware image to a directory "
+                          "(boot: kernel/ramdisk/dtb; dtbo: one .dtb per entry). "
+                          "Writes files.",
+                          "args": {"path": "image path", "out": "output dir"},
+                          "side_effects": True},
         "inspect_image": {"fn": inspect_image, "description":
                           "Identify and structurally inspect a firmware image "
                           "(boot / vendor_boot / dtbo table / raw dtb): header "

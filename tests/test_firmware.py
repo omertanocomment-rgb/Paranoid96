@@ -163,6 +163,33 @@ def test_dt_table():
     print("  ✓ dtbo/dt_table inspected; entry 0 decoded")
 
 
+def test_extract_bootimg():
+    dtb = _simple_dtb()
+    page = 2048
+    kernel, ramdisk = b"KERNELDATA", b"RAMD"
+    dtb_off = page * 3
+    img = bytearray(dtb_off + len(dtb))
+    img[0:8] = b"ANDROID!"
+    struct.pack_into("<IIIIIIII", img, 8, len(kernel), 0, len(ramdisk), 0, 0, 0, 0, page)
+    struct.pack_into("<I", img, 40, 2)
+    struct.pack_into("<I", img, 1648, len(dtb))
+    img[page:page + len(kernel)] = kernel
+    img[2 * page:2 * page + len(ramdisk)] = ramdisk
+    img[dtb_off:dtb_off + len(dtb)] = dtb
+    d = tempfile.mkdtemp()
+    ipath = os.path.join(d, "boot.img")
+    open(ipath, "wb").write(img)
+    out = os.path.join(d, "ex")
+    r = fw.extract_image({"path": ipath, "out": out})
+    assert r["status"] == "ok", r
+    files = {os.path.basename(w["file"]) for w in r["written"]}
+    assert {"kernel", "ramdisk", "dtb.dtb"} <= files, files
+    assert open(os.path.join(out, "kernel"), "rb").read() == kernel
+    a = fw.analyze_dtb({"path": os.path.join(out, "dtb.dtb")})
+    assert a["status"] == "ok" and a["report"]["soc"]["confidence"] == "CONFIRMED"
+    print("  ✓ boot.img extracted (kernel/ramdisk/dtb) and extracted DTB decodes")
+
+
 def test_plan_is_readonly():
     r = fw.collect_evidence_plan({})
     assert r["status"] == "ok" and r["level"].startswith("0")
@@ -176,5 +203,6 @@ if __name__ == "__main__":
     test_board_report()
     test_bootimg_v2_embedded_dtb()
     test_dt_table()
+    test_extract_bootimg()
     test_plan_is_readonly()
     print("\nFIRMWARE TESTS PASSED")

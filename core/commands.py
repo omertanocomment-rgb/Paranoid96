@@ -51,12 +51,16 @@ def _firmware(argv):
             print("firmware plugin not available"); return 1
         _emit(fn({"dir": rest[0]}))
         return 0
+    if sub == "extract" and rest:
+        fn = _plugin_tool("extract_image")
+        _emit(fn({"path": rest[0], "out": rest[1] if len(rest) > 1 else ""}))
+        return 0
     if sub == "plan":
         fn = _plugin_tool("collect_evidence_plan")
         _emit(fn({"out": rest[0]} if rest else {}))
         return 0
     print("usage: omerta firmware <inspect <img> | analyze <dtb|dtbo|boot.img> | "
-          "report <dir> | plan>")
+          "extract <img> [out] | report <dir> | plan>")
     return 0
 
 
