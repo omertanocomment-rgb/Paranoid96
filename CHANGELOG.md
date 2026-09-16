@@ -4,6 +4,37 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — 2026-09-16
+
+Self-contained mobile app and a normal, dependency-free backend.
+
+### Added
+- **Embedded Android backend — no Termux.** Chaquopy bundles CPython 3.11 +
+  pure-Python deps into the APK; a foreground service runs the agent in-process
+  and the WebView loads it on loopback (`android-native/`).
+- **`core/httpd.py`** — stdlib-only HTTP server (no FastAPI/uvicorn/pydantic,
+  nothing to install). Chat is a plain `POST /api/chat` request/response — no
+  websocket. It is what the APK runs and a drop-in `omerta serve` fallback.
+- **`core/api.py`** — one request layer shared by every front-end, so there is
+  exactly one approval gate and one wire protocol.
+- **Offline / Online / Auto mode** switch (`/api/mode`, UI toggle): offline
+  never touches the network, online uses cloud APIs, auto switches on its own.
+- **Unlimited chats** — no message cap; conversation history is compacted to a
+  bounded context window so endless sessions never overflow the model.
+- On-device **API-key / local-host storage** (`secrets.json`, `0600`) via a
+  loopback-only, opt-in secret API surfaced in the web UI.
+- `docs/AUDIT.md` — security & correctness audit; `tests/test_httpd.py` and
+  `tests/test_mode_history.py`.
+
+### Fixed
+- `tools/importers.py` used a PEP 701 nested-quote f-string that failed to
+  import on Python 3.9–3.11 (the supported range); rewritten portably.
+- Per-project dispatch lock and a POST-body size cap in the embedded server.
+
+### Changed
+- `server.py` refactored onto `core/api.py`; websocket route removed in favor
+  of `POST /api/chat`. The Android app no longer uses Termux or `RUN_COMMAND`.
+
 ## [1.0.0] — 2026-09-16
 
 First complete release.

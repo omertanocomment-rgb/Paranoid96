@@ -86,9 +86,13 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"error": "unauthorized",
                     "hint": "append ?token=... (printed in the server console)"}, 401)
 
+    MAX_BODY = 16 * 1024 * 1024        # 16 MiB — generous for a chat/sync payload
+
     def _body(self):
         n = int(self.headers.get("Content-Length", 0) or 0)
         if not n:
+            return {}
+        if n > self.MAX_BODY:
             return {}
         try:
             return json.loads(self.rfile.read(n).decode() or "{}")

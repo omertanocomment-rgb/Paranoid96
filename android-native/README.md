@@ -1,61 +1,88 @@
-# OMERTA AGENT — native Android app
+# OMERTA AGENT — native Android app (self-contained)
 
-A minimal WebView shell. **No Capacitor, no node_modules, no native libs** —
-which is exactly why it builds cleanly where a Capacitor project fights you
-on Termux. The whole APK is ~93KB.
+The agent backend runs **inside the app**. No Termux, no terminal, nothing
+external to install: tap the icon and the agent is running.
 
-## What it is (and isn't)
+## How it works
 
-The APK is the *interface*. The agent runs as a Python backend with a real
-shell — in Termux on this phone, or on a machine over your LAN. An Android
-app sandbox can't spawn `git`, `adb`, `fastboot` or a build toolchain, so
-the brain deliberately stays where it can actually work.
+[Chaquopy](https://chaquo.com/chaquopy/) embeds a full CPython 3.11 plus the
+agent's pure-Python dependencies (`requests`, `pyyaml`) into the APK. On
+launch a foreground service (`BackendService`) starts `core/httpd.py` — the
+dependency-free, stdlib-only HTTP server — bound to `127.0.0.1`. The WebView
+then loads the same web UI every other platform uses. Chat is plain
+`POST /api/chat` (no websocket, nothing to configure).
 
-Launch → enter backend address → connect. It remembers the address and
-token and reconnects on next launch. Back button backs out to the connect
-screen so you can repoint it at a different machine.
+The Python you run is byte-for-byte the repo's `core/` and `tools/`: they're
+staged into the APK as an asset payload at build time (`stageOmertaPayload`)
+and extracted to the app's private files dir on first launch, so the approval
+gate and hard-deny list are identical to desktop — there is no Android fork of
+the agent.
 
-## Install the prebuilt APK
-
-```bash
-adb install -r omerta-agent-1.0.0-debug.apk
-# or copy to the phone and tap it (allow "install unknown apps")
+```
+Java (thin)                     Python (the agent)
+──────────                      ──────────────────
+MainActivity ──starts──▶ BackendService
+                              │ Chaquopy: Python.start()
+                              ▼
+                         omerta_boot.start(filesDir, homeDir, port)
+                              │ sys.path += extracted payload
+                              ▼
+                         omerta_android.start() ─▶ core.httpd (127.0.0.1)
+                              ▲
+WebView ◀──http://127.0.0.1:8787/──┘   (loopback: no token needed)
 ```
 
-Then in Termux:
-```bash
-omerta serve
-```
-and connect the app to `127.0.0.1:8787` — localhost needs no token.
+## Giving it a brain
 
-To use a machine on your LAN instead, run `omerta serve` there and use its
-IP plus the token the server prints.
+On first run, open the **☰ menu → MODE / MODEL ACCESS**:
+
+- **Online:** paste an API key (Anthropic, OpenAI, OpenRouter, Groq, Gemini).
+  Stored `0600` on the device only; it never leaves the phone.
+- **Offline:** point OMERTA at a local model server on your LAN or device
+  (Ollama / llama.cpp / LM Studio) — unlimited, no key, no billing.
+- **Auto** uses online when reachable and falls back to local automatically.
+
+Chats are unlimited; long conversations are compacted into a bounded context
+window so they never hit a wall.
+
+## What it can actually do on a phone
+
+A stock, non-rooted Android device has no `git`/`adb`/`fastboot`/build
+toolchain, and an app sandbox can't run one. OMERTA reports that honestly
+rather than faking it — on such a device you get the model, memory, skills and
+the approval workflow. On a rooted/dev device (or when you point the app at a
+machine on your LAN via **Advanced**), the full shell-backed agent is available.
 
 ## Build it yourself
 
+Needs a JDK 17, the Android SDK, and a host Python 3.8–3.13 on `PATH`
+(Chaquopy runs `pip` on the host to assemble the in-APK Python).
+
 ```bash
-export ANDROID_HOME=~/Omerta/android-sdk      # or wherever yours lives
+export ANDROID_HOME=~/Android/sdk           # or wherever yours lives
 echo "sdk.dir=$ANDROID_HOME" > local.properties
 gradle assembleDebug
+# -> app/build/outputs/apk/debug/app-debug.apk
 ```
-Output: `app/build/outputs/apk/debug/app-debug.apk`
 
-Needs a full **JDK** (not a JRE) — the Android Gradle plugin calls `jlink`,
-and a JRE-only install fails with "jlink executable does not exist". On
-Termux: `pkg install openjdk-21`.
+The APK is larger than the old WebView-only shell (~tens of MB) because it now
+contains a CPython runtime per ABI (`arm64-v8a`, `armeabi-v7a`, `x86_64`).
 
 ## Release build
 
 ```bash
 keytool -genkey -v -keystore omerta.keystore -alias omerta \
   -keyalg RSA -keysize 2048 -validity 10000
+# put storeFile/storePassword/keyAlias/keyPassword in keystore.properties
 gradle assembleRelease
-apksigner sign --ks omerta.keystore \
-  --out omerta-release.apk app/build/outputs/apk/release/app-release-unsigned.apk
+# -> app/build/outputs/apk/release/app-release.apk (signed if keystore present)
 ```
 
-## Why targetSdk 34 / minSdk 24
+`keystore.properties` and `*.keystore` are git-ignored — never commit them.
 
-minSdk 24 (Android 7.0) covers essentially every device that can run Termux.
-`usesCleartextTraffic` is on because the backend speaks plain HTTP on
-localhost/LAN — the token, not TLS, is what protects it there.
+## Why minSdk 24 / targetSdk 34, cleartext on
+
+minSdk 24 (Android 7.0) covers the vast majority of devices. `usesCleartextTraffic`
+is on because the backend speaks plain HTTP on `127.0.0.1` (and optionally your
+LAN); the token, not TLS, is what protects a LAN backend, and loopback traffic
+never leaves the device.

@@ -12,18 +12,29 @@ Nothing here is transport-specific: every function takes plain Python values
 and returns plain dicts, so it works behind ASGI, behind `http.server`, or
 from a test harness with no server at all.
 """
+import threading
+
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
-# conversation and its pending-approval state survive a websocket reconnect.
+# conversation and its pending-approval state survive a reconnect.
 _agents: dict[str, Agent] = {}
+_agent_locks: dict[str, threading.Lock] = {}
+_registry_lock = threading.Lock()
 
 
 def get_agent(project: str) -> Agent:
-    if project not in _agents:
-        _agents[project] = Agent(project=project)
-    return _agents[project]
+    with _registry_lock:
+        if project not in _agents:
+            _agents[project] = Agent(project=project)
+            _agent_locks[project] = threading.Lock()
+        return _agents[project]
+
+
+def _lock_for(project: str) -> threading.Lock:
+    with _registry_lock:
+        return _agent_locks.setdefault(project, threading.Lock())
 
 
 def boot():
@@ -170,7 +181,14 @@ def dispatch(agent: Agent, msg: dict) -> dict:
 
 
 def chat(payload: dict) -> dict:
-    """Full chat entry point: pick the project's agent and dispatch one turn."""
+    """Full chat entry point: pick the project's agent and dispatch one turn.
+
+    Serialized per project: the server is multi-threaded, and an Agent mutates
+    its own history and pending-approval state, so two overlapping requests for
+    the same project must not interleave. Different projects run concurrently.
+    """
     payload = payload or {}
-    agent = get_agent(payload.get("project", "general"))
-    return dispatch(agent, payload)
+    project = payload.get("project", "general")
+    agent = get_agent(project)
+    with _lock_for(project):
+        return dispatch(agent, payload)

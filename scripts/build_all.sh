@@ -56,14 +56,16 @@ else
   echo "  skipped — install Node.js"
 fi
 
-say "4/5  android apk"
-if [ -n "${ANDROID_HOME:-}${ANDROID_SDK_ROOT:-}" ] && command -v npm >/dev/null; then
-  (cd android && npm install --no-audit --no-fund && npx cap add android 2>/dev/null || true)
-  bash scripts/android_icons.sh || true
-  (cd android && npx cap sync android && cd android && ./gradlew assembleDebug)
-  find android -name "*.apk" -path "*debug*" -exec cp {} "$OUT/omerta-agent-debug.apk" \;
+say "4/5  android apk (self-contained — embeds Python via Chaquopy, no Termux)"
+if [ -n "${ANDROID_HOME:-}${ANDROID_SDK_ROOT:-}" ] && command -v python3 >/dev/null; then
+  # Chaquopy runs pip on this host to assemble the in-APK Python, so a host
+  # python3 (3.8-3.13) must be present alongside the Android SDK + JDK 17.
+  GRADLE="gradle"; [ -x android-native/gradlew ] && GRADLE="./gradlew"
+  (cd android-native && $GRADLE assembleDebug --no-daemon)
+  find android-native -name "*.apk" -path "*debug*" \
+    -exec cp {} "$OUT/omerta-agent-debug.apk" \;
 else
-  echo "  skipped — set ANDROID_HOME (see android/README.md)"
+  echo "  skipped — set ANDROID_HOME and install python3 (see android-native/README.md)"
 fi
 
 say "5/5  checksums"

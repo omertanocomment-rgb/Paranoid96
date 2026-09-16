@@ -47,10 +47,22 @@ Spawns the Python backend and opens the UI in a real window with the
 blackletter O as its icon. Needs Python 3.9+ on PATH — it tells you clearly
 if that's missing.
 
-## 4. From source
+## 4. Android app (self-contained — no Termux)
+
+Install `omerta-agent-*.apk` and open it. The app **embeds Python** and runs
+the agent backend in-process (Chaquopy + a foreground service); there is
+nothing else to install. Give it a brain in **☰ → MODE / MODEL ACCESS**: paste
+a cloud API key (online) or point it at a local model server (offline). Build
+it yourself per `android-native/README.md`.
+
+> The pip route (option 1) still works on Termux if you prefer a terminal, and
+> the app can also connect to a backend running on another machine on your LAN
+> (**Advanced** on the launch screen).
+
+## 5. From source
 
 ```bash
-bash scripts/install_termux.sh     # Android
+bash scripts/install_termux.sh     # Android (Termux, optional — the APK needs none of this)
 bash scripts/install_linux.sh      # Linux / Kali
 bash scripts/install_macos.sh      # macOS
 powershell -ExecutionPolicy Bypass -File scripts\install_windows.ps1
@@ -84,7 +96,7 @@ Cross-platform builds have hard limits that aren't a matter of effort:
 | Electron Linux | any Linux | AppImage, deb, tar.gz |
 | Electron Windows | Windows, or Linux + wine | `npx electron-builder --win` |
 | Electron macOS | a Mac only | Apple's signing/notarization tools are mac-only |
-| Android APK | any host with the Android SDK | ~5GB SDK; see `android/README.md` |
+| Android APK | any host with the Android SDK + host Python 3.8–3.13 | embeds Python via Chaquopy; see `android-native/README.md` |
 
 The ones I built and tested here are Linux-host artifacts plus the universal
 wheel. For Windows `.exe`, macOS `.dmg`, and the APK, run the same script on

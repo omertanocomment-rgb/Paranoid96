@@ -90,6 +90,13 @@ def main():
         print(f"  {WARN} sync not configured — set OMERTA_SYNC_DIR "
               f"or use /sync <host:port>")
 
+    H("Mode")
+    mode = config._norm_mode(config.get("OMERTA_MODE", config.MODE))
+    print(f"  {OK} network mode: {mode}  "
+          f"({'local models only' if mode == 'offline' else 'cloud only' if mode == 'online' else 'online if reachable, else local'})")
+    print(f"  {OK} chats: unlimited (context window trimmed to "
+          f"{config.HISTORY_LIMIT or 'no'} messages)")
+
     H("Safety")
     print(f"  {OK if config.ALWAYS_ASK else WARN} always-ask: "
           f"{'ON — nothing runs without your approval' if config.ALWAYS_ASK else 'OFF'}")

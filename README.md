@@ -18,13 +18,14 @@ that drives real backends.
 | You asked for | What you got | Honest caveat |
 |---|---|---|
 | Offline + online | Local GGUF models (Ollama/llama.cpp/LM Studio) and 6 cloud providers, auto-switching | none |
-| No message limits | True offline — your hardware, your rules | Cloud APIs still bill/rate-limit server-side; can't change that |
+| No message limits | Unlimited chats; long conversations auto-compacted so they never hit a wall. True offline = your hardware, your rules | Cloud APIs still bill/rate-limit server-side; can't change that |
+| Offline / Online / Auto | A real mode switch: offline never touches the network, online uses cloud APIs, auto switches on its own | — |
 | Based on Codex + Claude | Claude, GPT, Gemini, Groq, OpenRouter, and any local model, hot-swappable | It *calls* them; it isn't them |
 | Always ask first | Enforced in code, not prompt. Verified by tests | — |
 | Learns your choices | Every approve/deny/edit recorded and fed back | — |
 | Sandbox | Tiered execution, hard-deny list, auto-backups before edits | — |
 | Network safety | Token auth on the server, loopback-exempt, spoof-proof | — |
-| Mobile/desktop/web | Termux CLI, Electron app (win/mac/linux), Capacitor Android app, responsive web UI | — |
+| Mobile/desktop/web | **Self-contained Android APK — embedded Python, no Termux**, Electron app (win/mac/linux), responsive web UI | — |
 | Connectors/plugins/skills | MCP client, Python plugin loader, skill system | — |
 | Shared memory across devices | Peer (LAN) + shared-folder sync; denials and deletions propagate | — |
 
@@ -74,6 +75,13 @@ Give it a brain (either is enough):
 export ANTHROPIC_API_KEY=sk-ant-...           # online
 ollama serve && ollama pull qwen2.5-coder:7b  # offline, unlimited
 ```
+
+## On your phone (no Termux)
+
+The Android app is self-contained: it embeds Python and runs the agent
+backend in-process. Install the APK, open it, and in **☰ → MODE / MODEL
+ACCESS** either paste an API key (online) or point it at a local model
+(offline). Nothing else to install. Build or details: `android-native/README.md`.
 
 ## The always-ask guarantee
 
@@ -132,16 +140,19 @@ about `fastboot erase` broadly. `/prefs` shows what it thinks it knows.
 
 ```
 core/       agent loop, router, memory, sandbox, skills, plugins, mcp, auth, sync, toolparse
+core/api.py     one request layer shared by every front-end (one approval gate)
+core/httpd.py   stdlib-only HTTP server — no FastAPI/pydantic; runs inside the APK
 core/providers/  anthropic, openai-compatible, ollama, llama.cpp
 tools/      fileops, devtools, firmware, importers
 skills/     8 playbooks
 plugins/    5 example plugins (incl. package-style wireless_adb)
 desktop/    Electron shell (win/mac/linux)
-android/    Capacitor shell (native app icon)
+android-native/ self-contained APK — Chaquopy embeds Python; runs the agent in-process, no Termux
+android/    legacy Capacitor shell
 assets/     blackletter O icon, every platform size
 scripts/    installers + doctor
-tests/      safety, integration, flash-gating, auth, multi-device sync
-docs/       deeper guides
+tests/      safety, integration, flash-gating, auth (both servers), mode/history, sync
+docs/       deeper guides (incl. AUDIT.md)
 ```
 
 ## One brain everywhere
