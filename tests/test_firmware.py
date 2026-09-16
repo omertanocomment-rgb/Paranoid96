@@ -287,6 +287,88 @@ def test_vendor_boot_roundtrip():
     print("  ✓ vendor_boot v4 inspect→extract→repack→extract preserves all parts")
 
 
+def test_unsparse():
+    blk = 4096
+    payload = b"RAWDATA!" + b"\x00" * (blk - 8)      # one block
+    # sparse header (28) + one RAW chunk header (12) + payload
+    hdr = struct.pack("<IHHHHIIII", 0xED26FF3A, 1, 0, 28, 12, blk, 1, 1, 0)
+    chunk = struct.pack("<HHII", 0xCAC1, 0, 1, 12 + len(payload)) + payload
+    sparse = hdr + chunk
+    d = tempfile.mkdtemp()
+    sp = os.path.join(d, "s.img")
+    open(sp, "wb").write(sparse)
+    r = fw.unsparse_image({"path": sp, "out": os.path.join(d, "raw.img")})
+    assert r["status"] == "ok" and r["bytes"] == blk, r
+    assert open(os.path.join(d, "raw.img"), "rb").read() == payload
+    print("  ✓ sparse image decoded to raw (RAW chunk)")
+
+
+def _build_super(part_name, part_bytes):
+    """Minimal raw super image with LP metadata + one linear partition."""
+    reserved = b"\x00" * 4096
+    # geometry (52 used, padded to 4096), x2
+    geo = struct.pack("<II", 0x616C4467, 52) + b"\x00" * 32 \
+        + struct.pack("<III", 4096, 1, 4096)
+    geo = geo + b"\x00" * (4096 - len(geo))
+    # header (128) at slot0 = 4096 + 2*4096 = 12288
+    # descriptors: partitions(off0,n1,es52), extents(off52,n1,es24), groups, bdev
+    descs = (struct.pack("<III", 0, 1, 52) + struct.pack("<III", 52, 1, 24)
+             + struct.pack("<III", 76, 0, 24) + struct.pack("<III", 76, 0, 24))
+    header = (struct.pack("<IHHI", 0x414C5030, 10, 0, 128) + b"\x00" * 32
+              + struct.pack("<I", 76 + 0) + b"\x00" * 32 + descs)
+    header = header + b"\x00" * (128 - len(header))
+    # partition data placed at sector 64 (offset 32768)
+    start_sector = 64
+    nsec = (len(part_bytes) + 511) // 512
+    name = part_name.encode()[:36]
+    name = name + b"\x00" * (36 - len(name))
+    ptable = name + struct.pack("<IIII", 0, 0, 1, 0)               # 52
+    etable = struct.pack("<QIQI", nsec, 0, start_sector, 0)        # 24
+    slot0 = header + ptable + etable
+    # assemble up to the data region
+    img = bytearray(reserved + geo + geo + slot0)
+    img += b"\x00" * (start_sector * 512 - len(img))
+    img += part_bytes + b"\x00" * (nsec * 512 - len(part_bytes))
+    return bytes(img)
+
+
+def test_super_list_and_extract():
+    payload = b"SYSTEM-PARTITION-CONTENT" + b"\x00" * 100
+    img = _build_super("system", payload)
+    d = tempfile.mkdtemp()
+    sp = os.path.join(d, "super.img")
+    open(sp, "wb").write(img)
+
+    lst = fw.super_list({"path": sp})
+    assert lst["status"] == "ok" and lst["partition_count"] == 1, lst
+    assert lst["partitions"][0]["name"] == "system"
+
+    out = os.path.join(d, "parts")
+    ex = fw.super_extract({"path": sp, "out": out})
+    assert ex["status"] == "ok" and ex["count"] == 1, ex
+    got = open(os.path.join(out, "system.img"), "rb").read()
+    assert got[:len(payload)] == payload, "extracted partition mismatch"
+    print("  ✓ super.img LP metadata parsed; logical partition 'system' extracted")
+
+
+def test_super_from_sparse():
+    payload = b"VENDOR" + b"\x00" * 20
+    raw = _build_super("vendor", payload)
+    # wrap raw as a single-RAW-chunk sparse image (block size 512 for simplicity)
+    blk = 512
+    assert len(raw) % blk == 0
+    nblk = len(raw) // blk
+    hdr = struct.pack("<IHHHHIIII", 0xED26FF3A, 1, 0, 28, 12, blk, nblk, 1, 0)
+    chunk = struct.pack("<HHII", 0xCAC1, 0, nblk, 12 + len(raw)) + raw
+    d = tempfile.mkdtemp()
+    sp = os.path.join(d, "super_sparse.img")
+    open(sp, "wb").write(hdr + chunk)
+    lst = fw.super_list({"path": sp})            # must unsparse transparently
+    assert lst["status"] == "ok" and lst["sparse"] is True
+    assert lst["partitions"][0]["name"] == "vendor"
+    print("  ✓ sparse super.img unsparsed transparently and listed")
+
+
 def test_plan_is_readonly():
     r = fw.collect_evidence_plan({})
     assert r["status"] == "ok" and r["level"].startswith("0")
@@ -303,5 +385,8 @@ if __name__ == "__main__":
     test_extract_bootimg()
     test_repack_roundtrip()
     test_vendor_boot_roundtrip()
+    test_unsparse()
+    test_super_list_and_extract()
+    test_super_from_sparse()
     test_plan_is_readonly()
     print("\nFIRMWARE TESTS PASSED")

@@ -647,6 +647,157 @@ def repack_image(args: dict) -> dict:
                     "with inspect_image before flashing; flashing stays gated."}
 
 
+# ── Android sparse image + super.img (logical/dynamic partitions) ────────────
+SPARSE_MAGIC = 0xED26FF3A
+LP_GEOMETRY_MAGIC = 0x616C4467
+LP_HEADER_MAGIC = 0x414C5030
+LP_GEOMETRY_OFFSET = 4096          # LP_PARTITION_RESERVED_BYTES
+LP_GEOMETRY_SIZE = 4096
+SECTOR = 512
+
+
+def is_sparse(data: bytes) -> bool:
+    return len(data) >= 4 and struct.unpack_from("<I", data, 0)[0] == SPARSE_MAGIC
+
+
+def unsparse(data: bytes) -> bytes:
+    """Decode an Android sparse image into a raw image. Read-only."""
+    (magic, _maj, _min, fhs, chs, blk, _tblks, nchunks, _cs) = struct.unpack_from(
+        "<IHHHHIIII", data, 0)
+    if magic != SPARSE_MAGIC:
+        raise DTBError("not an Android sparse image")
+    out = bytearray()
+    pos = fhs
+    for _ in range(nchunks):
+        ctype, _r, csz, tsz = struct.unpack_from("<HHII", data, pos)
+        body = pos + chs
+        n = csz * blk
+        if ctype == 0xCAC1:            # RAW
+            out += data[body:body + n]
+        elif ctype == 0xCAC2:          # FILL
+            fill = data[body:body + 4]
+            out += fill * (n // 4)
+        elif ctype == 0xCAC3:          # DONT_CARE
+            out += b"\x00" * n
+        elif ctype == 0xCAC4:          # CRC32 — no output
+            pass
+        pos += tsz
+    return bytes(out)
+
+
+def parse_super(data: bytes) -> dict:
+    """Parse a super image's LP (liblp) metadata and list its logical partitions
+    with their extents. Handles a sparse super by unsparsing first. Read-only;
+    checksums are not verified (lenient parse)."""
+    if is_sparse(data):
+        data = unsparse(data)
+    g = LP_GEOMETRY_OFFSET
+    if struct.unpack_from("<I", data, g)[0] != LP_GEOMETRY_MAGIC:
+        raise DTBError("no LP geometry magic — not a super image "
+                       "(or GPT-prefixed at a different offset)")
+    mms, slots, lbs = struct.unpack_from("<III", data, g + 40)
+    slot0 = LP_GEOMETRY_OFFSET + 2 * LP_GEOMETRY_SIZE
+    if struct.unpack_from("<I", data, slot0)[0] != LP_HEADER_MAGIC:
+        raise DTBError("no LP metadata header magic")
+    header_size = struct.unpack_from("<I", data, slot0 + 8)[0]
+
+    def desc(i):
+        return struct.unpack_from("<III", data, slot0 + 80 + i * 12)  # off,num,entry_sz
+
+    p_off, p_num, p_es = desc(0)
+    e_off, e_num, e_es = desc(1)
+    tables = slot0 + header_size
+    partitions = []
+    for i in range(p_num):
+        base = tables + p_off + i * p_es
+        name = data[base:base + 36].split(b"\x00", 1)[0].decode("utf-8", "replace")
+        _attrs, fei, nex, _gi = struct.unpack_from("<IIII", data, base + 36)
+        extents = []
+        for j in range(nex):
+            eb = tables + e_off + (fei + j) * e_es
+            nsec = struct.unpack_from("<Q", data, eb)[0]
+            ttype = struct.unpack_from("<I", data, eb + 8)[0]
+            tdata = struct.unpack_from("<Q", data, eb + 12)[0]
+            extents.append({"sectors": nsec, "type": ttype, "start_sector": tdata})
+        size = sum(x["sectors"] for x in extents) * SECTOR
+        partitions.append({"name": name, "size": size, "extents": extents})
+    return {"logical_block_size": lbs, "metadata_max_size": mms, "slots": slots,
+            "partitions": partitions, "_data": data}
+
+
+def super_list(args: dict) -> dict:
+    path = args.get("path") or ""
+    if not path or not os.path.isfile(path):
+        return {"status": "error", "reason": f"no such file: {path}"}
+    try:
+        s = parse_super(open(path, "rb").read())
+    except (DTBError, struct.error) as e:
+        return {"status": "error", "reason": str(e)}
+    parts = [{"name": p["name"], "size": p["size"], "extents": len(p["extents"])}
+             for p in s["partitions"]]
+    return {"status": "ok", "sparse": is_sparse(open(path, "rb").read()),
+            "logical_block_size": s["logical_block_size"],
+            "partition_count": len(parts), "partitions": parts,
+            "note": "Read-only. super_extract writes each logical partition to disk."}
+
+
+def super_extract(args: dict) -> dict:
+    """Extract logical partitions from a super image to files. Writes files."""
+    path = args.get("path") or ""
+    out = args.get("out") or (path + ".partitions" if path else "")
+    want = args.get("name")
+    if not path or not os.path.isfile(path):
+        return {"status": "error", "reason": f"no such file: {path}"}
+    try:
+        s = parse_super(open(path, "rb").read())
+    except (DTBError, struct.error) as e:
+        return {"status": "error", "reason": str(e)}
+    data = s["_data"]
+    os.makedirs(out, exist_ok=True)
+    written = []
+    for p in s["partitions"]:
+        if want and p["name"] != want:
+            continue
+        blob = bytearray()
+        for ex in p["extents"]:
+            n = ex["sectors"] * SECTOR
+            if ex["type"] == 0:            # LINEAR
+                o = ex["start_sector"] * SECTOR
+                blob += data[o:o + n]
+            else:                          # ZERO
+                blob += b"\x00" * n
+        fp = os.path.join(out, p["name"] + ".img")
+        with open(fp, "wb") as f:
+            f.write(blob)
+        written.append({"file": fp, "name": p["name"], "bytes": len(blob)})
+    if not written:
+        return {"status": "error", "reason": f"no partition matched {want!r}"}
+    return {"status": "ok", "out": out, "written": written, "count": len(written),
+            "note": "Extracted logical partitions. super repack (lpmake) is a "
+                    "documented follow-up; these are ready to inspect/flash "
+                    "individually (flashing stays gated)."}
+
+
+def unsparse_image(args: dict) -> dict:
+    """Convert an Android sparse image to a raw image. Writes a file."""
+    path = args.get("path") or ""
+    out = args.get("out") or (path + ".raw" if path else "")
+    if not path or not os.path.isfile(path):
+        return {"status": "error", "reason": f"no such file: {path}"}
+    data = open(path, "rb").read()
+    if not is_sparse(data):
+        return {"status": "ok", "out": path, "note": "already raw (not sparse)",
+                "bytes": len(data)}
+    try:
+        raw = unsparse(data)
+    except (DTBError, struct.error) as e:
+        return {"status": "error", "reason": str(e)}
+    with open(out, "wb") as f:
+        f.write(raw)
+    return {"status": "ok", "out": out, "bytes": len(raw),
+            "from_sparse_bytes": len(data)}
+
+
 # ── evidence-directory → BOARD REPORT ───────────────────────────────────────
 def _read(d, name):
     p = os.path.join(d, name)
@@ -800,6 +951,21 @@ def register():
                           "version, sizes, cmdline, os_version, dt entries. Read-only.",
                           "args": {"path": "path to a firmware image"},
                           "side_effects": False},
+        "super_list": {"fn": super_list, "description":
+                       "List the logical (dynamic) partitions in a super.img via its "
+                       "LP metadata; unsparses first if needed. Read-only.",
+                       "args": {"path": "super.img path"},
+                       "side_effects": False},
+        "super_extract": {"fn": super_extract, "description":
+                          "Extract logical partitions from a super.img to files "
+                          "(all, or one via name). Writes files.",
+                          "args": {"path": "super.img", "out": "output dir",
+                                   "name": "optional single partition"},
+                          "side_effects": True},
+        "unsparse_image": {"fn": unsparse_image, "description":
+                           "Convert an Android sparse image to a raw image. Writes a file.",
+                           "args": {"path": "sparse image", "out": "output raw path"},
+                           "side_effects": True},
         "board_report": {"fn": board_report, "description":
                          "Fuse an adb evidence directory (getprop/dmesg/partitions/"
                          "+optional .dtb) into a BOARD REPORT with confidences. Read-only.",

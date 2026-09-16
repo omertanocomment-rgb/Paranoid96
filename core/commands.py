@@ -61,12 +61,27 @@ def _firmware(argv):
         fn = _plugin_tool("repack_image")
         _emit(fn({"dir": rest[0], "out": rest[1] if len(rest) > 1 else ""}))
         return 0
+    if sub == "super" and rest:
+        # super <img>            -> list logical partitions
+        # super <img> <out> [nm] -> extract to dir (optionally one partition)
+        if len(rest) == 1:
+            _emit(_plugin_tool("super_list")({"path": rest[0]}))
+        else:
+            _emit(_plugin_tool("super_extract")(
+                {"path": rest[0], "out": rest[1],
+                 "name": rest[2] if len(rest) > 2 else None}))
+        return 0
+    if sub == "unsparse" and rest:
+        _emit(_plugin_tool("unsparse_image")(
+            {"path": rest[0], "out": rest[1] if len(rest) > 1 else ""}))
+        return 0
     if sub == "plan":
         fn = _plugin_tool("collect_evidence_plan")
         _emit(fn({"out": rest[0]} if rest else {}))
         return 0
     print("usage: omerta firmware <inspect <img> | analyze <dtb|dtbo|boot.img> | "
-          "extract <img> [out] | repack <dir> [out] | report <dir> | plan>")
+          "extract <img> [out] | repack <dir> [out] | super <img> [out] | "
+          "unsparse <img> [out] | report <dir> | plan>")
     return 0
 
 

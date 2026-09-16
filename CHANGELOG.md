@@ -29,7 +29,7 @@ Self-contained mobile app and a normal, dependency-free backend.
   embedded-DTB extraction, evidence→BOARD REPORT (`board_report`), and a
   read-only adb evidence plan, plus **extract** (image parts to disk) and
   **repack** of a classic boot image (v0–v2, SHA1 id recomputed) and **vendor_boot**
-  (v3/v4: ramdisk/dtb/table/bootconfig), both round-trip tested — every field tagged CONFIRMED/LIKELY/INFERRED/UNKNOWN, never guessed.
+  (v3/v4: ramdisk/dtb/table/bootconfig), both round-trip tested; plus **super.img unpack** — Android **sparse** decode and **LP (dynamic-partition) metadata** parse/extract (`omerta firmware super`/`unsparse`) — every field tagged CONFIRMED/LIKELY/INFERRED/UNKNOWN, never guessed.
   `tests/test_firmware.py`.
 - **`firmware-bringup` skill** and a **TCL T509K starter device tree**
   (`firmware/t509k/`): AOSP makefiles, discovery-only DTS, evidence/build
