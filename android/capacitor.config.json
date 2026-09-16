@@ -1,0 +1,13 @@
+{
+  "appId": "com.omerta.agent",
+  "appName": "OMERTA AGENT",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0b0a08"
+  }
+}

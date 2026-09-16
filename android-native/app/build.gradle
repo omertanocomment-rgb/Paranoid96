@@ -1,0 +1,71 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.omerta.agent'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.omerta.agent"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    // Release signing is taken from the environment or a local, untracked
+    // keystore.properties — never hardcoded, never committed.
+    signingConfigs {
+        release {
+            def props = new Properties()
+            def f = rootProject.file("keystore.properties")
+            if (f.exists()) { f.withInputStream { props.load(it) } }
+            def ksPath = props.getProperty("storeFile") ?: System.getenv("OMERTA_KEYSTORE")
+            if (ksPath) {
+                storeFile file(ksPath)
+                storePassword props.getProperty("storePassword") ?: System.getenv("OMERTA_STORE_PASS")
+                keyAlias      props.getProperty("keyAlias")      ?: System.getenv("OMERTA_KEY_ALIAS")
+                keyPassword   props.getProperty("keyPassword")   ?: System.getenv("OMERTA_KEY_PASS")
+                // full scheme coverage: v1 for API<24 sideloads, v2/v3 for modern,
+                // v3 specifically so the signing key can be rotated later
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            debuggable false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                          'proguard-rules.pro'
+            if (rootProject.file("keystore.properties").exists()
+                || System.getenv("OMERTA_KEYSTORE")) {
+                signingConfig signingConfigs.release
+            }
+        }
+        debug {
+            debuggable true
+            minifyEnabled false
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    dependenciesInfo {
+        // keep the APK free of the Play-signed dependency blob
+        includeInApk false
+        includeInBundle false
+    }
+
+    packagingOptions { resources { excludes += ['META-INF/*.kotlin_module'] } }
+}
+
+dependencies { }

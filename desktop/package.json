@@ -1,0 +1,97 @@
+{
+  "name": "omerta-agent",
+  "productName": "OMERTA AGENT",
+  "version": "1.0.0",
+  "description": "Offline-capable coding & firmware agent that asks before every action",
+  "main": "main.js",
+  "author": "OMERTA",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "dist:all": "electron-builder --win --mac --linux"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.omerta.agent",
+    "productName": "OMERTA AGENT",
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../",
+        "to": "app",
+        "filter": [
+          "**/*",
+          "!desktop/**",
+          "!build/**",
+          "!build_pkg/**",
+          "!dist/**",
+          "!data/**",
+          "!models/**",
+          "!tests/**",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!.git/**",
+          "!.venv/**",
+          "!**/*.AppImage",
+          "!**/*.tar.gz",
+          "!omerta_entry.py",
+          "!*.spec"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        "portable"
+      ],
+      "icon": "../assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "OMERTA AGENT"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        "zip"
+      ],
+      "icon": "../assets/icon.icns",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm",
+        "tar.gz"
+      ],
+      "icon": "../assets/icon_512.png",
+      "category": "Development",
+      "maintainer": "OMERTA"
+    }
+  }
+}

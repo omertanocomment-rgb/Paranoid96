@@ -1,0 +1,13 @@
+name: wireless_adb
+description: >
+  Wireless ADB pairing/connect helpers for headless Termux nodes
+  (matches the tab-node-kit workflow: broken-LCD device, ADB over WiFi).
+enabled: true
+tools:
+  - name: pair
+    mutating: true   # opens a pairing session — always confirmed
+  - name: connect
+    mutating: true   # establishes a network connection to a device
+  - name: status
+    mutating: false  # read-only, still goes through the global command
+                      # confirm gate via sandbox.execute (belt + suspenders)

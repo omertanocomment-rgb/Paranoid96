@@ -1,0 +1,24 @@
+data/*
+!data/.gitkeep
+models/*
+!models/.gitkeep
+__pycache__/
+*.pyc
+.venv/
+desktop/node_modules/
+desktop/dist/
+.env
+
+# secrets — never commit
+keystore.properties
+*.keystore
+*.jks
+.anthropic_key
+*.pem
+*.p12
+local.properties
+
+# build output
+artifacts/
+build_pkg/dist/
+android-native/app/build/

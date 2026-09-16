@@ -1,0 +1,20 @@
+{
+  "name": "omerta-agent-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor shell — native Android app icon for OMERTA AGENT",
+  "scripts": {
+    "init": "cap add android",
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "build:debug": "cap sync android && cd android && ./gradlew assembleDebug",
+    "build:release": "cap sync android && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

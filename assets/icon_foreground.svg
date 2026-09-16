@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="amber" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#ffe0a3"/>
+      <stop offset="35%" stop-color="#ffb020"/>
+      <stop offset="100%" stop-color="#a86a08"/>
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#17140f"/>
+      <stop offset="100%" stop-color="#060504"/>
+    </linearGradient>
+  </defs>
+  
+  
+  <g fill="url(#amber)" fill-rule="evenodd">
+    <path d="M256 48
+             L316 72 L356 108 L382 160 L394 214 L396 256 L394 298 L382 352 L356 404
+             L316 440 L256 464
+             L196 440 L156 404 L130 352 L118 298 L116 256 L118 214 L130 160 L156 108 L196 72 Z
+             M256 100
+             L296 142 L318 190 L330 236 L332 256 L330 276 L318 322 L296 370 L256 412
+             L216 370 L194 322 L182 276 L180 256 L182 236 L194 190 L216 142 Z"/>
+  </g>
+  <g fill="url(#amber)">
+    <path d="M147 146 L177 176 L147 206 L117 176 Z"/>
+    <path d="M365 146 L395 176 L365 206 L335 176 Z"/>
+    <path d="M147 306 L177 336 L147 366 L117 336 Z"/>
+    <path d="M365 306 L395 336 L365 366 L335 336 Z"/>
+  </g>
+  <g stroke="#0a0907" stroke-width="10" stroke-linecap="square">
+    <line x1="119" y1="224" x2="185" y2="212"/>
+    <line x1="119" y1="292" x2="185" y2="304"/>
+    <line x1="327" y1="212" x2="393" y2="224"/>
+    <line x1="327" y1="304" x2="393" y2="292"/>
+  </g>
+  <g fill="url(#amber)">
+    <path d="M256 24 L276 52 L256 64 L236 52 Z"/>
+    <path d="M256 488 L236 460 L256 448 L276 460 Z"/>
+  </g>
+</svg>

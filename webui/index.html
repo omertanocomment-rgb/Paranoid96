@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0a08">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/assets/icon_256.png">
+<title>OMERTA AGENT</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0a08;--panel:#141210;--panel2:#1b1813;--border:#2a2620;
+  --amber:#ffb020;--amber-dim:#8a5a12;--text:#e8ddc8;--muted:#8a8272;
+  --danger:#ff4d4d;--ok:#4dff88}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',ui-monospace,monospace;
+  height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel);
+  border-bottom:1px solid var(--border);padding-top:max(10px,env(safe-area-inset-top))}
+header img{width:26px;height:26px}
+.brand{color:var(--amber);font-weight:700;letter-spacing:.09em;font-size:.95rem}
+.spacer{flex:1}
+.pill{font-size:.68rem;padding:3px 8px;border:1px solid var(--border);border-radius:99px;
+  color:var(--muted);white-space:nowrap}
+.pill.on{border-color:var(--amber-dim);color:var(--amber)}
+.iconbtn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;
+  padding:5px 9px;font-family:inherit;cursor:pointer;font-size:.8rem}
+.iconbtn:active{background:var(--panel2)}
+#log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;
+  -webkit-overflow-scrolling:touch}
+.msg{max-width:92%;padding:10px 12px;border-radius:8px;line-height:1.5;font-size:.88rem;
+  white-space:pre-wrap;word-break:break-word}
+.you{align-self:flex-end;background:#1f1810;border:1px solid var(--amber-dim)}
+.agent{align-self:flex-start;background:var(--panel);border:1px solid var(--border)}
+.meta{font-size:.65rem;color:var(--muted);margin-bottom:5px;letter-spacing:.05em}
+.msg code{background:#000;padding:1px 5px;border-radius:3px;color:var(--amber);font-size:.85em}
+.msg pre{background:#000;padding:10px;border-radius:6px;overflow-x:auto;border:1px solid var(--border)}
+.msg pre code{background:none;padding:0;color:var(--text)}
+.approve{align-self:stretch;background:var(--panel2);border:1px solid var(--amber);
+  border-radius:8px;padding:12px}
+.approve.danger{border-color:var(--danger);background:#1c0e0e}
+.approve .hdr{font-size:.7rem;letter-spacing:.09em;color:var(--amber);margin-bottom:8px;font-weight:700}
+.approve.danger .hdr{color:var(--danger)}
+.approve .cmd{background:#000;padding:10px;border-radius:6px;font-size:.84rem;
+  overflow-x:auto;white-space:pre;border:1px solid var(--border)}
+.approve .hint{font-size:.7rem;color:var(--muted);margin-top:7px}
+.approve .hint.warn{color:var(--danger)}
+.btns{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+.btns button{flex:1;min-width:76px;padding:11px;border:none;border-radius:6px;font-weight:700;
+  font-family:inherit;font-size:.82rem;cursor:pointer}
+.b-yes{background:var(--amber);color:#000}
+.b-no{background:transparent;color:var(--muted);border:1px solid var(--border)!important}
+.b-edit{background:var(--panel);color:var(--amber);border:1px solid var(--amber-dim)!important}
+#bar{display:flex;gap:8px;padding:10px;background:var(--panel);border-top:1px solid var(--border);
+  padding-bottom:max(10px,env(safe-area-inset-bottom))}
+#bar textarea{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:11px;border-radius:8px;font-family:inherit;font-size:.9rem;resize:none;max-height:120px}
+#bar button{background:var(--amber);color:#000;border:none;padding:0 17px;border-radius:8px;
+  font-weight:700;font-family:inherit;cursor:pointer}
+#panel{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;z-index:50}
+#panel.open{display:block}
+#panelInner{position:absolute;right:0;top:0;bottom:0;width:min(360px,88vw);background:var(--panel);
+  border-left:1px solid var(--border);padding:16px;overflow-y:auto}
+#panelInner h3{color:var(--amber);font-size:.78rem;letter-spacing:.09em;margin:18px 0 8px}
+#panelInner h3:first-child{margin-top:0}
+.row{font-size:.75rem;padding:6px 0;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;gap:10px}
+.dot{color:var(--ok)}.dot.off{color:var(--muted)}
+select{background:var(--bg);color:var(--text);border:1px solid var(--border);padding:7px;
+  border-radius:6px;font-family:inherit;width:100%;font-size:.8rem}
+.thinking{color:var(--muted);font-style:italic}
+.tool{font-size:.7rem;color:var(--muted);align-self:flex-start;padding:4px 9px;
+  border-left:2px solid var(--amber-dim);background:var(--panel)}
+</style>
+</head>
+<body>
+<header>
+  <img src="/icon.svg" alt="O">
+  <span class="brand">OMERTA</span>
+  <span class="pill on" id="askPill">ASKS FIRST</span>
+  <span class="spacer"></span>
+  <span class="pill" id="brainPill">—</span>
+  <button class="iconbtn" onclick="openPanel()">☰</button>
+</header>
+
+<div id="log"></div>
+
+<div id="bar">
+  <textarea id="msg" rows="1" placeholder="what do you want built?"></textarea>
+  <button onclick="send()">▶</button>
+</div>
+
+<div id="panel" onclick="if(event.target.id==='panel')closePanel()">
+  <div id="panelInner">
+    <h3>BRAIN</h3>
+    <select id="providerSel" onchange="setProvider()"></select>
+    <div id="providers"></div>
+    <h3>PROJECT</h3>
+    <select id="projectSel" onchange="switchProject()">
+      <option value="general">general</option>
+    </select>
+    <input id="newProject" placeholder="new project name…"
+      style="width:100%;margin-top:7px;background:var(--bg);color:var(--text);
+      border:1px solid var(--border);padding:7px;border-radius:6px;font-family:inherit;font-size:.8rem">
+    <button class="iconbtn" style="width:100%;margin-top:7px" onclick="addProject()">add project</button>
+    <h3>SKILLS</h3><div id="skills"></div>
+    <h3>PLUGINS</h3><div id="plugins"></div>
+    <h3>CONNECTORS</h3><div id="connectors"></div>
+    <h3>MEMORY</h3><div id="memstats"></div>
+    <button class="iconbtn" style="width:100%;margin-top:12px" onclick="resetChat()">clear conversation</button>
+  </div>
+</div>
+
+<script>
+let ws, project = 'general';
+const log = document.getElementById('log');
+
+function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function md(s){
+  return esc(s)
+    .replace(/```([\s\S]*?)```/g,(m,c)=>`<pre><code>${c.trim()}</code></pre>`)
+    .replace(/`([^`\n]+)`/g,'<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+}
+function tokenParam(){
+  const t = new URLSearchParams(location.search).get('token');
+  return t ? ('?token=' + encodeURIComponent(t)) : '';
+}
+function connect(){
+  const p = location.protocol==='https:'?'wss':'ws';
+  ws = new WebSocket(`${p}://${location.host}/ws/${project}${tokenParam()}`);
+  ws.onmessage = e => render(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(connect,1500);
+}
+function addMsg(role,text){
+  const d=document.createElement('div');
+  d.className='msg '+(role==='you'?'you':'agent');
+  d.innerHTML=`<div class="meta">${role==='you'?'you':'omerta'}</div>${md(text)}`;
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+}
+function render(data){
+  document.querySelectorAll('.thinking').forEach(e=>e.remove());
+  if(data.provider){
+    document.getElementById('brainPill').textContent =
+      data.provider + (data.offline?' · offline':' · online');
+  }
+  (data.tool_log||[]).forEach(t=>{
+    const d=document.createElement('div'); d.className='tool';
+    d.textContent='⚙ '+(t.call?.tool||'tool');
+    log.appendChild(d);
+  });
+  if(data.text) addMsg('agent',data.text);
+  if(data.pending) addApproval(data.pending);
+  log.scrollTop=log.scrollHeight;
+}
+function addApproval(p){
+  const d=document.createElement('div');
+  d.className='approve'+(p.danger?' danger':'');
+  const hint=p.history&&p.history.detail?
+    `<div class="hint ${p.history.hint==='likely_deny'?'warn':''}">${esc(p.history.detail)}</div>`:'';
+  d.innerHTML=`<div class="hdr">${p.danger?'⚠ DESTRUCTIVE — APPROVE?':'APPROVAL NEEDED'}</div>
+    <div class="cmd">${esc(p.action)}</div>${hint}`;
+  const btns=document.createElement('div'); btns.className='btns';
+  const yes=document.createElement('button'); yes.className='b-yes'; yes.textContent='RUN';
+  yes.onclick=()=>{send_raw({kind:'approve'}); d.remove(); thinking();};
+  const edit=document.createElement('button'); edit.className='b-edit'; edit.textContent='EDIT';
+  edit.onclick=()=>{const c=prompt('rewrite command:',p.action);
+    if(c){send_raw({kind:'edit',cmd:c}); d.remove(); thinking();}};
+  const no=document.createElement('button'); no.className='b-no'; no.textContent='REFUSE';
+  no.onclick=()=>{const r=prompt('reason (optional):','');
+    send_raw({kind:'deny',note:r||''}); d.remove(); thinking();};
+  btns.append(yes,edit,no); d.appendChild(btns);
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+}
+function thinking(){
+  const t=document.createElement('div'); t.className='msg agent thinking';
+  t.textContent='working…'; log.appendChild(t); log.scrollTop=log.scrollHeight;
+}
+function send_raw(o){ws.send(JSON.stringify(o));}
+function send(){
+  const i=document.getElementById('msg'); const t=i.value.trim(); if(!t)return;
+  addMsg('you',t); thinking(); send_raw({kind:'message',text:t});
+  i.value=''; i.style.height='auto';
+}
+const ta=document.getElementById('msg');
+ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,120)+'px';});
+ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+
+async function loadStatus(){
+  const s=await (await fetch('/api/status')).json();
+  document.getElementById('askPill').textContent = s.always_ask?'ASKS FIRST':'AUTO-RUN';
+  document.getElementById('askPill').className = 'pill'+(s.always_ask?' on':'');
+  const sel=document.getElementById('providerSel');
+  sel.innerHTML='<option value="auto">auto (best available)</option>'+
+    Object.entries(s.providers).map(([k,v])=>
+      `<option value="${k}" ${s.active===k?'selected':''}>${k} — ${v.ready?'ready':'unavailable'}</option>`).join('');
+  document.getElementById('providers').innerHTML=Object.entries(s.providers).map(([k,v])=>
+    `<div class="row"><span>${k}</span><span class="dot ${v.ready?'':'off'}">${v.ready?'●':'○'}</span></div>`).join('');
+  document.getElementById('skills').innerHTML=s.skills.map(x=>
+    `<div class="row"><span>${esc(x.name)}</span></div>`).join('')||'<div class="row">none</div>';
+  document.getElementById('plugins').innerHTML=Object.entries(s.plugins).map(([k,v])=>
+    `<div class="row"><span>${esc(k)}</span><span class="dot ${v.failed?'off':''}">${v.tools.length} tools</span></div>`).join('')||'<div class="row">none</div>';
+  document.getElementById('connectors').innerHTML=s.connectors.map(x=>
+    `<div class="row"><span>${esc(x.name)}</span><span class="dot ${x.connected?'':'off'}">${x.connected?'●':'○'}</span></div>`).join('')||'<div class="row">none</div>';
+  document.getElementById('memstats').innerHTML=
+    `<div class="row"><span>facts</span><span>${s.memory.facts}</span></div>
+     <div class="row"><span>learned choices</span><span>${s.memory.choices}</span></div>`;
+  const ps=document.getElementById('projectSel');
+  const have=[...ps.options].map(o=>o.value);
+  (s.memory.projects||[]).forEach(p=>{if(!have.includes(p)){
+    const o=document.createElement('option');o.value=o.textContent=p;ps.appendChild(o);}});
+  ps.value=project;
+}
+async function setProvider(){
+  const v=document.getElementById('providerSel').value;
+  await fetch('/api/model',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({provider:v})});
+  loadStatus();
+}
+function switchProject(){
+  project=document.getElementById('projectSel').value;
+  log.innerHTML=''; ws.close(); connect(); closePanel();
+}
+function addProject(){
+  const n=document.getElementById('newProject').value.trim(); if(!n)return;
+  const o=document.createElement('option'); o.value=o.textContent=n;
+  document.getElementById('projectSel').appendChild(o);
+  document.getElementById('projectSel').value=n;
+  document.getElementById('newProject').value=''; switchProject();
+}
+function resetChat(){send_raw({kind:'reset'});log.innerHTML='';closePanel();}
+function openPanel(){document.getElementById('panel').classList.add('open');loadStatus();}
+function closePanel(){document.getElementById('panel').classList.remove('open');}
+connect(); loadStatus(); setInterval(loadStatus,30000);
+</script>
+</body>
+</html>

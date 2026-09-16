@@ -1,0 +1,62 @@
+# OMERTA AGENT — connectors (MCP servers)
+#
+# Every connector tool is treated as a side effect and goes through the
+# same approval gate as a shell command. Enable what you need.
+#
+# transport: stdio  -> local process, works fully offline
+# transport: http   -> remote MCP endpoint, needs internet
+#
+# Env vars in `env:` and `headers:` are expanded from your shell, so no
+# tokens are ever stored in this file.
+
+servers:
+
+  filesystem:
+    enabled: false
+    transport: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/data/data/com.termux/files/home"]
+    description: Read/write files in a sandboxed root. Offline.
+
+  git:
+    enabled: false
+    transport: stdio
+    command: uvx
+    args: ["mcp-server-git", "--repository", "."]
+    description: Git operations as structured tools. Offline.
+
+  github:
+    enabled: false
+    transport: stdio
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-github"]
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: "$GITHUB_TOKEN"
+    description: Issues, PRs, repos for omertanocomment-rgb / dardybrah-ux.
+
+  sqlite:
+    enabled: false
+    transport: stdio
+    command: uvx
+    args: ["mcp-server-sqlite", "--db-path", "./data/memory.sqlite3"]
+    description: Query the agent's own memory DB directly. Offline.
+
+  fetch:
+    enabled: false
+    transport: stdio
+    command: uvx
+    args: ["mcp-server-fetch"]
+    description: Fetch and convert web pages to markdown.
+
+  # --- remote examples: fill in and flip enabled when you want them ---
+  sentry:
+    enabled: false
+    transport: http
+    url: https://mcp.sentry.dev/mcp
+    description: Crash/error triage for shipped apps.
+
+  cloudflare:
+    enabled: false
+    transport: http
+    url: https://bindings.mcp.cloudflare.com/mcp
+    description: Workers/KV/R2 bindings.
