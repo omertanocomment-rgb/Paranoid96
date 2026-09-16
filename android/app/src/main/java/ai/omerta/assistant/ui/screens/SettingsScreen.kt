@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ai.omerta.assistant.data.local.EngineMode
+import ai.omerta.assistant.data.local.Provider
 import ai.omerta.assistant.ui.theme.OmertaAmber
 import ai.omerta.assistant.ui.theme.OmertaBlack
 import ai.omerta.assistant.ui.theme.OmertaBorder
@@ -83,6 +84,9 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
     var mcpUrl by remember(s.mcpUrl) { mutableStateOf(s.mcpUrl) }
     var agentMode by remember(s.agentMode) { mutableStateOf(s.agentMode) }
     var autoApprove by remember(s.autoApprove) { mutableStateOf(s.autoApprove) }
+    var provider by remember(s.provider) { mutableStateOf(s.provider) }
+    var openAiKey by remember(s.openAiKey) { mutableStateOf(s.openAiKey) }
+    var ollamaUrl by remember(s.ollamaUrl) { mutableStateOf(s.ollamaUrl) }
 
     val embedded = engineMode == EngineMode.EMBEDDED
     val context = LocalContext.current
@@ -131,14 +135,50 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
             }
 
             if (embedded) {
-                OutlinedTextField(
-                    value = apiKey, onValueChange = { apiKey = it },
-                    label = { Text("Anthropic API key") }, singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(), colors = fieldColors,
-                    textStyle = MaterialTheme.typography.bodySmall,
-                )
-                Hint("Calls Claude directly. Key stored on device (extractable from the APK).")
+                SectionLabel("AI PROVIDER")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ProviderChip("CLAUDE", provider == Provider.ANTHROPIC, Modifier.weight(1f)) {
+                        provider = Provider.ANTHROPIC; if (!model.startsWith("claude")) model = "claude-opus-5"
+                    }
+                    ProviderChip("OPENAI", provider == Provider.OPENAI, Modifier.weight(1f)) {
+                        provider = Provider.OPENAI; if (model.startsWith("claude")) model = "gpt-4o"
+                    }
+                    ProviderChip("OLLAMA", provider == Provider.OLLAMA, Modifier.weight(1f)) {
+                        provider = Provider.OLLAMA; if (model.startsWith("claude") || model.startsWith("gpt")) model = "llama3.1"
+                    }
+                }
+                when (provider) {
+                    Provider.OPENAI -> {
+                        OutlinedTextField(
+                            value = openAiKey, onValueChange = { openAiKey = it },
+                            label = { Text("OpenAI API key") }, singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                            textStyle = MaterialTheme.typography.bodySmall,
+                        )
+                        Hint("Calls OpenAI directly. Key stored on device.")
+                    }
+                    Provider.OLLAMA -> {
+                        OutlinedTextField(
+                            value = ollamaUrl, onValueChange = { ollamaUrl = it },
+                            label = { Text("Ollama URL") }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                            textStyle = MaterialTheme.typography.bodySmall,
+                        )
+                        Hint("Your own local models — no external limits. Phone→PC: use the PC's LAN IP " +
+                            "(e.g. http://192.168.1.x:11434) and run `OLLAMA_HOST=0.0.0.0 ollama serve`.")
+                    }
+                    else -> {
+                        OutlinedTextField(
+                            value = apiKey, onValueChange = { apiKey = it },
+                            label = { Text("Anthropic API key") }, singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                            textStyle = MaterialTheme.typography.bodySmall,
+                        )
+                        Hint("Calls Claude directly. Key stored on device (extractable from the APK).")
+                    }
+                }
             } else {
                 OutlinedTextField(
                     value = url, onValueChange = { url = it },
@@ -156,15 +196,25 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
             }
 
             SectionLabel("MODEL")
-            MODELS.forEach { m ->
-                Row(
-                    Modifier.fillMaxWidth().selectable(selected = model == m, onClick = { model = m })
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = model == m, onClick = { model = m },
-                        colors = RadioButtonDefaults.colors(selectedColor = OmertaAmber, unselectedColor = OmertaTextSecondary))
-                    Text(m, style = MaterialTheme.typography.bodyMedium, color = OmertaTextPrimary)
+            if (embedded && provider != Provider.ANTHROPIC) {
+                OutlinedTextField(
+                    value = model, onValueChange = { model = it },
+                    label = { Text(if (provider == Provider.OPENAI) "OpenAI model (e.g. gpt-4o)"
+                                   else "Ollama model (e.g. llama3.1)") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                MODELS.forEach { m ->
+                    Row(
+                        Modifier.fillMaxWidth().selectable(selected = model == m, onClick = { model = m })
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = model == m, onClick = { model = m },
+                            colors = RadioButtonDefaults.colors(selectedColor = OmertaAmber, unselectedColor = OmertaTextSecondary))
+                        Text(m, style = MaterialTheme.typography.bodyMedium, color = OmertaTextPrimary)
+                    }
                 }
             }
 
@@ -251,6 +301,32 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
             Hint("Unlimited — the full conversation is sent each turn (bounded only by the " +
                 "model's context window). Uses your API key, so there is no app-imposed message limit.")
 
+            SectionLabel("MEMORY (TEACH & LEARN)")
+            var memRefresh by remember { mutableStateOf(0) }
+            val lessons = remember(memRefresh) { vm.lessons() }
+            Hint("Teach in chat: /teach key: value  ·  /learn <rule>  ·  /memory  ·  /forget <id>. " +
+                "Taught items are applied on every turn.")
+            if (lessons.isEmpty()) {
+                Hint("Nothing taught yet.")
+            } else {
+                lessons.forEach { l ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("[${l.type}] ${l.key}: ${l.value}",
+                            style = MaterialTheme.typography.bodySmall, color = OmertaTextPrimary,
+                            modifier = Modifier.weight(1f))
+                        androidx.compose.material3.TextButton(onClick = {
+                            vm.forgetLesson(l.id); memRefresh++
+                        }) { Text("forget", style = MaterialTheme.typography.labelSmall, color = OmertaTextSecondary) }
+                    }
+                }
+                OutlinedButton(
+                    onClick = { vm.clearMemory(); memRefresh++ },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = OmertaSurface, contentColor = OmertaTextSecondary),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Clear all lessons", style = MaterialTheme.typography.labelMedium) }
+            }
+
             SectionLabel("SYSTEM PROMPT")
             OutlinedTextField(
                 value = system, onValueChange = { system = it },
@@ -268,6 +344,7 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
                         webSearch = webSearch, codeExecution = codeExec,
                         mcpName = mcpName, mcpUrl = mcpUrl,
                         agentMode = agentMode, autoApprove = autoApprove,
+                        provider = provider, openAiKey = openAiKey, ollamaUrl = ollamaUrl,
                     )
                     onBack()
                 },
@@ -292,6 +369,19 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean,
                 checkedThumbColor = OmertaBlack, checkedTrackColor = OmertaAmber,
                 uncheckedThumbColor = OmertaTextSecondary, uncheckedTrackColor = OmertaSurface))
     }
+}
+
+@Composable
+private fun ProviderChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) OmertaAmber else OmertaSurface,
+            contentColor = if (selected) OmertaBlack else OmertaTextSecondary,
+        ),
+        modifier = modifier,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp),
+    ) { Text(label, style = MaterialTheme.typography.labelSmall) }
 }
 
 @Composable

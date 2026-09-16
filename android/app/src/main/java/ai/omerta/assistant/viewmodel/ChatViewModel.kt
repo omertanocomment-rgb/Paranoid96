@@ -4,7 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import ai.omerta.assistant.data.agent.DeviceTools
+import ai.omerta.assistant.data.local.MemoryStore
 import ai.omerta.assistant.data.local.OmertaSettings
+import ai.omerta.assistant.data.local.Provider
 import ai.omerta.assistant.data.local.SettingsStore
 import ai.omerta.assistant.data.model.ChatItem
 import ai.omerta.assistant.data.model.Role
@@ -40,6 +42,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsStore = SettingsStore(app)
     private val repo = ChatRepository()
     private val deviceTools = DeviceTools(app)
+    private val memory = MemoryStore(app)
 
     val settings: StateFlow<OmertaSettings?> =
         settingsStore.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -101,9 +104,43 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun send() {
         val text = _ui.value.input.trim()
         if (text.isEmpty() || _ui.value.isSending) return
+        if (handleCommand(text)) return
         val userItem = ChatItem(role = Role.USER, content = text)
         _ui.update { it.copy(messages = it.messages + userItem, input = "") }
         dispatch()
+    }
+
+    /** Slash-commands so you can teach the app by command. Returns true if handled. */
+    private fun handleCommand(text: String): Boolean {
+        if (!text.startsWith("/")) return false
+        val (cmd, rest) = text.drop(1).split(" ", limit = 2).let {
+            it[0].lowercase() to (it.getOrNull(1)?.trim() ?: "")
+        }
+        fun note(msg: String) = _ui.update {
+            it.copy(messages = it.messages + ChatItem(role = Role.ASSISTANT, content = msg), input = "")
+        }
+        when (cmd) {
+            "teach", "learn" -> {
+                // /teach key: value   (or)   /learn free text
+                val (key, value) = if (":" in rest) rest.split(":", limit = 2).let { it[0].trim() to it[1].trim() }
+                    else "note" to rest
+                if (value.isBlank()) { note("usage: /teach <key>: <value>"); return true }
+                val id = memory.teach(key, value, if (cmd == "learn") "RULE" else "LESSON")
+                note("✓ learned #$id [${if (cmd == "learn") "RULE" else "LESSON"}] $key: $value")
+            }
+            "forget" -> {
+                val id = rest.toLongOrNull()
+                note(if (id != null && memory.forget(id)) "✓ forgot #$id" else "usage: /forget <id>")
+            }
+            "memory", "mem" -> {
+                val items = memory.all()
+                note(if (items.isEmpty()) "no lessons yet — teach me with /teach key: value"
+                    else items.joinToString("\n") { "#${it.id} [${it.type}] ${it.key}: ${it.value}" })
+            }
+            "help" -> note("commands: /teach key: value · /learn <rule> · /memory · /forget <id>")
+            else -> return false
+        }
+        return true
     }
 
     fun retryLast() {
@@ -116,10 +153,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun dispatch() {
-        val s = settings.value ?: return
+        val base = settings.value ?: return
+        // Inject operator-taught memory so the app applies what it has learned.
+        val taught = memory.learnedContext()
+        val s = if (taught.isBlank()) base
+        else base.copy(systemPrompt = (base.systemPrompt.trim() + "\n\n" + taught).trim())
         val history = _ui.value.messages.map { it.toWire() }
         when {
-            s.agentMode && s.embedded -> runAgent(s, history)
+            // Agent tool-loop requires the Anthropic tool API.
+            s.agentMode && s.embedded && s.provider == Provider.ANTHROPIC -> runAgent(s, history)
             s.streaming -> streamResponse(s, history)
             else -> sendResponse(s, history)
         }
@@ -274,15 +316,21 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         maxTokens: Int? = null, webSearch: Boolean? = null, codeExecution: Boolean? = null,
         mcpName: String? = null, mcpUrl: String? = null,
         agentMode: Boolean? = null, autoApprove: Boolean? = null,
+        provider: String? = null, openAiKey: String? = null, ollamaUrl: String? = null,
     ) {
         viewModelScope.launch {
             settingsStore.update(
                 engineMode, anthropicApiKey, backendUrl, appToken,
                 model, systemPrompt, effort, streaming,
                 maxTokens, webSearch, codeExecution, mcpName, mcpUrl,
-                agentMode, autoApprove,
+                agentMode, autoApprove, provider, openAiKey, ollamaUrl,
             )
             checkConnection()
         }
     }
+
+    // --- teachable memory (also drives the Settings memory list) ---
+    fun lessons() = memory.all()
+    fun forgetLesson(id: Long) = memory.forget(id)
+    fun clearMemory() = memory.clear()
 }

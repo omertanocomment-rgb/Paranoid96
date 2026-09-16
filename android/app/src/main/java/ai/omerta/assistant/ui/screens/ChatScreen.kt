@@ -59,7 +59,13 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
     }
 
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val needsKey = settings?.let { it.embedded && it.anthropicApiKey.isBlank() } ?: false
+    val needsKey = settings?.let {
+        it.embedded && when (it.provider) {
+            ai.omerta.assistant.data.local.Provider.ANTHROPIC -> it.anthropicApiKey.isBlank()
+            ai.omerta.assistant.data.local.Provider.OPENAI -> it.openAiKey.isBlank()
+            else -> false // Ollama needs no key
+        }
+    } ?: false
     val approval by vm.approval.collectAsStateWithLifecycle()
 
     approval?.let { pending ->

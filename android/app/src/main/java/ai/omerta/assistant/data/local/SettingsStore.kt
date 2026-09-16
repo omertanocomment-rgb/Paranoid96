@@ -11,10 +11,18 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "omerta_settings")
 
-/** How the app reaches Claude. */
+/** How the app reaches the AI. */
 object EngineMode {
-    const val EMBEDDED = "embedded" // in-process: app calls the Anthropic API directly
-    const val REMOTE = "remote"     // via the external Omerta AI Node backend
+    const val EMBEDDED = "embedded" // in-process: app calls the provider API directly
+    const val REMOTE = "remote"     // via the external Omerta AI engine / Node backend
+}
+
+/** Which AI powers EMBEDDED mode. */
+object Provider {
+    const val ANTHROPIC = "anthropic"
+    const val OPENAI = "openai"
+    const val OLLAMA = "ollama"      // your own local models, no external limits
+    val ALL = listOf(ANTHROPIC, OPENAI, OLLAMA)
 }
 
 /** Persisted user/operator settings. */
@@ -34,6 +42,9 @@ data class OmertaSettings(
     val mcpUrl: String,
     val agentMode: Boolean,
     val autoApprove: Boolean,
+    val provider: String,
+    val openAiKey: String,
+    val ollamaUrl: String,
 ) {
     val embedded: Boolean get() = engineMode == EngineMode.EMBEDDED
 }
@@ -56,6 +67,9 @@ class SettingsStore(private val context: Context) {
         val MCP_URL = stringPreferencesKey("mcp_url")
         val AGENT_MODE = booleanPreferencesKey("agent_mode")
         val AUTO_APPROVE = booleanPreferencesKey("auto_approve")
+        val PROVIDER = stringPreferencesKey("provider")
+        val OPENAI_KEY = stringPreferencesKey("openai_key")
+        val OLLAMA_URL = stringPreferencesKey("ollama_url")
     }
 
     companion object {
@@ -88,6 +102,9 @@ class SettingsStore(private val context: Context) {
             mcpUrl = p[Keys.MCP_URL] ?: "",
             agentMode = p[Keys.AGENT_MODE] ?: false,
             autoApprove = p[Keys.AUTO_APPROVE] ?: false,
+            provider = p[Keys.PROVIDER] ?: Provider.ANTHROPIC,
+            openAiKey = p[Keys.OPENAI_KEY] ?: "",
+            ollamaUrl = p[Keys.OLLAMA_URL]?.takeIf { it.isNotBlank() } ?: "http://localhost:11434",
         )
     }
 
@@ -107,6 +124,9 @@ class SettingsStore(private val context: Context) {
         mcpUrl: String? = null,
         agentMode: Boolean? = null,
         autoApprove: Boolean? = null,
+        provider: String? = null,
+        openAiKey: String? = null,
+        ollamaUrl: String? = null,
     ) {
         context.dataStore.edit { p ->
             engineMode?.let { p[Keys.ENGINE_MODE] = it }
@@ -124,6 +144,9 @@ class SettingsStore(private val context: Context) {
             mcpUrl?.let { p[Keys.MCP_URL] = it.trim() }
             agentMode?.let { p[Keys.AGENT_MODE] = it }
             autoApprove?.let { p[Keys.AUTO_APPROVE] = it }
+            provider?.let { p[Keys.PROVIDER] = it }
+            openAiKey?.let { p[Keys.OPENAI_KEY] = it.trim() }
+            ollamaUrl?.let { p[Keys.OLLAMA_URL] = it.trim() }
         }
     }
 }
