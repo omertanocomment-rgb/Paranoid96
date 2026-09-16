@@ -137,7 +137,8 @@ select{background:var(--bg);color:var(--text);border:1px solid var(--border);pad
 let project = 'general';
 const log = document.getElementById('log');
 
-function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,
+  c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function md(s){
   return esc(s)
     .replace(/```([\s\S]*?)```/g,(m,c)=>`<pre><code>${c.trim()}</code></pre>`)
@@ -221,9 +222,9 @@ async function loadStatus(){
   const sel=document.getElementById('providerSel');
   sel.innerHTML='<option value="auto">auto (best available)</option>'+
     Object.entries(s.providers).map(([k,v])=>
-      `<option value="${k}" ${s.active===k?'selected':''}>${k} — ${v.ready?'ready':'unavailable'}</option>`).join('');
+      `<option value="${esc(k)}" ${s.active===k?'selected':''}>${esc(k)} — ${v.ready?'ready':'unavailable'}</option>`).join('');
   document.getElementById('providers').innerHTML=Object.entries(s.providers).map(([k,v])=>
-    `<div class="row"><span>${k}</span><span class="dot ${v.ready?'':'off'}">${v.ready?'●':'○'}</span></div>`).join('');
+    `<div class="row"><span>${esc(k)}</span><span class="dot ${v.ready?'':'off'}">${v.ready?'●':'○'}</span></div>`).join('');
   document.getElementById('skills').innerHTML=s.skills.map(x=>
     `<div class="row"><span>${esc(x.name)}</span></div>`).join('')||'<div class="row">none</div>';
   document.getElementById('plugins').innerHTML=Object.entries(s.plugins).map(([k,v])=>
@@ -231,8 +232,8 @@ async function loadStatus(){
   document.getElementById('connectors').innerHTML=s.connectors.map(x=>
     `<div class="row"><span>${esc(x.name)}</span><span class="dot ${x.connected?'':'off'}">${x.connected?'●':'○'}</span></div>`).join('')||'<div class="row">none</div>';
   document.getElementById('memstats').innerHTML=
-    `<div class="row"><span>facts</span><span>${s.memory.facts}</span></div>
-     <div class="row"><span>learned choices</span><span>${s.memory.choices}</span></div>`;
+    `<div class="row"><span>facts</span><span>${esc(s.memory.facts)}</span></div>
+     <div class="row"><span>learned choices</span><span>${esc(s.memory.choices)}</span></div>`;
   const ps=document.getElementById('projectSel');
   const have=[...ps.options].map(o=>o.value);
   (s.memory.projects||[]).forEach(p=>{if(!have.includes(p)){
@@ -263,7 +264,7 @@ async function loadSecrets(){
     box.style.display='block';
     const sel=document.getElementById('secretKey');
     const cur=sel.value;
-    sel.innerHTML=s.allowed.map(k=>`<option value="${k}">${k}${s.set[k]?' ✓':''}</option>`).join('');
+    sel.innerHTML=s.allowed.map(k=>`<option value="${esc(k)}">${esc(k)}${s.set[k]?' ✓':''}</option>`).join('');
     if(cur) sel.value=cur;
   }catch(e){/* server without secret API */}
 }

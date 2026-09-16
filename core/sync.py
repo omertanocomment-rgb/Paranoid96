@@ -34,6 +34,36 @@ from . import config, memory
 STATE_FILE = config.DATA_DIR / "sync_state.json"
 BUNDLE_VERSION = 1
 
+# A bundle arrives from another device or a shared folder. It is authenticated,
+# but it is still input: coerce every field and bound the size so a malformed or
+# hostile bundle returns a clean error instead of a traceback or a bloated DB.
+MAX_BUNDLE_ROWS = 100_000
+MAX_TEXT_LEN = 200_000
+
+
+def _text(v, limit=MAX_TEXT_LEN):
+    """Coerce a bundle field to a bounded string (sqlite binds only scalars)."""
+    if v is None:
+        return ""
+    if not isinstance(v, str):
+        if isinstance(v, (int, float, bool)):
+            v = str(v)
+        else:
+            v = json.dumps(v, default=str)
+    return v[:limit]
+
+
+def _num(v, default=0.0):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    return default if f != f or f in (float("inf"), float("-inf")) else f
+
+
+def _flag(v):
+    return 1 if v else 0
+
 
 def _state():
     if STATE_FILE.exists():
@@ -90,43 +120,61 @@ def merge_bundle(bundle):
     """Apply a bundle from another device. Idempotent."""
     if not isinstance(bundle, dict) or "facts" not in bundle:
         return {"status": "error", "reason": "not a valid sync bundle"}
-    if bundle.get("version", 1) > BUNDLE_VERSION:
+    if _num(bundle.get("version", 1), 1) > BUNDLE_VERSION:
         return {"status": "error",
                 "reason": f"bundle version {bundle['version']} newer than this "
                           f"install supports ({BUNDLE_VERSION}) — update first"}
+    facts = bundle.get("facts") or []
+    choices = bundle.get("choices") or []
+    if not isinstance(facts, list) or not isinstance(choices, list):
+        return {"status": "error",
+                "reason": "malformed bundle: 'facts'/'choices' must be lists"}
+    if len(facts) + len(choices) > MAX_BUNDLE_ROWS:
+        return {"status": "error",
+                "reason": f"bundle carries {len(facts) + len(choices)} rows "
+                          f"(cap {MAX_BUNDLE_ROWS}); refusing to merge"}
     memory.init()
     con = sqlite3.connect(config.MEMORY_DB)
     con.row_factory = sqlite3.Row
     added = updated = skipped = tombstoned = 0
     ch_added = ch_skipped = 0
     try:
-        for f in bundle.get("facts", []):
-            uid = f.get("uid")
+        for f in facts:
+            if not isinstance(f, dict):
+                skipped += 1
+                continue
+            uid = _text(f.get("uid"), 256)
             if not uid:
                 continue
             row = con.execute("SELECT id, COALESCE(updated_at,created_at) u, "
                               "COALESCE(deleted,0) d FROM facts WHERE uid=?",
                               (uid,)).fetchone()
-            incoming_u = f.get("updated_at") or f.get("created_at") or 0
+            incoming_u = _num(f.get("updated_at")) or _num(f.get("created_at"))
             if row is None:
                 con.execute(
                     "INSERT INTO facts (uid,project,kind,content,tags,weight,"
                     "created_at,updated_at,origin,deleted) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    (uid, f.get("project", "general"), f.get("kind", "fact"),
-                     f.get("content", ""), f.get("tags", ""), f.get("weight", 1.0),
-                     f.get("created_at", time.time()), incoming_u,
-                     f.get("origin", bundle.get("device", "")), f.get("deleted", 0)))
+                    (uid, _text(f.get("project") or "general", 256),
+                     _text(f.get("kind") or "fact", 64),
+                     _text(f.get("content")), _text(f.get("tags"), 4096),
+                     _num(f.get("weight"), 1.0),
+                     _num(f.get("created_at"), time.time()), incoming_u,
+                     _text(f.get("origin") or bundle.get("device") or "", 256),
+                     _flag(f.get("deleted"))))
                 if f.get("deleted"):
                     tombstoned += 1
                 else:
                     added += 1
-            elif incoming_u > (row["u"] or 0):
+            # row["u"] may be a string on a DB polluted by a pre-validation sync
+            elif incoming_u > _num(row["u"]):
                 con.execute("UPDATE facts SET project=?,kind=?,content=?,tags=?,"
                             "weight=?,updated_at=?,origin=?,deleted=? WHERE uid=?",
-                            (f.get("project", "general"), f.get("kind", "fact"),
-                             f.get("content", ""), f.get("tags", ""),
-                             f.get("weight", 1.0), incoming_u,
-                             f.get("origin", ""), f.get("deleted", 0), uid))
+                            (_text(f.get("project") or "general", 256),
+                             _text(f.get("kind") or "fact", 64),
+                             _text(f.get("content")), _text(f.get("tags"), 4096),
+                             _num(f.get("weight"), 1.0), incoming_u,
+                             _text(f.get("origin"), 256),
+                             _flag(f.get("deleted")), uid))
                 if f.get("deleted") and not row["d"]:
                     con.execute("DELETE FROM facts_fts WHERE rowid=?", (row["id"],))
                     tombstoned += 1
@@ -135,8 +183,11 @@ def merge_bundle(bundle):
             else:
                 skipped += 1
 
-        for c in bundle.get("choices", []):
-            uid = c.get("uid")
+        for c in choices:
+            if not isinstance(c, dict):
+                ch_skipped += 1
+                continue
+            uid = _text(c.get("uid"), 256)
             if not uid:
                 continue
             if con.execute("SELECT 1 FROM choices WHERE uid=?", (uid,)).fetchone():
@@ -144,15 +195,22 @@ def merge_bundle(bundle):
                 continue
             con.execute("INSERT INTO choices (uid,project,subject,raw,decision,"
                         "note,created_at,origin) VALUES (?,?,?,?,?,?,?,?)",
-                        (uid, c.get("project", "general"), c.get("subject", ""),
-                         c.get("raw", ""), c.get("decision", "approved"),
-                         c.get("note", ""), c.get("created_at", time.time()),
-                         c.get("origin", bundle.get("device", ""))))
+                        (uid, _text(c.get("project") or "general", 256),
+                         _text(c.get("subject"), 4096),
+                         _text(c.get("raw")),
+                         _text(c.get("decision") or "approved", 64),
+                         _text(c.get("note"), 4096),
+                         _num(c.get("created_at"), time.time()),
+                         _text(c.get("origin") or bundle.get("device") or "", 256)))
             ch_added += 1
         con.commit()
+    except sqlite3.Error as e:
+        # a hostile bundle must never surface as a 500 with a traceback
+        con.rollback()
+        return {"status": "error", "reason": f"bundle rejected: {e}"}
     finally:
         con.close()
-    return {"status": "ok", "from": bundle.get("device"),
+    return {"status": "ok", "from": _text(bundle.get("device"), 256),
             "facts_added": added, "facts_updated": updated,
             "facts_skipped": skipped, "tombstones": tombstoned,
             "choices_added": ch_added, "choices_skipped": ch_skipped}

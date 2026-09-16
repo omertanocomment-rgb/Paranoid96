@@ -63,6 +63,25 @@ Self-contained mobile app and a normal, dependency-free backend.
   import on Python 3.9–3.11 (the supported range); rewritten portably.
 - Per-project dispatch lock and a POST-body size cap in the embedded server.
 
+### Security
+Second audit pass, focused on untrusted input. Full write-up in `docs/AUDIT.md`.
+- **Path traversal → arbitrary file write (High, exploit-confirmed)** in
+  `super_extract`: a logical-partition name taken from an untrusted super
+  image's LP metadata was used directly as a filename, so a partition named
+  `../../ESCAPED` wrote outside the output directory. Names are now sanitised
+  (`_safe_name`) and every write is containment-checked (`_safe_join`).
+- **Unbounded allocation** decoding crafted images: `unsparse`/`parse_super`
+  trusted header-declared sizes, so a 40-byte file could claim gigabytes, and a
+  zero-length chunk looped forever. Now bounded by `MAX_OUTPUT_BYTES` /
+  `MAX_TABLE_ENTRIES` with bounds checks on every chunk, table and extent.
+- **Sync bundles from a peer** could crash the merge with an unhandled
+  `ProgrammingError`/`AttributeError`/`TypeError`. Every field is now coerced
+  and bounded, bundle size is capped, and a DB error rolls back to a clean
+  error instead of a traceback.
+- Web-UI `esc()` now escapes quotes and covers every `innerHTML`
+  interpolation; the LAN server gained the same 16 MiB body cap the embedded
+  server already had.
+
 ### Changed
 - `server.py` refactored onto `core/api.py`; websocket route removed in favor
   of `POST /api/chat`. The Android app no longer uses Termux or `RUN_COMMAND`.

@@ -30,6 +30,10 @@ def _json(payload: dict):
 
 PUBLIC_PATHS = {"/favicon.ico", "/icon.svg"}
 
+# Parity with the embedded stdlib server (`httpd.Handler.MAX_BODY`): a request
+# body is bounded so one client cannot exhaust memory on the LAN server either.
+MAX_BODY = 16 * 1024 * 1024
+
 
 @app.middleware("http")
 async def auth_gate(request: Request, call_next):
@@ -38,6 +42,13 @@ async def auth_gate(request: Request, call_next):
     path = request.url.path
     if path in PUBLIC_PATHS or path.startswith("/assets"):
         return await call_next(request)
+    try:
+        declared = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        return JSONResponse({"error": "bad content-length"}, status_code=400)
+    if declared > MAX_BODY:
+        return JSONResponse({"error": f"body too large (max {MAX_BODY} bytes)"},
+                            status_code=413)
     client = request.client.host if request.client else ""
     spoofable = any(h in request.headers for h in
                     ("x-forwarded-for", "x-real-ip", "forwarded"))

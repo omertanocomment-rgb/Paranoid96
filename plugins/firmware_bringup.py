@@ -449,7 +449,7 @@ def extract_image(args: dict) -> dict:
     written = []
 
     def dump(name, blob):
-        p = os.path.join(out, name)
+        p = _safe_join(out, name)          # names are internal, but stay contained
         with open(p, "wb") as f:
             f.write(blob)
         written.append({"file": p, "bytes": len(blob)})
@@ -655,6 +655,11 @@ LP_GEOMETRY_OFFSET = 4096          # LP_PARTITION_RESERVED_BYTES
 LP_GEOMETRY_SIZE = 4096
 SECTOR = 512
 
+# Untrusted images declare their own sizes. Decode is bounded so a crafted
+# header cannot make OMERTA allocate the machine to death — it errors instead.
+MAX_OUTPUT_BYTES = int(os.environ.get("OMERTA_FW_MAX_BYTES", 8 * 1024 ** 3))
+MAX_TABLE_ENTRIES = int(os.environ.get("OMERTA_FW_MAX_ENTRIES", 4096))
+
 
 def is_sparse(data: bytes) -> bool:
     return len(data) >= 4 and struct.unpack_from("<I", data, 0)[0] == SPARSE_MAGIC
@@ -666,21 +671,36 @@ def unsparse(data: bytes) -> bytes:
         "<IHHHHIIII", data, 0)
     if magic != SPARSE_MAGIC:
         raise DTBError("not an Android sparse image")
+    if blk <= 0 or blk % 4:
+        raise DTBError(f"bad sparse block size {blk}")
     out = bytearray()
     pos = fhs
     for _ in range(nchunks):
+        if pos < 0 or pos + 12 > len(data):
+            raise DTBError("truncated sparse image: chunk header past end of file")
         ctype, _r, csz, tsz = struct.unpack_from("<HHII", data, pos)
         body = pos + chs
         n = csz * blk
+        # a crafted chunk count can claim far more output than the file holds
+        if n < 0 or len(out) + n > MAX_OUTPUT_BYTES:
+            raise DTBError(
+                f"sparse image declares more than {MAX_OUTPUT_BYTES} bytes of "
+                "output (refusing to allocate; raise OMERTA_FW_MAX_BYTES if real)")
         if ctype == 0xCAC1:            # RAW
+            if body + n > len(data):
+                raise DTBError("truncated sparse image: RAW chunk body past end of file")
             out += data[body:body + n]
         elif ctype == 0xCAC2:          # FILL
+            if body + 4 > len(data):
+                raise DTBError("truncated sparse image: FILL chunk has no fill word")
             fill = data[body:body + 4]
             out += fill * (n // 4)
         elif ctype == 0xCAC3:          # DONT_CARE
             out += b"\x00" * n
         elif ctype == 0xCAC4:          # CRC32 — no output
             pass
+        if tsz <= 0:
+            raise DTBError("bad sparse chunk: non-advancing total_sz (would loop forever)")
         pos += tsz
     return bytes(out)
 
@@ -706,12 +726,27 @@ def parse_super(data: bytes) -> dict:
 
     p_off, p_num, p_es = desc(0)
     e_off, e_num, e_es = desc(1)
+    # table counts come from the image: bound them before looping/allocating
+    if p_num > MAX_TABLE_ENTRIES or e_num > MAX_TABLE_ENTRIES:
+        raise DTBError(
+            f"LP metadata declares {p_num} partitions / {e_num} extents "
+            f"(cap {MAX_TABLE_ENTRIES}); refusing to parse")
+    if p_es < 52 or e_es < 20:
+        raise DTBError(f"implausible LP entry sizes ({p_es}, {e_es})")
     tables = slot0 + header_size
+    if tables < 0 or tables > len(data):
+        raise DTBError("LP metadata header_size points past end of image")
+    for off, num, es in ((p_off, p_num, p_es), (e_off, e_num, e_es)):
+        if off < 0 or tables + off + num * es > len(data):
+            raise DTBError("LP metadata table extends past end of image")
     partitions = []
     for i in range(p_num):
         base = tables + p_off + i * p_es
         name = data[base:base + 36].split(b"\x00", 1)[0].decode("utf-8", "replace")
         _attrs, fei, nex, _gi = struct.unpack_from("<IIII", data, base + 36)
+        if nex > e_num or fei > e_num or fei + nex > e_num:
+            raise DTBError(
+                f"partition {name!r} references extents outside the extent table")
         extents = []
         for j in range(nex):
             eb = tables + e_off + (fei + j) * e_es
@@ -758,15 +793,27 @@ def super_extract(args: dict) -> dict:
     for p in s["partitions"]:
         if want and p["name"] != want:
             continue
+        if p["size"] > MAX_OUTPUT_BYTES:
+            return {"status": "error",
+                    "reason": f"partition {p['name']!r} declares {p['size']} bytes "
+                              f"(cap {MAX_OUTPUT_BYTES}); refusing to allocate"}
         blob = bytearray()
         for ex in p["extents"]:
             n = ex["sectors"] * SECTOR
             if ex["type"] == 0:            # LINEAR
                 o = ex["start_sector"] * SECTOR
+                if o < 0 or o > len(data):
+                    return {"status": "error",
+                            "reason": f"partition {p['name']!r} extent starts past "
+                                      "end of image"}
                 blob += data[o:o + n]
             else:                          # ZERO
                 blob += b"\x00" * n
-        fp = os.path.join(out, p["name"] + ".img")
+        # the partition name comes from the image metadata — never trust it as a path
+        try:
+            fp = _safe_join(out, p["name"] + ".img")
+        except DTBError as e:
+            return {"status": "error", "reason": str(e)}
         with open(fp, "wb") as f:
             f.write(blob)
         written.append({"file": fp, "name": p["name"], "bytes": len(blob)})
@@ -776,6 +823,31 @@ def super_extract(args: dict) -> dict:
             "note": "Extracted logical partitions. super repack (lpmake) is a "
                     "documented follow-up; these are ready to inspect/flash "
                     "individually (flashing stays gated)."}
+
+
+def _safe_name(name, fallback="unnamed"):
+    """Reduce a name taken from image metadata to a bare, safe filename.
+
+    Partition/entry names come from the image being analysed, which may be
+    untrusted. Without this a crafted name ('../../x', '/etc/x', 'a/b') would
+    make an extract write outside the output directory.
+    """
+    base = os.path.basename(str(name).replace("\\", "/").strip())
+    base = base.replace("\x00", "")
+    if base in ("", ".", "..") or base.startswith(".."):
+        return fallback
+    # keep it conservative: only sane filename characters
+    safe = "".join(c for c in base if c.isalnum() or c in "._-+")
+    return safe or fallback
+
+
+def _safe_join(out_dir, name):
+    """Join and verify the result stays inside out_dir. Raises on escape."""
+    out_abs = os.path.abspath(out_dir)
+    p = os.path.abspath(os.path.join(out_abs, _safe_name(name)))
+    if p != out_abs and not p.startswith(out_abs + os.sep):
+        raise DTBError(f"refusing to write outside {out_dir}: {name!r}")
+    return p
 
 
 def _sha256(b):

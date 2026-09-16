@@ -90,6 +90,41 @@ def main():
     check("rejects newer bundle version", bad["status"] == "error")
     check("rejects garbage", sy.merge_bundle({"nope": 1})["status"] == "error")
 
+    # --- a hostile/malformed bundle must return a clean error, never a traceback
+    hostile = [
+        {"version": 1, "device": "evil", "facts": [{"uid": "h1", "content": {"a": 1}}]},
+        {"version": 1, "device": "evil", "facts": "notalist"},
+        {"version": 1, "device": "evil", "facts": ["nope", {"uid": "h2", "content": "ok"}]},
+        {"version": 1, "device": "evil", "facts": [
+            {"uid": "h3", "content": "ok", "weight": "NaN",
+             "created_at": "soon", "updated_at": float("inf")}]},
+        {"version": 1, "device": "evil", "facts": [{"uid": "h3", "content": "again",
+                                                    "created_at": "later"}]},
+        {"version": "zzz", "device": "evil", "facts": []},
+        {"version": 1, "device": "evil", "facts": [], "choices": [42, {"uid": "c1",
+                                                                      "raw": {"k": 1}}]},
+    ]
+    crashed = None
+    for b in hostile:
+        try:
+            r = sy.merge_bundle(b)
+            assert r["status"] in ("ok", "error"), r
+        except Exception as e:                       # noqa: BLE001 — that's the point
+            crashed = f"{type(e).__name__}: {e}"
+            break
+    check("malformed bundles never raise (coerced or rejected)", crashed is None)
+
+    over = {"version": 1, "device": "evil",
+            "facts": [{"uid": str(i)} for i in range(sy.MAX_BUNDLE_ROWS + 1)]}
+    check("oversize bundle refused before merging",
+          sy.merge_bundle(over)["status"] == "error")
+
+    sy.merge_bundle({"version": 1, "device": "evil",
+                     "facts": [{"uid": "big", "content": "A" * (sy.MAX_TEXT_LEN * 4)}]})
+    stored = [f for f in mem.recall("AAAA", top_k=50) if len(f["content"]) > 1000]
+    check("oversized field truncated, not stored whole",
+          all(len(f["content"]) <= sy.MAX_TEXT_LEN for f in stored))
+
     shutil.rmtree(tmp, ignore_errors=True)
     print("\n" + ("SYNC TESTS PASSED" if ok else "SYNC TESTS FAILED"))
     sys.exit(0 if ok else 1)

@@ -409,6 +409,71 @@ def test_super_repack_roundtrip():
     print("  ✓ super repack round-trip; geometry/header/tables SHA-256 verify")
 
 
+def test_super_extract_rejects_path_traversal():
+    """A crafted partition name must never write outside the output dir
+    (regression: LP metadata is attacker-controlled in an untrusted image)."""
+    d = tempfile.mkdtemp()
+    img = _build_super("../../ESCAPED", b"PWNED")
+    p = os.path.join(d, "evil_super.img")
+    open(p, "wb").write(img)
+    out = os.path.join(d, "sub", "out")
+    os.makedirs(out)
+    r = fw.super_extract({"path": p, "out": out})
+    assert r["status"] == "ok", r
+    for w in r["written"]:
+        real = os.path.realpath(w["file"])
+        assert real.startswith(os.path.realpath(out) + os.sep), f"escaped: {real}"
+    assert not os.path.exists(os.path.join(d, "ESCAPED.img")), "wrote outside out dir!"
+    # the sanitizer itself
+    assert fw._safe_name("../../etc/passwd") == "passwd"
+    assert fw._safe_name("/abs/path") == "path"
+    assert fw._safe_name("..") == "unnamed"
+    assert fw._safe_name("") == "unnamed"
+    print("  ✓ crafted partition names are sanitised; writes stay inside out dir")
+
+
+def test_untrusted_images_are_bounded():
+    """A crafted header must error, not allocate the machine to death."""
+    # sparse image claiming 64 GiB of DONT_CARE output from a 40-byte file
+    blk = 4096
+    hdr = struct.pack("<IHHHHIIII", fw.SPARSE_MAGIC, 1, 0, 28, 12,
+                      blk, 16 * 1024 * 1024, 1, 0)
+    chunk = struct.pack("<HHII", 0xCAC3, 0, 16 * 1024 * 1024, 12)
+    try:
+        fw.unsparse(hdr + chunk)
+        assert False, "unsparse allocated an unbounded DONT_CARE chunk"
+    except fw.DTBError as e:
+        assert "OMERTA_FW_MAX_BYTES" in str(e) or "bytes of output" in str(e), e
+
+    # a RAW chunk whose body runs past EOF must be reported, not silently short
+    raw = struct.pack("<HHII", 0xCAC1, 0, 8, 12 + 8 * blk)
+    try:
+        fw.unsparse(hdr + raw)
+        assert False, "unsparse accepted a RAW chunk past end of file"
+    except fw.DTBError as e:
+        assert "past end of file" in str(e), e
+
+    # a chunk with total_sz == 0 would loop forever
+    stuck = struct.pack("<HHII", 0xCAC4, 0, 0, 0)
+    hdr2 = struct.pack("<IHHHHIIII", fw.SPARSE_MAGIC, 1, 0, 28, 12, blk, 1, 2, 0)
+    try:
+        fw.unsparse(hdr2 + stuck + stuck)
+        assert False, "unsparse accepted a non-advancing chunk"
+    except fw.DTBError as e:
+        assert "non-advancing" in str(e), e
+
+    # LP metadata claiming an absurd partition count must be refused
+    img = bytearray(_build_super("system", b"x" * 512))
+    slot0 = fw.LP_GEOMETRY_OFFSET + 2 * fw.LP_GEOMETRY_SIZE
+    struct.pack_into("<I", img, slot0 + 84, 1 << 20)     # partition table num_entries
+    try:
+        fw.parse_super(bytes(img))
+        assert False, "parse_super accepted a 1M-partition table"
+    except fw.DTBError as e:
+        assert "refusing to parse" in str(e), e
+    print("  ✓ crafted sparse/LP headers are bounded (no unbounded allocation)")
+
+
 def test_plan_is_readonly():
     r = fw.collect_evidence_plan({})
     assert r["status"] == "ok" and r["level"].startswith("0")
@@ -429,5 +494,7 @@ if __name__ == "__main__":
     test_super_list_and_extract()
     test_super_from_sparse()
     test_super_repack_roundtrip()
+    test_super_extract_rejects_path_traversal()
+    test_untrusted_images_are_bounded()
     test_plan_is_readonly()
     print("\nFIRMWARE TESTS PASSED")

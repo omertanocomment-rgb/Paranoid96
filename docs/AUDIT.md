@@ -5,7 +5,10 @@ plus the newly-embedded Android backend. This documents the threat model, what
 was checked, what was fixed in this pass, and what is an accepted, documented
 design choice.
 
-_Last reviewed: 2026-09 (embedded-backend + offline/online + unlimited-chat work)._
+_Last reviewed: 2026-09 — two passes. Pass 1: embedded backend, offline/online,
+unlimited chat (F1–F4). Pass 2: the full build, focused on untrusted input —
+firmware images and sync bundles (F5–F9), including one confirmed
+arbitrary-file-write._
 
 ## Threat model
 
@@ -61,6 +64,35 @@ Plugin and MCP tools with side effects route through the same gate
 | F2 | Medium | Embedded server is multi-threaded; two overlapping requests for one project could interleave `Agent.history` / `pending` mutations. | `core/api.chat` serializes per project with a lock; different projects still run concurrently. |
 | F3 | Low | Stdlib server read the full POST body by `Content-Length` with no cap → memory-exhaustion vector. | `httpd.Handler.MAX_BODY` caps bodies at 16 MiB. |
 | F4 | Low | Secret-writing API could otherwise be exposed on a LAN server. | `POST /api/secret` gated by `ALLOW_SECRET_API` (off by default) **and** an `is_loopback` check in both transports; `GET /api/secret` returns booleans only, never values (tested). |
+
+## Findings from the post-build audit (firmware + untrusted input pass)
+
+This pass traced every path where **attacker-controlled bytes reach a filename,
+an allocation, or the database**. Three of the five were confirmed by exploit,
+not by reading.
+
+| # | Severity | Finding | Evidence | Fix |
+|---|----------|---------|----------|-----|
+| **F5** | **High** | **Path traversal → arbitrary file write** in `super_extract`. A logical-partition name is read out of the super image's LP metadata (`name = data[base:base+36]…`) and was used directly as a filename: `os.path.join(out, p["name"] + ".img")`. Analysing an untrusted `super.img` — exactly what this tool is for — could write anywhere the process can. | Exploited: a crafted image with the partition named `../../ESCAPED` produced `/tmp/…/sub/out/../../ESCAPED.img` containing `PWNED-CONTENT`, outside the chosen output directory. | `_safe_name()` reduces a metadata-supplied name to a bare, charset-restricted filename; `_safe_join()` then re-checks the resolved path is inside the output dir and raises otherwise. Applied to `extract_image` too. Regression: `test_super_extract_rejects_path_traversal`. |
+| **F6** | Medium | **Unbounded allocation from a crafted image.** `unsparse` trusted the sparse header's chunk count and per-chunk block count, so a 40-byte file could declare gigabytes of `DONT_CARE` output; a `total_sz` of 0 looped forever; a RAW chunk body past EOF was silently truncated. `parse_super` likewise trusted the LP table entry counts and offsets. | A 40-byte sparse header declaring 64 GiB allocated until the process died. | `MAX_OUTPUT_BYTES` (8 GiB) / `MAX_TABLE_ENTRIES` (4096), both env-overridable; bounds checks on every chunk header, body, table offset and extent reference; non-advancing chunks and implausible entry sizes rejected. Regression: `test_untrusted_images_are_bounded`. |
+| **F7** | Medium | **A peer sync bundle could crash the sync endpoint.** `merge_bundle` bound bundle fields straight into SQLite. A non-scalar value (`content: {…}`) raised `sqlite3.ProgrammingError`; `facts` not being a list raised `AttributeError`; a string `created_at` was stored verbatim and then raised `TypeError` on the *next* merge's comparison. Unbounded row counts and field lengths could also bloat the DB. | Reproduced all three: `RAISED ProgrammingError`, `RAISED AttributeError`, `RAISED TypeError: '>' not supported between 'float' and 'str'`. | `_text`/`_num`/`_flag` coerce and bound every field (`MAX_TEXT_LEN` 200 000); `MAX_BUNDLE_ROWS` (100 000) refuses an oversize bundle before merging; `facts`/`choices` type-checked; rows that aren't dicts are skipped, not fatal; the DB loop is wrapped so a `sqlite3.Error` rolls back and returns a clean error. Stored timestamps are re-coerced on read, so a DB already polluted by a pre-fix sync recovers. Regression: three new checks in `tests/test_sync.py`. |
+| F8 | Low | Web UI `esc()` escaped `& < >` but not quotes, and a handful of interpolations (provider keys, secret-key names, memory counters) went into `innerHTML` — two of them into an **attribute** — unescaped. All those values are server-side constants today, so this was reachable only via a malicious plugin/provider name, but it is one rename away from being real. | Reviewed, not exploited (no untrusted source reaches them at present). | `esc()` now also escapes `"` and `'` and handles non-string input; every remaining interpolation routed through it. The security-critical path (the approval command text) was already escaped. |
+| F9 | Low | The FastAPI/LAN server had **no request-body cap**, while the embedded stdlib server capped at 16 MiB — an asymmetry, and the LAN server is the exposed one. | Reviewed. | `server.MAX_BODY` (16 MiB) enforced in the auth middleware; oversize → `413`, malformed `Content-Length` → `400`. Both servers now agree. |
+
+Checked and found clean in the same pass:
+
+- **Static asset serving** on the embedded server (`/assets/…`) — probed with
+  `../`, URL-encoded `..%2F`, doubled `....//` and an absolute path; all 404,
+  no leak. `Path.resolve()` + a `parents` containment check also defeats a
+  symlink planted inside the assets dir.
+- **SQL** — every statement in `memory.py`/`sync.py` is parameterised; no
+  string-built SQL anywhere in the tree.
+- **No `eval`, `exec`, `pickle`, `yaml.load`, or `os.system`** in the codebase.
+  A single `shell=True` exists, in `core/sandbox.py`, behind the approval gate.
+- **No hardcoded secrets**; `compileall` clean on the whole tree.
+- **The approval gate** still mediates every side-effecting firmware tool —
+  `extract_image`, `repack_image`, `super_extract`, `super_repack` are all
+  `side_effects: True`; the read-only analysers are not.
 
 ## Accepted / documented design choices
 
@@ -120,8 +152,12 @@ Plugin and MCP tools with side effects route through the same gate
   secrets; the server inside still enforces token auth (loopback-exempt). The
   Docker image binds `0.0.0.0` by design (container networking) — front it with
   the token like any LAN server.
-- The `code_index` FDT/boot parsers only *read* attacker-supplied images; a
-  malformed image yields a handled error, never code execution.
+- The FDT/boot parsers only *read* attacker-supplied images; a malformed image
+  yields a handled error, never code execution. The first version of this
+  addendum stopped there and was too generous: pass 2 found that *extraction*
+  of such an image could still write outside its output directory (F5) and
+  allocate without bound (F6). Both are fixed and regression-tested. Reading is
+  not the only thing a parser does — the bytes it hands onward count too.
 
 ## How to re-run the checks
 
