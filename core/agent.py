@@ -17,7 +17,7 @@ import re
 import yaml
 import time
 
-from . import config, memory, router, sandbox, skills, plugins, mcp, executor, toolparse
+from . import config, memory, router, sandbox, skills, plugins, mcp, executor, toolparse, roles
 from .providers import ProviderError
 from tools import fileops, devtools, firmware, checkpoint_tools
 
@@ -108,11 +108,17 @@ Tools marked [ASKS FIRST] do NOT run when you call them — the user must
 approve. On `status: awaiting_approval`, stop and say what you want to run
 and why. If denied, do not retry it; propose something else.
 Finished? Reply in plain text with no tool block."""]
+        rb = roles.block()
+        if rb:
+            blocks.insert(1, rb)
         if mem:
             blocks.append(mem)
         return "\n\n".join(blocks)
 
     parts = [p.get("voice", "")]
+    rb = roles.block()
+    if rb:
+        parts.append(rb)
     parts.append(f"""
 TOOL PROTOCOL
 To use a tool, reply with ONLY this and nothing else:

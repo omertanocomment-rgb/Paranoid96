@@ -61,18 +61,19 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 
 | Spec | Status | Where |
 |---|---|---|
-| CLI (`doctor/agent/build/test/debug/review/teach/firmware/…`) | Partial | `cli.py` + `core/commands.py`; some verbs map to agent prompts |
+| CLI (`doctor/agent/plan/build/test/debug/review/teach/firmware/index/sandbox/role/…`) | Implemented | `cli.py` + `core/commands.py`; agent verbs run role-focused one-shots |
 | Web UI (chat/settings/mode/model access) | Implemented | `webui/index.html`, `core/api.py` |
 | Self-contained mobile app (embedded Python, no Termux) | Implemented | `android-native/` (Chaquopy) |
 | Token auth, spoof-proof, on-device secrets | Implemented | `core/auth.py`; `docs/AUDIT.md`; tests on both servers |
 | Secret scanning in CI | Implemented | `.github/workflows/ci.yml` gitleaks |
 | Packaging: wheel/sdist, Electron, APK | Implemented | `scripts/build_all.sh`; Docker/.deb/AppImage = Planned |
-| Multi-agent orchestrator (Architect/Developer/…) | Planned | single agent today; roles are a future split |
+| Engineering roles (Architect/Developer/Reviewer/…) | Implemented (as focus profiles) | `core/roles.py` — 10 roles steer the one agent; `omerta plan/review/build/test/debug`, `omerta role`; `tests/test_roles.py` |
+| Parallel multi-agent orchestration | Planned | roles focus one agent; concurrent orchestrated agents are a follow-up |
 
 ## Not yet built (tracked, not claimed)
 
 - Call-graph index (symbol + dependency graph are done; call edges are not).
-- Named multi-agent roles as separate orchestrated agents.
+- Parallel multi-agent orchestration (roles focus a single agent today).
 - Firmware image **repack** (writing a modified boot/vendor_boot back out; inspect, decode and extract are done).
 - `.deb` / AppImage / OCI packaging targets.
 

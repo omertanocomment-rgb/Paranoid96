@@ -15,7 +15,8 @@ import json
 import sys
 
 HANDLED = {"firmware", "teach", "learn", "memory", "forget", "rules",
-           "index", "search", "symbol", "deps", "sandbox"}
+           "index", "search", "symbol", "deps", "sandbox",
+           "agent", "plan", "review", "build", "test", "debug", "role"}
 
 
 def _plugin_tool(name):
@@ -201,6 +202,81 @@ def _sandbox(argv):
     return 0
 
 
+# ── agent verbs (role-focused one-shots) ─────────────────────────────────────
+import os
+
+
+def _run_agent(task, role=None):
+    """Run a one-shot agent turn under an optional role, reusing the terminal
+    CLI so approvals work. Returns the CLI exit code."""
+    if role:
+        os.environ["OMERTA_ROLE"] = role
+    import sys as _sys
+    import cli
+    _sys.argv = ["omerta", "-c", task]
+    return cli.main()
+
+
+def _agent(argv):
+    task = " ".join(argv).strip()
+    if not task:
+        print('usage: omerta agent "task"'); return 1
+    return _run_agent(task)
+
+
+def _plan(argv):
+    task = " ".join(argv).strip()
+    if not task:
+        print('usage: omerta plan "what to build/change"'); return 1
+    return _run_agent("Produce a staged implementation plan (do not modify "
+                      "anything): " + task, role="architect")
+
+
+def _review(argv):
+    target = " ".join(argv).strip() or "the current uncommitted changes (git diff)"
+    return _run_agent(f"Review {target} for correctness, safety and style. "
+                      "Report findings by severity with file:line. Do not modify files.",
+                      role="reviewer")
+
+
+def _build(argv):
+    extra = " ".join(argv).strip()
+    return _run_agent("Discover this project's build system and build it"
+                      + (f" ({extra})" if extra else "")
+                      + ". Report the result with the actual build output.",
+                      role="builder")
+
+
+def _test(argv):
+    extra = " ".join(argv).strip()
+    return _run_agent("Find and run this project's tests"
+                      + (f" ({extra})" if extra else "")
+                      + ". Report pass/fail with the actual output.", role="tester")
+
+
+def _debug(argv):
+    err = " ".join(argv).strip()
+    if not err:
+        print('usage: omerta debug "error text"'); return 1
+    return _run_agent("Debug this failure: find the root cause (file:line), "
+                      "propose a fix, and verify it.\n\n" + err, role="debugger")
+
+
+def _role(argv):
+    from . import roles, config
+    if not argv:
+        cur = config.get("OMERTA_ROLE", "") or "(none)"
+        print(f"current role: {cur}\navailable: {', '.join(roles.names())}")
+        return 0
+    r = roles.resolve(argv[0])
+    if r not in roles.ROLES and argv[0] != "none":
+        print(f"unknown role '{argv[0]}'. available: {', '.join(roles.names())}")
+        return 1
+    config.set_setting("OMERTA_ROLE", "" if argv[0] == "none" else r)
+    print(f"role set to: {r if argv[0] != 'none' else '(none)'}")
+    return 0
+
+
 def dispatch(argv):
     """Handle a top-level verb. Returns an int exit code, or None if the verb
     isn't one of ours (let the interactive CLI handle it)."""
@@ -221,4 +297,11 @@ def dispatch(argv):
         "symbol": _symbol,
         "deps": _deps,
         "sandbox": _sandbox,
+        "agent": _agent,
+        "plan": _plan,
+        "review": _review,
+        "build": _build,
+        "test": _test,
+        "debug": _debug,
+        "role": _role,
     }[verb](rest)
