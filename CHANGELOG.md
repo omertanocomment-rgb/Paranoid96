@@ -47,6 +47,7 @@ Self-contained mobile app and a normal, dependency-free backend.
   validated), and a thin `packaging/build-appimage.sh`; wired into
   `scripts/build_all.sh`.
 - **Evidence & confidence** (`core/evidence.py`, `plugins/evidence_tools.py`): a general CONFIRMED/LIKELY/INFERRED/UNKNOWN facility — shared record shape, weakest-link combine, and a durable per-project evidence log; `omerta evidence`. Firmware tools reuse it. `tests/test_evidence.py`.
+- **Multi-agent orchestration** (`core/orchestrator.py`): sequential role pipelines (`omerta workflow plan|analyze|full`) and a **concurrent** role 'team' (`omerta workflow team`) with thread-local role isolation; `tests/test_orchestrator.py`.
 - **Git intelligence** (`core/gitx.py`, `plugins/git_tools.py`): read-only structured `status/diff/log/branch/show/review`; mutating git stays behind the approval gate. `omerta git …`; `tests/test_gitx.py`.
 - **New `omerta` verbs** (`core/commands.py`): `firmware`, `teach`, `memory`,
   `forget`, `rules`, `index`, `search`, `symbol`, `deps`, `sandbox`, `role`,

@@ -69,9 +69,12 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 @contextmanager
 def _conn():
-    c = sqlite3.connect(config.MEMORY_DB)
+    # timeout lets concurrent writers (e.g. parallel role agents) wait for the
+    # lock instead of failing with "database is locked".
+    c = sqlite3.connect(config.MEMORY_DB, timeout=10)
     c.row_factory = sqlite3.Row
     try:
+        c.execute("PRAGMA busy_timeout=10000")
         yield c
         c.commit()
     finally:

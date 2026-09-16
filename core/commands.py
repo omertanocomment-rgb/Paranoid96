@@ -278,11 +278,14 @@ def _debug(argv):
 
 def _workflow(argv):
     from . import orchestrator
+    known = set(orchestrator.PIPELINES) | set(orchestrator.PARALLEL_PIPELINES)
     if not argv:
-        print("usage: omerta workflow [pipeline] \"task\"\n"
-              f"pipelines: {', '.join(sorted(orchestrator.PIPELINES))}")
+        seq = ", ".join(sorted(orchestrator.PIPELINES))
+        par = ", ".join(sorted(orchestrator.PARALLEL_PIPELINES))
+        print(f"usage: omerta workflow [pipeline] \"task\"\n"
+              f"sequential: {seq}\nparallel:   {par}")
         return 1
-    if argv[0] in orchestrator.PIPELINES:
+    if argv[0] in known:
         pipeline, task = argv[0], " ".join(argv[1:]).strip()
     else:
         pipeline, task = "default", " ".join(argv).strip()

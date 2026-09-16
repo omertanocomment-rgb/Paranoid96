@@ -17,7 +17,7 @@ def test_pipeline_runs_all_stages_in_order():
     def fake_complete(messages, system="", max_tokens=None, stream_cb=None):
         # read the exact injected role block ("[ROLE: Architect. …]"), which is
         # unambiguous and not present in recalled memory
-        m = re.search(r"ROLE: (\w+)\.", system)
+        m = re.search(r"ROLE: (\w+)", system)
         role = m.group(1) if m else "?"
         seen.append(role)
         return {"text": f"{role} says ok", "provider": "mock",
@@ -59,8 +59,39 @@ def test_unknown_pipeline():
     print("  ✓ unknown pipeline rejected")
 
 
+def test_parallel_team_role_isolation():
+    """Concurrent role agents must each see their OWN role — the real hazard if
+    the active role weren't thread-local."""
+    import re
+    import time
+    import threading
+    seen = {}
+
+    def fake_complete(messages, system="", max_tokens=None, stream_cb=None):
+        m = re.search(r"ROLE: (\w+)", system)
+        role = m.group(1) if m else "?"
+        # hold briefly so the threads genuinely overlap and could clash
+        time.sleep(0.05)
+        seen[threading.current_thread().name] = role
+        return {"text": f"{role} finding", "provider": "mock",
+                "model": "mock", "offline": True}
+    agent_mod.router.complete = fake_complete
+
+    res = orchestrator.run("audit this", pipeline="team")
+    assert res["mode"] == "parallel"
+    assert set(res["stages"]) == {"architect", "security", "tester", "reviewer"}
+    # each thread saw exactly its own role — no cross-thread contamination
+    roles_seen = sorted(seen.values())
+    assert roles_seen == ["Architect", "Reviewer", "Security", "Tester"], roles_seen
+    # results are ordered back to the pipeline order
+    assert [t["role"] for t in res["transcript"]] == \
+        ["architect", "security", "tester", "reviewer"]
+    print("  ✓ parallel 'team' ran 4 roles concurrently, each isolated to its role")
+
+
 if __name__ == "__main__":
     test_pipeline_runs_all_stages_in_order()
     test_pipeline_stops_on_pending_approval()
     test_unknown_pipeline()
+    test_parallel_team_role_isolation()
     print("\nORCHESTRATOR TESTS PASSED")

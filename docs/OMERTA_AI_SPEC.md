@@ -72,11 +72,10 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | AppImage | Partial (recipe) | `packaging/build-appimage.sh` — thin AppImage, needs `appimagetool` |
 | Engineering roles (Architect/Developer/Reviewer/…) | Implemented (as focus profiles) | `core/roles.py` — 10 roles steer the one agent; `omerta plan/review/build/test/debug`, `omerta role`; `tests/test_roles.py` |
 | Multi-role pipeline (sequential) | Implemented | `core/orchestrator.py` — plan→review etc., feeds output forward, halts on approval; `omerta workflow`; `tests/test_orchestrator.py` |
-| Parallel/concurrent multi-agent orchestration | Planned | sequential role pipeline done; running agents concurrently is a follow-up |
+| Parallel/concurrent multi-agent orchestration | Implemented | `core/orchestrator.py` `run_parallel` — a role 'team' runs concurrently (thread-local roles); `omerta workflow team`; `tests/test_orchestrator.py` |
 
 ## Not yet built (tracked, not claimed)
 
-- Parallel/concurrent multi-agent orchestration (a sequential role pipeline is done).
 - super.img (dynamic partitions) unpack/repack (classic boot + vendor_boot repack are done).
 - Fat AppImage bundling its own Python (a thin, host-python recipe exists).
 
