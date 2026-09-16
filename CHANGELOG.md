@@ -24,9 +24,11 @@ Self-contained mobile app and a normal, dependency-free backend.
 - On-device **API-key / local-host storage** (`secrets.json`, `0600`) via a
   loopback-only, opt-in secret API surfaced in the web UI.
 - **Firmware bring-up tooling** (`plugins/firmware_bringup.py`): a pure-Python
-  DTB/FDT parser (`analyze_dtb`, no `dtc` needed), evidence→BOARD REPORT
-  (`board_report`), and a read-only adb evidence plan — every field tagged
-  CONFIRMED/LIKELY/INFERRED/UNKNOWN, never guessed. `tests/test_firmware.py`.
+  DTB/FDT parser (`analyze_dtb`, no `dtc` needed), Android **boot/vendor_boot/
+  dtbo image inspection** (`inspect_image`, header v0–v4 + dt_table) with
+  embedded-DTB extraction, evidence→BOARD REPORT (`board_report`), and a
+  read-only adb evidence plan — every field tagged CONFIRMED/LIKELY/INFERRED/
+  UNKNOWN, never guessed. `tests/test_firmware.py`.
 - **`firmware-bringup` skill** and a **TCL T509K starter device tree**
   (`firmware/t509k/`): AOSP makefiles, discovery-only DTS, evidence/build
   scripts, hardware/firmware/kernel KB, and a device constitution.

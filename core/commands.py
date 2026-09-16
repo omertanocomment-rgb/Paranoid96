@@ -33,7 +33,13 @@ def _emit(obj):
 def _firmware(argv):
     sub = argv[0] if argv else "help"
     rest = argv[1:]
-    if sub in ("inspect", "analyze", "dtb") and rest:
+    if sub == "inspect" and rest:
+        fn = _plugin_tool("inspect_image")
+        if not fn:
+            print("firmware plugin not available"); return 1
+        _emit(fn({"path": rest[0]}))
+        return 0
+    if sub in ("analyze", "dtb") and rest:
         fn = _plugin_tool("analyze_dtb")
         if not fn:
             print("firmware plugin not available"); return 1
@@ -49,7 +55,8 @@ def _firmware(argv):
         fn = _plugin_tool("collect_evidence_plan")
         _emit(fn({"out": rest[0]} if rest else {}))
         return 0
-    print("usage: omerta firmware <analyze|dtb <file> | report <dir> | plan>")
+    print("usage: omerta firmware <inspect <img> | analyze <dtb|dtbo|boot.img> | "
+          "report <dir> | plan>")
     return 0
 
 

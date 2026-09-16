@@ -109,6 +109,60 @@ def test_board_report():
     print("  ✓ evidence fused: model/ram CONFIRMED, touch LIKELY, camera UNKNOWN")
 
 
+def _simple_dtb():
+    return build_dtb({"name": "", "props": {
+        "model": "TCL T509K — OMERTA AI",
+        "compatible": ["tcl,t509k", "mediatek,mt6765"]}, "children": []})
+
+
+def test_bootimg_v2_embedded_dtb():
+    dtb = _simple_dtb()
+    page = 2048
+    kernel, ramdisk = b"KERNELDATA", b"RAMD"
+    dtb_off = page + page + page          # header + kernel page + ramdisk page
+    img = bytearray(dtb_off + len(dtb))
+    img[0:8] = b"ANDROID!"
+    struct.pack_into("<IIIIIIII", img, 8,
+                     len(kernel), 0, len(ramdisk), 0, 0, 0, 0, page)
+    struct.pack_into("<I", img, 40, 2)                    # header_version = 2
+    struct.pack_into("<I", img, 1632, 0)                  # recovery_dtbo_size
+    struct.pack_into("<I", img, 1648, len(dtb))           # dtb_size
+    img[page:page + len(kernel)] = kernel
+    img[2 * page:2 * page + len(ramdisk)] = ramdisk
+    img[dtb_off:dtb_off + len(dtb)] = dtb
+    with tempfile.NamedTemporaryFile(suffix=".img", delete=False) as f:
+        f.write(img); path = f.name
+    try:
+        info = fw.inspect_image({"path": path})
+        assert info["status"] == "ok" and info["container"] == "boot", info
+        assert info["info"]["header_version"] == 2 and info["info"]["has_dtb"]
+        a = fw.analyze_dtb({"path": path})
+        assert a["status"] == "ok" and a["source"] == "boot.img(dtb)", a
+        assert "mediatek,mt6765" in a["report"]["compatible"]["value"]
+    finally:
+        os.unlink(path)
+    print("  ✓ boot.img v2 inspected; embedded DTB extracted + decoded")
+
+
+def test_dt_table():
+    dtb = _simple_dtb()
+    hdr = struct.pack(">8I", 0xD7B7AB1E, 64 + len(dtb), 32, 32, 1, 32, 2048, 0)
+    entry = struct.pack(">IIII", len(dtb), 64, 0, 0) + b"\x00" * 16
+    blob = hdr + entry + dtb
+    with tempfile.NamedTemporaryFile(suffix=".img", delete=False) as f:
+        f.write(blob); path = f.name
+    try:
+        info = fw.inspect_image({"path": path})
+        assert info["status"] == "ok" and info["container"] == "dt_table"
+        assert info["entry_count"] == 1
+        a = fw.analyze_dtb({"path": path})
+        assert a["status"] == "ok" and a["source"] == "dt_table[0]", a
+        assert a["report"]["soc"]["confidence"] == "CONFIRMED"
+    finally:
+        os.unlink(path)
+    print("  ✓ dtbo/dt_table inspected; entry 0 decoded")
+
+
 def test_plan_is_readonly():
     r = fw.collect_evidence_plan({})
     assert r["status"] == "ok" and r["level"].startswith("0")
@@ -120,5 +174,7 @@ def test_plan_is_readonly():
 if __name__ == "__main__":
     test_analyze_dtb()
     test_board_report()
+    test_bootimg_v2_embedded_dtb()
+    test_dt_table()
     test_plan_is_readonly()
     print("\nFIRMWARE TESTS PASSED")

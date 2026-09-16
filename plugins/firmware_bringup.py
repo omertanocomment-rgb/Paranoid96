@@ -160,15 +160,7 @@ def _field(value, confidence, source):
     return {"value": value, "confidence": confidence, "source": source}
 
 
-def analyze_dtb(args: dict) -> dict:
-    path = args.get("path") or args.get("dtb") or ""
-    if not path or not os.path.isfile(path):
-        return {"status": "error", "reason": f"no such file: {path}"}
-    try:
-        root = parse_dtb(open(path, "rb").read())
-    except DTBError as e:
-        return {"status": "error", "reason": str(e)}
-
+def _summarize_root(root, path, source="dtb") -> dict:
     props = root["props"]
     model = props.get("model")
     compat = props.get("compatible")
@@ -219,12 +211,185 @@ def analyze_dtb(args: dict) -> dict:
         "battery_charger": present("battery/charger", ["battery", "charger", "charging", "fuel", "gauge"]),
     }
     unknown = [k for k, v in report.items() if v["confidence"] == "UNKNOWN"]
-    return {"status": "ok", "source": "dtb", "path": path,
+    return {"status": "ok", "source": source, "path": path,
             "node_count": sum(1 for _ in _walk(root)),
             "report": report,
             "unknown_fields": unknown,
             "note": "UNKNOWN fields need more evidence (kernel source, DTBO, dmesg). "
                     "Values are only what the DTB actually declares — nothing guessed."}
+
+
+def analyze_dtb(args: dict) -> dict:
+    """Analyze a device tree. Accepts a raw .dtb, a dtbo/dt_table image (decodes
+    an entry, default 0), or an Android boot image with an embedded DTB (v2).
+    Read-only."""
+    path = args.get("path") or args.get("dtb") or ""
+    if not path or not os.path.isfile(path):
+        return {"status": "error", "reason": f"no such file: {path}"}
+    data = open(path, "rb").read()
+    kind = _detect(data)
+    try:
+        if kind == "dtb":
+            return _summarize_root(parse_dtb(data), path, "dtb")
+        if kind == "dt_table":
+            entries = parse_dt_table(data)
+            if not entries:
+                return {"status": "error", "reason": "dt_table has no entries"}
+            idx = int(args.get("index", 0))
+            if idx >= len(entries):
+                return {"status": "error", "reason": f"index {idx} of {len(entries)}"}
+            e = entries[idx]
+            blob = data[e["offset"]:e["offset"] + e["size"]]
+            out = _summarize_root(parse_dtb(blob), path, f"dt_table[{idx}]")
+            out["dt_table"] = {"entries": len(entries), "index": idx,
+                               "id": e["id"], "rev": e["rev"]}
+            return out
+        if kind == "bootimg":
+            info = parse_bootimg(data)
+            if info.get("_dtb_size"):
+                blob = data[info["_dtb_offset"]:info["_dtb_offset"] + info["_dtb_size"]]
+                out = _summarize_root(parse_dtb(blob), path, "boot.img(dtb)")
+                out["boot_image"] = {k: v for k, v in info.items()
+                                     if not k.startswith("_")}
+                return out
+            return {"status": "ok", "source": info.get("type"), "path": path,
+                    "report": {}, "info": {k: v for k, v in info.items()
+                                           if not k.startswith("_")},
+                    "note": "No embedded DTB in this image "
+                            "(boot v3+/vendor_boot keep the DTB in vendor_boot.img)."}
+    except (DTBError, struct.error) as e:
+        return {"status": "error", "reason": str(e)}
+    return {"status": "error", "reason": "unrecognized image (not FDT/dt_table/boot)"}
+
+
+# ── Android boot image + DTBO/DT table containers (read-only) ────────────────
+DT_TABLE_MAGIC = 0xD7B7AB1E
+BOOT_MAGIC = b"ANDROID!"
+VENDOR_BOOT_MAGIC = b"VNDRBOOT"
+
+
+def _os_version(v):
+    """Decode the packed os_version+patch field of an Android boot header."""
+    if not v:
+        return None
+    ver = v >> 11
+    a, b, c = (ver >> 14) & 0x7F, (ver >> 7) & 0x7F, ver & 0x7F
+    patch = v & 0x7FF
+    year, month = 2000 + (patch >> 4), patch & 0xF
+    return f"{a}.{b}.{c} (patch {year:04d}-{month:02d})"
+
+
+def _round(x, page):
+    return ((x + page - 1) // page) * page if page else x
+
+
+def parse_bootimg(data: bytes) -> dict:
+    """Parse an Android boot/vendor_boot image header (v0–v4). Read-only."""
+    if data[:8] == VENDOR_BOOT_MAGIC:
+        # vendor_boot v3/v4: magic, header_version, page_size, kernel_addr,
+        # ramdisk_addr, vendor_ramdisk_size, cmdline[2048], tags_addr, name[16],
+        # header_size, dtb_size ...
+        hv, page = struct.unpack_from("<II", data, 8)
+        vraml, = struct.unpack_from("<I", data, 16 + 8)   # after two addrs
+        cmd = data[28:28 + 2048].split(b"\x00", 1)[0].decode("utf-8", "replace")
+        # dtb_size sits after cmdline(2048)+tags_addr(4)+name(16)+header_size(4)
+        off = 28 + 2048 + 4 + 16 + 4
+        dtb_size, = struct.unpack_from("<I", data, off)
+        return {"type": "vendor_boot", "header_version": hv, "page_size": page,
+                "vendor_ramdisk_size": vraml, "dtb_size": dtb_size,
+                "cmdline": cmd, "has_dtb": dtb_size > 0}
+
+    if data[:8] != BOOT_MAGIC:
+        raise DTBError("not an Android boot image (missing ANDROID! magic)")
+    header_version = struct.unpack_from("<I", data, 40)[0]
+    if header_version >= 3:
+        kernel_size, ramdisk_size, os_ver, header_size = struct.unpack_from("<IIII", data, 8)
+        cmd = data[44:44 + 1536].split(b"\x00", 1)[0].decode("utf-8", "replace")
+        return {"type": "boot", "header_version": header_version,
+                "page_size": 4096, "kernel_size": kernel_size,
+                "ramdisk_size": ramdisk_size, "os_version": _os_version(os_ver),
+                "cmdline": cmd, "has_dtb": False,
+                "note": "boot v3+/vendor_boot holds the DTB in vendor_boot.img"}
+    # classic v0/v1/v2
+    (kernel_size, _ka, ramdisk_size, _ra, second_size, _sa, _tags,
+     page_size) = struct.unpack_from("<IIIIIIII", data, 8)
+    os_ver = struct.unpack_from("<I", data, 44)[0]
+    cmd = data[64:64 + 512].split(b"\x00", 1)[0].decode("utf-8", "replace")
+    extra = data[608:608 + 1024].split(b"\x00", 1)[0].decode("utf-8", "replace")
+    out = {"type": "boot", "header_version": header_version, "page_size": page_size,
+           "kernel_size": kernel_size, "ramdisk_size": ramdisk_size,
+           "second_size": second_size, "os_version": _os_version(os_ver),
+           "cmdline": (cmd + " " + extra).strip(), "has_dtb": False}
+    recovery_dtbo_size = 0
+    if header_version >= 1:
+        recovery_dtbo_size = struct.unpack_from("<I", data, 1632)[0]
+    if header_version >= 2:
+        dtb_size = struct.unpack_from("<I", data, 1648)[0]
+        out["dtb_size"] = dtb_size
+        out["has_dtb"] = dtb_size > 0
+        if dtb_size:
+            p = page_size
+            off = (_round(p, p) + _round(kernel_size, p) + _round(ramdisk_size, p)
+                   + _round(second_size, p) + _round(recovery_dtbo_size, p))
+            out["_dtb_offset"], out["_dtb_size"] = off, dtb_size
+    return out
+
+
+def parse_dt_table(data: bytes) -> list:
+    """Parse a dt_table (dtbo.img / dtb.img). Returns entry list. Read-only."""
+    magic, total, hsize, esize, ecount, eoff, page, ver = struct.unpack(">8I", data[:32])
+    if magic != DT_TABLE_MAGIC:
+        raise DTBError("not a dt_table (bad magic 0x%08x)" % magic)
+    entries = []
+    for i in range(ecount):
+        base = eoff + i * esize
+        dt_size, dt_off, dt_id, rev = struct.unpack_from(">IIII", data, base)
+        entries.append({"index": i, "size": dt_size, "offset": dt_off,
+                        "id": dt_id, "rev": rev})
+    return entries
+
+
+def _detect(data: bytes) -> str:
+    if data[:8] in (BOOT_MAGIC, VENDOR_BOOT_MAGIC):
+        return "bootimg"
+    if len(data) >= 4 and struct.unpack(">I", data[:4])[0] == DT_TABLE_MAGIC:
+        return "dt_table"
+    if len(data) >= 4 and struct.unpack(">I", data[:4])[0] == FDT_MAGIC:
+        return "dtb"
+    return "unknown"
+
+
+def inspect_image(args: dict) -> dict:
+    """Identify a firmware image (boot / vendor_boot / dtbo table / raw dtb) and
+    report its structure. Read-only; nothing is unpacked to disk."""
+    path = args.get("path") or ""
+    if not path or not os.path.isfile(path):
+        return {"status": "error", "reason": f"no such file: {path}"}
+    data = open(path, "rb").read()
+    kind = _detect(data)
+    if kind == "bootimg":
+        try:
+            info = parse_bootimg(data)
+        except (DTBError, struct.error) as e:
+            return {"status": "error", "reason": str(e)}
+        info = {k: v for k, v in info.items() if not k.startswith("_")}
+        return {"status": "ok", "path": path, "container": info.get("type"),
+                "info": info,
+                "note": "Read-only header parse. Use analyze_dtb to pull the "
+                        "embedded/vendor DTB where present."}
+    if kind == "dt_table":
+        try:
+            entries = parse_dt_table(data)
+        except (DTBError, struct.error) as e:
+            return {"status": "error", "reason": str(e)}
+        return {"status": "ok", "path": path, "container": "dt_table",
+                "entry_count": len(entries), "entries": entries,
+                "note": "DTBO/DT table. analyze_dtb will decode entry 0 (or set index)."}
+    if kind == "dtb":
+        return {"status": "ok", "path": path, "container": "dtb",
+                "note": "Raw flattened device tree — analyze_dtb decodes it."}
+    return {"status": "error", "reason": "unrecognized image "
+            "(not ANDROID!/VNDRBOOT/dt_table/FDT)"}
 
 
 # ── evidence-directory → BOARD REPORT ───────────────────────────────────────
@@ -357,10 +522,18 @@ def collect_evidence_plan(args: dict) -> dict:
 def register():
     return {
         "analyze_dtb": {"fn": analyze_dtb, "description":
-                        "Decode a flattened device tree (.dtb) and summarise "
+                        "Decode a device tree — raw .dtb, a dtbo/dt_table image, or "
+                        "an Android boot.img with an embedded DTB — and summarise "
                         "board/soc/cpu/display/touch/etc. with confidences. Read-only.",
-                        "args": {"path": "path to a .dtb file"},
+                        "args": {"path": "path to .dtb / dtbo.img / boot.img",
+                                 "index": "dt_table entry index (default 0)"},
                         "side_effects": False},
+        "inspect_image": {"fn": inspect_image, "description":
+                          "Identify and structurally inspect a firmware image "
+                          "(boot / vendor_boot / dtbo table / raw dtb): header "
+                          "version, sizes, cmdline, os_version, dt entries. Read-only.",
+                          "args": {"path": "path to a firmware image"},
+                          "side_effects": False},
         "board_report": {"fn": board_report, "description":
                          "Fuse an adb evidence directory (getprop/dmesg/partitions/"
                          "+optional .dtb) into a BOARD REPORT with confidences. Read-only.",

@@ -52,7 +52,9 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | `omerta device report` (evidence → BOARD REPORT) | Implemented | `plugins/firmware_bringup.py` `board_report` |
 | Evidence collection plan (read-only adb) | Implemented | `collect_evidence_plan`; `firmware/t509k/scripts/collect-t509k-evidence.sh` |
 | Device-tree bring-up workflow + starter tree | Implemented | skill `skills/firmware-bringup`, `firmware/t509k/` |
-| Full DTBO/boot.img/super unpack | Partial/Planned | DTB decode done; image unpack is a follow-up |
+| `omerta firmware inspect` boot/vendor_boot/dtbo images | Implemented | `plugins/firmware_bringup.py` `inspect_image` (header v0–v4, dt_table); `tests/test_firmware.py` |
+| Analyze DTB embedded in boot.img (v2) / dtbo entry | Implemented | `analyze_dtb` container dispatch; `tests/test_firmware.py` |
+| Full boot/vendor_boot/super **repack** & extract-to-disk | Planned | inspect + embedded-DTB decode done; repack is a follow-up |
 
 ## Interfaces, security, packaging
 
@@ -71,7 +73,7 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 - Container-isolated sandbox with per-task resource limits.
 - Full symbol/dependency/call-graph index across languages.
 - Named multi-agent roles as separate orchestrated agents.
-- Firmware image (boot/vendor_boot/super) unpack & repack.
+- Firmware image **repack** and extract-to-disk (inspect + embedded-DTB decode are done).
 - `.deb` / AppImage / OCI packaging targets.
 
 These are honest gaps. OMERTA should say so rather than imply they exist.
