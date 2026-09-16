@@ -56,7 +56,8 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Analyze DTB embedded in boot.img (v2) / dtbo entry | Implemented | `analyze_dtb` container dispatch; `tests/test_firmware.py` |
 | Extract image parts to disk (kernel/ramdisk/dtb, per-entry dtb) | Implemented | `extract_image`; `omerta firmware extract`; `tests/test_firmware.py` |
 | Classic boot image **repack** (v0–v2) | Implemented | `repack_image` rebuilds the image + recomputes the SHA1 id; round-trip tested |
-| vendor_boot / super repack | Planned | classic boot repack done; the newer/multi-part formats are a follow-up |
+| vendor_boot repack (v3/v4) | Implemented | `repack_image` rebuilds vendor_boot (ramdisk/dtb/table/bootconfig); round-trip tested |
+| super.img (dynamic partitions) unpack/repack | Planned | needs lpunpack/lpmake-style logical-partition handling |
 
 ## Interfaces, security, packaging
 
@@ -76,7 +77,7 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 ## Not yet built (tracked, not claimed)
 
 - Parallel/concurrent multi-agent orchestration (a sequential role pipeline is done).
-- vendor_boot / super **repack** (classic boot v0–v2 repack is done).
+- super.img (dynamic partitions) unpack/repack (classic boot + vendor_boot repack are done).
 - Fat AppImage bundling its own Python (a thin, host-python recipe exists).
 
 These are honest gaps. OMERTA should say so rather than imply they exist.

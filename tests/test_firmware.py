@@ -233,6 +233,60 @@ def test_repack_roundtrip():
     print("  ✓ repack round-trip: extract→repack→extract preserves parts + decodes")
 
 
+def _build_vendor_boot(hv, page, vr, dtb, table=b"", bcfg=b""):
+    header_size = 2128 if hv >= 4 else 2112
+
+    def pad(b):
+        return b + b"\x00" * ((-len(b)) % page)
+    hdr = bytearray(((header_size + page - 1) // page) * page)
+    hdr[0:8] = b"VNDRBOOT"
+    struct.pack_into("<IIIII", hdr, 8, hv, page, 0x8000, 0x1000000, len(vr))
+    struct.pack_into("<6s", hdr, 28, b"cmd=vb")     # fixed-width, never resizes
+    struct.pack_into("<II", hdr, 2096, header_size, len(dtb))
+    if hv >= 4:
+        struct.pack_into("<IIII", hdr, 2112, len(table), 1, 108, len(bcfg))
+    blob = bytes(hdr) + pad(vr) + pad(dtb)
+    if hv >= 4:
+        blob += pad(table) + pad(bcfg)
+    return blob
+
+
+def test_vendor_boot_roundtrip():
+    dtb = _simple_dtb()
+    page = 2048
+    vr = b"VENDOR-RAMDISK-CONTENT"
+    table = b"T" * 108
+    bcfg = b"androidboot.x=1\n"
+    img = _build_vendor_boot(4, page, vr, dtb, table, bcfg)
+    d = tempfile.mkdtemp()
+    ipath = os.path.join(d, "vendor_boot.img")
+    open(ipath, "wb").write(img)
+
+    info = fw.inspect_image({"path": ipath})
+    assert info["status"] == "ok" and info["container"] == "vendor_boot", info
+    assert info["info"]["header_version"] == 4 and info["info"]["has_dtb"]
+
+    ex = os.path.join(d, "ex")
+    r = fw.extract_image({"path": ipath, "out": ex})
+    assert r["status"] == "ok"
+    got = {os.path.basename(w["file"]) for w in r["written"]}
+    assert {"vendor_ramdisk", "dtb.dtb", "vendor_ramdisk_table", "bootconfig",
+            "vendor_bootimg.json"} <= got, got
+    a = fw.analyze_dtb({"path": os.path.join(ex, "dtb.dtb")})
+    assert a["report"]["soc"]["confidence"] == "CONFIRMED"
+
+    out = os.path.join(d, "repacked.img")
+    rp = fw.repack_image({"dir": ex, "out": out})
+    assert rp["status"] == "ok" and rp["type"] == "vendor_boot", rp
+    # re-extract the repacked image; parts must be byte-identical
+    ex2 = os.path.join(d, "ex2")
+    fw.extract_image({"path": out, "out": ex2})
+    assert open(os.path.join(ex2, "vendor_ramdisk"), "rb").read() == vr
+    assert open(os.path.join(ex2, "dtb.dtb"), "rb").read() == dtb
+    assert open(os.path.join(ex2, "bootconfig"), "rb").read() == bcfg
+    print("  ✓ vendor_boot v4 inspect→extract→repack→extract preserves all parts")
+
+
 def test_plan_is_readonly():
     r = fw.collect_evidence_plan({})
     assert r["status"] == "ok" and r["level"].startswith("0")
@@ -248,5 +302,6 @@ if __name__ == "__main__":
     test_dt_table()
     test_extract_bootimg()
     test_repack_roundtrip()
+    test_vendor_boot_roundtrip()
     test_plan_is_readonly()
     print("\nFIRMWARE TESTS PASSED")

@@ -294,18 +294,41 @@ def _round(x, page):
 def parse_bootimg(data: bytes) -> dict:
     """Parse an Android boot/vendor_boot image header (v0–v4). Read-only."""
     if data[:8] == VENDOR_BOOT_MAGIC:
-        # vendor_boot v3/v4: magic, header_version, page_size, kernel_addr,
-        # ramdisk_addr, vendor_ramdisk_size, cmdline[2048], tags_addr, name[16],
-        # header_size, dtb_size ...
-        hv, page = struct.unpack_from("<II", data, 8)
-        vraml, = struct.unpack_from("<I", data, 16 + 8)   # after two addrs
+        # vendor_boot v3/v4 (AOSP bootimg format):
+        #   magic[8], header_version, page_size, kernel_addr, ramdisk_addr,
+        #   vendor_ramdisk_size, cmdline[2048], tags_addr, name[16], header_size,
+        #   dtb_size, dtb_addr(u64)  [v4 adds table + bootconfig sizes]
+        hv, page, kaddr, raddr, vraml = struct.unpack_from("<IIIII", data, 8)
         cmd = data[28:28 + 2048].split(b"\x00", 1)[0].decode("utf-8", "replace")
-        # dtb_size sits after cmdline(2048)+tags_addr(4)+name(16)+header_size(4)
-        off = 28 + 2048 + 4 + 16 + 4
-        dtb_size, = struct.unpack_from("<I", data, off)
+        tags_addr = struct.unpack_from("<I", data, 2076)[0]
+        name = data[2080:2096].split(b"\x00", 1)[0].decode("utf-8", "replace")
+        header_size, dtb_size = struct.unpack_from("<II", data, 2096)
+        dtb_addr = struct.unpack_from("<Q", data, 2104)[0]
+        raw = {"header_version": hv, "page_size": page, "kernel_addr": kaddr,
+               "ramdisk_addr": raddr, "vendor_ramdisk_size": vraml,
+               "cmdline": cmd, "tags_addr": tags_addr, "name": name,
+               "header_size": header_size, "dtb_size": dtb_size,
+               "dtb_addr": dtb_addr, "table_size": 0, "table_entries": 0,
+               "table_entry_size": 0, "bootconfig_size": 0}
+        if hv >= 4:
+            (tsize, tnum, tesize, bcfg) = struct.unpack_from("<IIII", data, 2112)
+            raw.update(table_size=tsize, table_entries=tnum,
+                       table_entry_size=tesize, bootconfig_size=bcfg)
+        # section offsets, everything in page units
+        p = page
+        o = _round(header_size, p)
+        vr_off = o
+        dtb_off = vr_off + _round(vraml, p)
+        table_off = dtb_off + _round(dtb_size, p)
+        bcfg_off = table_off + _round(raw["table_size"], p)
+        raw["_offsets"] = {"vendor_ramdisk": vr_off, "dtb": dtb_off,
+                           "table": table_off, "bootconfig": bcfg_off}
         return {"type": "vendor_boot", "header_version": hv, "page_size": page,
                 "vendor_ramdisk_size": vraml, "dtb_size": dtb_size,
-                "cmdline": cmd, "has_dtb": dtb_size > 0}
+                "table_size": raw["table_size"],
+                "bootconfig_size": raw["bootconfig_size"],
+                "cmdline": cmd, "name": name, "has_dtb": dtb_size > 0,
+                "_raw": raw}
 
     if data[:8] != BOOT_MAGIC:
         raise DTBError("not an Android boot image (missing ANDROID! magic)")
@@ -453,10 +476,28 @@ def extract_image(args: dict) -> dict:
                 with open(manifest, "w") as f:
                     json.dump(info.get("_raw", {}), f, indent=2)
                 written.append({"file": manifest, "bytes": os.path.getsize(manifest)})
+            elif info.get("type") == "vendor_boot":
+                raw = info["_raw"]
+                offs = raw["_offsets"]
+                p = raw["page_size"]
+
+                def cut(o, n, name):
+                    if n:
+                        dump(name, data[o:o + n])
+                cut(offs["vendor_ramdisk"], raw["vendor_ramdisk_size"], "vendor_ramdisk")
+                cut(offs["dtb"], raw["dtb_size"], "dtb.dtb")
+                cut(offs["table"], raw["table_size"], "vendor_ramdisk_table")
+                cut(offs["bootconfig"], raw["bootconfig_size"], "bootconfig")
+                manifest = os.path.join(out, "vendor_bootimg.json")
+                save = {k: v for k, v in raw.items() if k != "_offsets"}
+                with open(manifest, "w") as f:
+                    json.dump(save, f, indent=2)
+                written.append({"file": manifest, "bytes": os.path.getsize(manifest)})
             else:
                 return {"status": "error",
-                        "reason": "extract supports classic boot v0–v2; boot v3+/"
-                                  "vendor_boot repack is a Planned follow-up"}
+                        "reason": "extract supports classic boot v0–v2 and "
+                                  "vendor_boot v3/v4; boot v3+ (non-vendor) keeps its "
+                                  "ramdisk without a dtb and isn't repacked here"}
         elif kind == "dt_table":
             for e in parse_dt_table(data):
                 dump(f"{e['index']:02d}_id{e['id']}_rev{e['rev']}.dtb",
@@ -469,22 +510,77 @@ def extract_image(args: dict) -> dict:
         return {"status": "error", "reason": str(e)}
     return {"status": "ok", "source": kind, "out": out,
             "written": written, "count": len(written),
-            "note": "Extracted read-only from the image. Analyze any .dtb with "
-                    "analyze_dtb. Repack is not implemented (Planned)."}
+            "note": "Extracted from the image. Analyze any .dtb with analyze_dtb; "
+                    "rebuild a boot/vendor_boot image with repack_image."}
+
+
+def _repack_vendor_boot(d, out, raw):
+    """Rebuild a vendor_boot v3/v4 image from an extracted dir."""
+    p = int(raw["page_size"])
+    hv = int(raw["header_version"])
+
+    def rd(name):
+        fp = os.path.join(d, name)
+        return open(fp, "rb").read() if os.path.isfile(fp) else b""
+
+    vr, dtb = rd("vendor_ramdisk"), rd("dtb.dtb")
+    table, bcfg = rd("vendor_ramdisk_table"), rd("bootconfig")
+
+    def pad(b):
+        return b + b"\x00" * (_round(len(b), p) - len(b))
+
+    header_size = 2128 if hv >= 4 else 2112
+    hdr = bytearray(_round(header_size, p))
+    hdr[0:8] = b"VNDRBOOT"
+    struct.pack_into("<IIIII", hdr, 8, hv, p, int(raw.get("kernel_addr", 0)),
+                     int(raw.get("ramdisk_addr", 0)), len(vr))
+    cm = raw.get("cmdline", "").encode()[:2048]
+    hdr[28:28 + len(cm)] = cm
+    struct.pack_into("<I", hdr, 2076, int(raw.get("tags_addr", 0)))
+    nm = raw.get("name", "").encode()[:16]
+    hdr[2080:2080 + len(nm)] = nm
+    struct.pack_into("<II", hdr, 2096, header_size, len(dtb))
+    struct.pack_into("<Q", hdr, 2104, int(raw.get("dtb_addr", 0)))
+    if hv >= 4:
+        struct.pack_into("<IIII", hdr, 2112, len(table),
+                         int(raw.get("table_entries", 0)),
+                         int(raw.get("table_entry_size", 0)), len(bcfg))
+
+    blob = pad(bytes(hdr))
+    blob += pad(vr) if vr else b""
+    blob += pad(dtb) if dtb else b""
+    if hv >= 4:
+        blob += pad(table) if table else b""
+        blob += pad(bcfg) if bcfg else b""
+    with open(out, "wb") as f:
+        f.write(blob)
+    return {"status": "ok", "out": out, "bytes": len(blob), "type": "vendor_boot",
+            "header_version": hv,
+            "parts": {"vendor_ramdisk": len(vr), "dtb": len(dtb),
+                      "table": len(table), "bootconfig": len(bcfg)},
+            "note": "Rebuilt vendor_boot. Verify with inspect_image before flashing; "
+                    "flashing stays gated."}
 
 
 def repack_image(args: dict) -> dict:
-    """Rebuild a classic Android boot image (v0–v2) from a directory produced by
-    extract_image (kernel/ramdisk/second/dtb.dtb + bootimg.json). Writes a new
-    image; the standard SHA1 id is recomputed. Boot v3+/vendor_boot repack is not
-    supported (returns an honest error)."""
+    """Rebuild an Android boot image from an extract_image directory. Supports a
+    classic boot image (v0–v2, kernel/ramdisk/second/dtb.dtb + bootimg.json, SHA1
+    id recomputed) and vendor_boot v3/v4 (vendor_bootimg.json). Writes a new
+    image; verify with inspect_image before flashing (flashing stays gated)."""
     d = args.get("dir") or args.get("in") or ""
+    vmanifest = os.path.join(d, "vendor_bootimg.json") if d else ""
+    manifest = os.path.join(d, "bootimg.json") if d else ""
+    if d and os.path.isfile(vmanifest):
+        out = args.get("out") or os.path.join(d, "repacked-vendor_boot.img")
+        try:
+            return _repack_vendor_boot(d, out, json.loads(open(vmanifest).read()))
+        except (struct.error, ValueError, KeyError) as e:
+            return {"status": "error", "reason": f"vendor_boot repack failed: {e}"}
     out = args.get("out") or (os.path.join(d, "repacked-boot.img") if d else "")
-    manifest = os.path.join(d, "bootimg.json")
     if not d or not os.path.isfile(manifest):
         return {"status": "error",
-                "reason": f"no bootimg.json in {d} — run extract_image on a classic "
-                          "boot image first (v3+/vendor_boot repack is unsupported)"}
+                "reason": f"no bootimg.json/vendor_bootimg.json in {d} — run "
+                          "extract_image on a boot or vendor_boot image first"}
     raw = json.loads(open(manifest).read())
     hv = int(raw.get("header_version", 0))
     if hv > 2:

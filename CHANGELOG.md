@@ -28,8 +28,8 @@ Self-contained mobile app and a normal, dependency-free backend.
   dtbo image inspection** (`inspect_image`, header v0–v4 + dt_table) with
   embedded-DTB extraction, evidence→BOARD REPORT (`board_report`), and a
   read-only adb evidence plan, plus **extract** (image parts to disk) and
-  **repack** of a classic boot image (v0–v2, SHA1 id recomputed, round-trip
-  tested) — every field tagged CONFIRMED/LIKELY/INFERRED/UNKNOWN, never guessed.
+  **repack** of a classic boot image (v0–v2, SHA1 id recomputed) and **vendor_boot**
+  (v3/v4: ramdisk/dtb/table/bootconfig), both round-trip tested — every field tagged CONFIRMED/LIKELY/INFERRED/UNKNOWN, never guessed.
   `tests/test_firmware.py`.
 - **`firmware-bringup` skill** and a **TCL T509K starter device tree**
   (`firmware/t509k/`): AOSP makefiles, discovery-only DTS, evidence/build
