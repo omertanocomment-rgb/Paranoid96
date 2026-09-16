@@ -17,7 +17,7 @@ import sys
 HANDLED = {"firmware", "teach", "learn", "memory", "forget", "rules",
            "index", "search", "symbol", "deps", "sandbox",
            "agent", "plan", "review", "build", "test", "debug", "role", "calls",
-           "workflow", "git"}
+           "workflow", "git", "evidence"}
 
 
 def _plugin_tool(name):
@@ -300,6 +300,27 @@ def _workflow(argv):
     return 0
 
 
+def _evidence(argv):
+    from . import evidence
+    sub = argv[0] if argv else "show"
+    rest = argv[1:]
+    if sub == "add":
+        # omerta evidence add <CONFIDENCE> "value" ["source"]
+        if len(rest) < 2:
+            print('usage: omerta evidence add <CONFIRMED|LIKELY|INFERRED|UNKNOWN> '
+                  '"claim" ["source"]')
+            return 1
+        conf, value = rest[0], rest[1]
+        source = rest[2] if len(rest) > 2 else ""
+        _emit(evidence.note(value, conf, source=source))
+        return 0
+    if sub in ("show", "log"):
+        _emit(evidence.log(project=rest[0] if rest else None))
+        return 0
+    print("usage: omerta evidence <add <conf> \"claim\" [\"source\"] | show>")
+    return 0
+
+
 def _git(argv):
     from . import gitx
     sub = argv[0] if argv else "status"
@@ -368,4 +389,5 @@ def dispatch(argv):
         "role": _role,
         "workflow": _workflow,
         "git": _git,
+        "evidence": _evidence,
     }[verb](rest)

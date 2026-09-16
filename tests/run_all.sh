@@ -14,6 +14,7 @@ echo "=== sandbox isolate ===" && python3 tests/test_isolate.py
 echo "=== roles ==="            && python3 tests/test_roles.py
 echo "=== orchestrator ==="     && python3 tests/test_orchestrator.py
 echo "=== git intelligence ==="  && python3 tests/test_gitx.py
+echo "=== evidence ==="          && python3 tests/test_evidence.py
 echo "=== mode + history ==="     && python3 tests/test_mode_history.py
 echo "=== multi-device sync ===" && python3 tests/test_sync.py
 echo "=== doctor ==="            && python3 scripts/doctor.py > /dev/null && echo "doctor ran clean"

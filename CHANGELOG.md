@@ -46,6 +46,7 @@ Self-contained mobile app and a normal, dependency-free backend.
 - **Packaging**: `docker/Dockerfile` (OCI), `packaging/build-deb.sh` (built +
   validated), and a thin `packaging/build-appimage.sh`; wired into
   `scripts/build_all.sh`.
+- **Evidence & confidence** (`core/evidence.py`, `plugins/evidence_tools.py`): a general CONFIRMED/LIKELY/INFERRED/UNKNOWN facility — shared record shape, weakest-link combine, and a durable per-project evidence log; `omerta evidence`. Firmware tools reuse it. `tests/test_evidence.py`.
 - **Git intelligence** (`core/gitx.py`, `plugins/git_tools.py`): read-only structured `status/diff/log/branch/show/review`; mutating git stays behind the approval gate. `omerta git …`; `tests/test_gitx.py`.
 - **New `omerta` verbs** (`core/commands.py`): `firmware`, `teach`, `memory`,
   `forget`, `rules`, `index`, `search`, `symbol`, `deps`, `sandbox`, `role`,

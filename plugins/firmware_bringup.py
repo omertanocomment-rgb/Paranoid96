@@ -159,7 +159,13 @@ def _find(root, needles):
 
 
 def _field(value, confidence, source):
-    return {"value": value, "confidence": confidence, "source": source}
+    # reuse the shared evidence record shape (same CONFIRMED/LIKELY/… model)
+    try:
+        from core import evidence
+        return evidence.record(value, confidence, source)
+    except Exception:  # noqa: BLE001 — stay self-contained if core isn't importable
+        return {"value": value, "confidence": confidence, "source": source,
+                "notes": ""}
 
 
 def _summarize_root(root, path, source="dtb") -> dict:

@@ -29,7 +29,7 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Persistent memory + preference learning | Implemented | `core/memory.py` (SQLite+FTS5) |
 | Explicit teaching (`omerta teach`, scopes, `memory`, `forget`, `rules`) | Implemented | `core/commands.py`, `core/memory.py` |
 | Failure memory (don't retry a known-failed fix) | Implemented | `core/executor.py` AttemptTracker + `error_fix` memories |
-| Evidence confidence (CONFIRMED/LIKELY/INFERRED/UNKNOWN) | Implemented (firmware) / Partial (general) | `plugins/firmware_bringup.py`; general policy in constitution |
+| Evidence confidence (CONFIRMED/LIKELY/INFERRED/UNKNOWN) | Implemented | `core/evidence.py` — shared record/combine (weakest-link) + durable per-project log; `plugins/evidence_tools.py`, `omerta evidence`; firmware reuses the shape; `tests/test_evidence.py` |
 | Unlimited chats with bounded context | Implemented | `core/agent.py` `_trim_history`, `HISTORY_LIMIT` |
 
 ## Tools, sandbox, git, build
