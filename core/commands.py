@@ -15,7 +15,7 @@ import json
 import sys
 
 HANDLED = {"firmware", "teach", "learn", "memory", "forget", "rules",
-           "index", "search", "symbol", "deps"}
+           "index", "search", "symbol", "deps", "sandbox"}
 
 
 def _plugin_tool(name):
@@ -175,6 +175,32 @@ def _deps(argv):
     return 0
 
 
+# ── sandbox (isolation + snapshots) ──────────────────────────────────────────
+def _sandbox(argv):
+    from . import isolate
+    sub = argv[0] if argv else "status"
+    rest = argv[1:]
+    if sub == "status":
+        _emit(isolate.status()); return 0
+    if sub == "snapshot":
+        _emit(isolate.snapshot(rest[0] if rest else ".",
+                               note=" ".join(rest[1:]))); return 0
+    if sub == "list":
+        for s in isolate.list_snapshots():
+            print(f"  {s['id']}  {s['files']} files  {s['src']}"
+                  f"{('  · ' + s['note']) if s.get('note') else ''}")
+        return 0
+    if sub == "rollback":
+        _emit(isolate.rollback(rest[0] if rest else "latest",
+                               dest=rest[1] if len(rest) > 1 else None))
+        return 0
+    if sub == "wrap" and rest:
+        print(isolate.wrap(" ".join(rest))); return 0
+    print("usage: omerta sandbox <status | snapshot [dir] [note] | list | "
+          "rollback [id] [dest] | wrap <cmd>>")
+    return 0
+
+
 def dispatch(argv):
     """Handle a top-level verb. Returns an int exit code, or None if the verb
     isn't one of ours (let the interactive CLI handle it)."""
@@ -194,4 +220,5 @@ def dispatch(argv):
         "search": _search,
         "symbol": _symbol,
         "deps": _deps,
+        "sandbox": _sandbox,
     }[verb](rest)

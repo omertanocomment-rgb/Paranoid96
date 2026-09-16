@@ -37,11 +37,11 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Spec | Status | Where |
 |---|---|---|
 | Tool system with risk levels & audit record | Implemented | `core/agent.py` tiers; `data/command_log.jsonl` |
-| Sandbox: approvals, backups/snapshots, tiered exec | Implemented | approval gate + `tools/fileops.py` backups + `core/checkpoint.py` |
-| Sandbox: container isolation / resource limits | Planned | (agent currently runs in the host/session sandbox) |
+| Sandbox: approvals, backups/snapshots, tiered exec | Implemented | approval gate + `tools/fileops.py` backups + `core/checkpoint.py` + `core/isolate.py` workspace snapshot/rollback |
+| Sandbox: isolation + resource limits (opt-in) | Implemented | `core/isolate.py` — ulimit + bubblewrap/firejail wrap, net denied by default; `OMERTA_ISOLATE=1`; `tests/test_isolate.py` |
 | Git intelligence (status/diff/commit/…); git safety | Partial | via shell `git` tool through the gate; `git push --force`/`reset --hard` are HIGH_RISK |
 | Build / test discovery + fix loop | Implemented | `tools/devtools.py`, executor retry loop, skills |
-| Codebase index / search | Partial | `omerta index`/`search` via `tools/importers.py` + memory FTS (no full symbol graph yet) |
+| Codebase index / search / symbol / deps | Implemented | `core/index.py` — ast symbols + import graph (py) & regex for js/ts/go/rust/jvm/c/shell; `omerta index/search/symbol/deps`; `plugins/code_index.py`; `tests/test_index.py` |
 
 ## Firmware / Android / AOSP
 
@@ -54,7 +54,8 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Device-tree bring-up workflow + starter tree | Implemented | skill `skills/firmware-bringup`, `firmware/t509k/` |
 | `omerta firmware inspect` boot/vendor_boot/dtbo images | Implemented | `plugins/firmware_bringup.py` `inspect_image` (header v0–v4, dt_table); `tests/test_firmware.py` |
 | Analyze DTB embedded in boot.img (v2) / dtbo entry | Implemented | `analyze_dtb` container dispatch; `tests/test_firmware.py` |
-| Full boot/vendor_boot/super **repack** & extract-to-disk | Planned | inspect + embedded-DTB decode done; repack is a follow-up |
+| Extract image parts to disk (kernel/ramdisk/dtb, per-entry dtb) | Implemented | `extract_image`; `omerta firmware extract`; `tests/test_firmware.py` |
+| Full boot/vendor_boot/super **repack** | Planned | inspect/decode/extract done; writing a new image back is a follow-up |
 
 ## Interfaces, security, packaging
 
@@ -70,10 +71,9 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 
 ## Not yet built (tracked, not claimed)
 
-- Container-isolated sandbox with per-task resource limits.
-- Full symbol/dependency/call-graph index across languages.
+- Call-graph index (symbol + dependency graph are done; call edges are not).
 - Named multi-agent roles as separate orchestrated agents.
-- Firmware image **repack** and extract-to-disk (inspect + embedded-DTB decode are done).
+- Firmware image **repack** (writing a modified boot/vendor_boot back out; inspect, decode and extract are done).
 - `.deb` / AppImage / OCI packaging targets.
 
 These are honest gaps. OMERTA should say so rather than imply they exist.

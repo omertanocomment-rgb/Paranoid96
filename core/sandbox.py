@@ -64,8 +64,18 @@ def run(cmd, cwd=".", timeout=None, project="general") -> dict:
                 "reason": "hard-deny pattern"}
     timeout = timeout or config.COMMAND_TIMEOUT
     start = time.time()
+    # opt-in containment: wrap with resource limits + fs/net isolation. Off by
+    # default so the audited execution path (and tests) run the command verbatim.
+    exec_cmd = cmd
     try:
-        p = subprocess.run(cmd, shell=True, cwd=cwd, timeout=timeout,
+        from . import isolate
+        if isolate.enabled():
+            net = str(config.get("OMERTA_ISOLATE_NET", "0")).lower() in ("1", "true", "yes")
+            exec_cmd = isolate.wrap(cmd, workdir=cwd, net=net)
+    except Exception:  # noqa: BLE001
+        exec_cmd = cmd
+    try:
+        p = subprocess.run(exec_cmd, shell=True, cwd=cwd, timeout=timeout,
                            capture_output=True, text=True)
         out = {"status": "ran", "cmd": cmd, "cwd": cwd, "returncode": p.returncode,
                "stdout": p.stdout[-8000:], "stderr": p.stderr[-4000:],

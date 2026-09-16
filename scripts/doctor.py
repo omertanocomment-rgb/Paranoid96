@@ -101,6 +101,14 @@ def main():
     print(f"  {OK if config.ALWAYS_ASK else WARN} always-ask: "
           f"{'ON — nothing runs without your approval' if config.ALWAYS_ASK else 'OFF'}")
     print(f"  {OK} {len(config.DENY_PATTERNS)} hard-deny patterns active")
+    try:
+        from core import isolate
+        st = isolate.status()
+        mark = OK if st["backend"] != "none" else WARN
+        print(f"  {mark} sandbox isolation: {'ON' if st['isolation_enabled'] else 'available'} "
+              f"(backend: {st['backend']}); snapshots ready")
+    except Exception:  # noqa: BLE001
+        pass
     if auth.enabled():
         print(f"  {OK} server auth ON (loopback exempt: {auth.allow_loopback()})")
     else:
