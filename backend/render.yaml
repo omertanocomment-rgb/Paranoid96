@@ -1,0 +1,18 @@
+# One-click deploy config for Render (https://render.com).
+services:
+  - type: web
+    name: omerta-ai-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OMERTA_APP_TOKEN
+        sync: false
+      - key: OMERTA_MODEL
+        value: claude-opus-5
+      - key: OMERTA_EFFORT
+        value: high

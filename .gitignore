@@ -1,0 +1,28 @@
+# ---- Secrets / local config (NEVER commit) ----
+**/keystore.properties
+**/*.jks
+**/*.keystore
+android/local.properties
+**/.env
+.env
+
+# ---- Android / Gradle ----
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/.idea/
+android/*.iml
+android/local.properties
+.gradle/
+build/
+
+# ---- Node ----
+node_modules/
+npm-debug.log*
+backend/out/
+
+# ---- Misc ----
+*.log
+.DS_Store
+out/

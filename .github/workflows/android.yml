@@ -1,0 +1,87 @@
+name: Build Omerta AI APK
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+    inputs:
+      backendUrl:
+        description: "Backend URL to bake into the APK"
+        required: false
+        default: ""
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Decode release keystore (optional)
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        env:
+          KS: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          echo "$KS" | base64 -d > omerta-release.jks
+          cat > keystore.properties <<PROPS
+          storeFile=omerta-release.jks
+          storePassword=$STORE_PASS
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASS
+          PROPS
+
+      - name: Assemble debug + release
+        run: |
+          BACKEND="${{ github.event.inputs.backendUrl }}"
+          ARGS=""
+          if [ -n "$BACKEND" ]; then ARGS="-PomertaBackendUrl=$BACKEND"; fi
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug :app:assembleRelease $ARGS --no-daemon --stacktrace
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Rename artifacts
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/OmertaAI-debug.apk
+          cp app/build/outputs/apk/release/app-release.apk out/OmertaAI-release.apk 2>/dev/null || \
+            cp app/build/outputs/apk/release/app-release-unsigned.apk out/OmertaAI-release-unsigned.apk 2>/dev/null || true
+          ls -la out
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: omerta-ai-apk
+          path: android/out/*.apk
+          if-no-files-found: error

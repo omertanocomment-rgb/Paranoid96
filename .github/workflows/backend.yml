@@ -1,0 +1,30 @@
+name: Backend CI
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm test
+      - name: Boot smoke test
+        run: |
+          PORT=8099 node server.js &
+          PID=$!
+          sleep 2
+          curl -sf http://127.0.0.1:8099/health
+          curl -sf http://127.0.0.1:8099/api/config
+          kill $PID
