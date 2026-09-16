@@ -98,6 +98,31 @@ Plugin and MCP tools with side effects route through the same gate
 - API keys entered in the app are stored `0600` under the app-private files
   dir and never leave the device; the write path is loopback-only.
 
+## Addendum — capabilities added after the first audit
+
+- **Codebase index (`core/index.py`), roles (`core/roles.py`), memory/teach
+  verbs (`core/commands.py`)** are read-only or write only to the agent's own
+  data dir. `omerta agent/plan/review/…` shell out to the same CLI and agent,
+  so every side effect still passes the approval gate; roles only change the
+  system-prompt focus, never the gate.
+- **Firmware tools (`plugins/firmware_bringup.py`)**: `analyze_dtb`,
+  `inspect_image`, `board_report`, `collect_evidence_plan` are read-only
+  (`side_effects: False`). `extract_image` writes extracted parts to a local
+  directory and is marked `side_effects: True`, so the agent routes it through
+  approval; it never writes to a device. All device/destructive actions
+  (adb/fastboot/flash) remain shell-backed and gated, with flashing High-Risk
+  and the hard-deny list intact.
+- **Sandbox isolation (`core/isolate.py`)** only ever *narrows* what a command
+  can do (resource limits, network denial, shadowing key stores) and is opt-in
+  (`OMERTA_ISOLATE=1`); it cannot widen access. Snapshots/rollback write only
+  under the agent data dir and the explicit restore target.
+- **Packaging**: the Docker image and `.deb`/AppImage recipes hard-code no
+  secrets; the server inside still enforces token auth (loopback-exempt). The
+  Docker image binds `0.0.0.0` by design (container networking) — front it with
+  the token like any LAN server.
+- The `code_index` FDT/boot parsers only *read* attacker-supplied images; a
+  malformed image yields a handled error, never code execution.
+
 ## How to re-run the checks
 
 ```bash

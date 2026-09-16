@@ -341,6 +341,49 @@ def build():
                "routing, unlimited-chat trim, multi-device sync).", SMALL))
 
     # 11. Reference
+    S.append(PageBreak())
+    S.append(P("Beyond chat — the engineering toolkit", H1))
+    S.append(P("OMERTA is a workflow system, not just a chat box. These verbs "
+               "work from the CLI and, where they change the world, still pass "
+               "through the approval gate.", BODY))
+    S.append(P("Codebase intelligence", H2))
+    S.append(P("<font face='Courier'>omerta index</font> builds a real index — "
+               "Python parsed with <font face='Courier'>ast</font> (classes, "
+               "functions, methods + imports + a call graph), other languages via "
+               "conservative regex. Then <font face='Courier'>search</font> / "
+               "<font face='Courier'>symbol</font> / <font face='Courier'>deps</font> "
+               "/ <font face='Courier'>calls</font> answer “where is this "
+               "defined / imported / called” instantly. The same power is "
+               "available to the agent as the <b>code_index</b> plugin tools.", BODY))
+    S.append(P("Engineering roles", H2))
+    S.append(P("Ten focus profiles steer the one agent under the same gate: "
+               "<font face='Courier'>omerta plan</font> (Architect), "
+               "<font face='Courier'>review</font> (Reviewer, read-only), "
+               "<font face='Courier'>build</font> / <font face='Courier'>test</font> "
+               "/ <font face='Courier'>debug</font>, and Firmware / Security / Docs "
+               "/ Researcher / Developer. <font face='Courier'>omerta role &lt;name&gt;</font> "
+               "sets a default. (Parallel multi-agent orchestration is a documented "
+               "Planned item — today the roles focus a single agent.)", BODY))
+    S.append(P("Sandbox &amp; recovery", H2))
+    S.append(P("<font face='Courier'>omerta sandbox snapshot</font> copies a "
+               "workspace before a risky change and <font face='Courier'>rollback</font> "
+               "restores it (edited and deleted files). Opt-in isolation "
+               "(<font face='Courier'>OMERTA_ISOLATE=1</font>) wraps commands with "
+               "resource limits and, when bubblewrap/firejail is installed, denies "
+               "the network and shadows key stores (~/.ssh, ~/.aws, ~/.gnupg).", BODY))
+    S.append(P("Learning", H2))
+    S.append(P("<font face='Courier'>omerta teach \"rule\"</font> stores a durable "
+               "project rule; <font face='Courier'>memory show</font> / "
+               "<font face='Courier'>rules</font> / <font face='Courier'>forget</font> "
+               "manage it. Approvals/denials are already learned automatically.", BODY))
+    S.append(P("Packaging", H2))
+    S.append(P("Ship it as a wheel, an <b>OCI/Docker image</b> "
+               "(<font face='Courier'>docker/Dockerfile</font>), a validated "
+               "<b>.deb</b> (<font face='Courier'>packaging/build-deb.sh</font>), a "
+               "thin AppImage, the self-contained APK, or Electron installers. "
+               "<font face='Courier'>scripts/build_all.sh</font> builds whatever "
+               "the host can.", BODY))
+
     S.append(P("HTTP API reference", H1))
     S.append(table([
         ["Method & path", "Purpose"],
@@ -360,8 +403,10 @@ def build():
                "omerta -c \"audit this repo\"   # one-shot<br/>"
                "omerta --project omerta-beats<br/>"
                "omerta serve | doctor | sync | version<br/>"
-               "omerta teach \"rule\" | memory show | rules | index | search \"q\"<br/>"
-               "omerta firmware inspect &lt;img&gt; | analyze &lt;dtb|dtbo|boot.img&gt; | report &lt;dir&gt; | plan", CODE))
+               "omerta teach \"rule\" | memory show | rules | role &lt;name&gt;<br/>"
+               "omerta index | search \"q\" | symbol Name | deps | calls Name<br/>"
+               "omerta plan/review/build/test/debug \"...\" | sandbox snapshot|rollback<br/>"
+               "omerta firmware inspect &lt;img&gt; | analyze &lt;dtb|dtbo|boot.img&gt; | extract &lt;img&gt; | report &lt;dir&gt;", CODE))
 
     # Firmware / device bring-up
     S.append(P("Firmware &amp; device bring-up", H1))
