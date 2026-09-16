@@ -1,29 +1,32 @@
 #!/usr/bin/env python3
 """
-OMERTA AGENT — HTTP/WebSocket server.
-Same agent as the CLI; reachable from phone, desktop, or the Electron shell.
-"""
-import json
-from pathlib import Path
+OMERTA AGENT — HTTP/WebSocket server (FastAPI/uvicorn).
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+Same agent as the CLI; reachable from phone, desktop, or the Electron shell.
+All request logic lives in `core/api.py` so this file and the pure-stdlib
+embedded server (`core/httpd.py`) stay in lock-step — one approval gate, one
+protocol. Use this server on Linux/macOS/Windows/Termux; the embedded app
+uses httpd.py because FastAPI's dependency chain (pydantic-core) has no
+Android wheel.
+"""
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from core.agent import Agent
-from core import config, memory, router, sandbox, skills, plugins, mcp, auth, sync
+from core import config, auth, mcp, api
 
 app = FastAPI(title="OMERTA AGENT")
-HERE = Path(__file__).parent
-memory.init()
-plugins.load_all()
-_agents: dict[str, Agent] = {}
+HERE = config.RES_DIR
+api.boot()
 
 
-def get_agent(project):
-    if project not in _agents:
-        _agents[project] = Agent(project=project)
-    return _agents[project]
+def _json(payload: dict):
+    """Honor an optional `_status` hint from a core.api result."""
+    if isinstance(payload, dict) and "_status" in payload:
+        payload = dict(payload)
+        code = payload.pop("_status")
+        return JSONResponse(payload, status_code=code)
+    return JSONResponse(payload)
 
 
 PUBLIC_PATHS = {"/favicon.ico", "/icon.svg"}
@@ -57,142 +60,100 @@ async def auth_gate(request: Request, call_next):
 @app.on_event("startup")
 def _startup():
     mcp.connect_all()
-    if config.SYNC_ON_START:
-        if config.SYNC_DIR:
-            print("[sync]", sync.sync_file(config.SYNC_DIR).get("status"))
-        for peer in [p.strip() for p in str(config.SYNC_PEERS).split(",") if p.strip()]:
-            print(f"[sync] {peer}:", sync.sync_peer(peer).get("status"))
+    for label, result in api.startup_sync():
+        print(f"[{label}]", result)
 
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return (HERE / "webui" / "index.html").read_text()
+    return (config.WEBUI_DIR / "index.html").read_text()
 
 
 @app.get("/favicon.ico")
 def favicon():
-    return FileResponse(HERE / "assets" / "favicon.ico")
+    return FileResponse(config.ASSETS_DIR / "favicon.ico")
 
 
 @app.get("/icon.svg")
 def icon():
-    return FileResponse(HERE / "assets" / "icon.svg", media_type="image/svg+xml")
+    return FileResponse(config.ASSETS_DIR / "icon.svg", media_type="image/svg+xml")
 
 
 @app.get("/api/status")
 def status():
-    return {
-        "providers": router.provider_status(),
-        "active": config.get("OMERTA_PROVIDER", config.ACTIVE_PROVIDER),
-        "always_ask": config.ALWAYS_ASK,
-        "memory": memory.stats(),
-        "skills": [{"name": s["name"], "description": s["description"]}
-                   for s in skills.load_all()],
-        "plugins": {n: {"description": d["manifest"].get("description", ""),
-                        "tools": d["tools"], "failed": "error" in d}
-                    for n, d in plugins.loaded().items()},
-        "connectors": mcp.status(),
-    }
+    return api.status_payload()
+
+
+@app.post("/api/chat")
+def chat(payload: dict):
+    """One chat turn: {project, kind, text|cmd|note} -> full agent result."""
+    return api.chat(payload)
 
 
 @app.post("/api/model")
 def set_model(payload: dict):
-    pid = payload.get("provider", "auto")
-    if pid != "auto" and pid not in config.PROVIDERS:
-        return JSONResponse({"error": "unknown provider"}, status_code=400)
-    config.set_setting("OMERTA_PROVIDER", pid)
-    return {"ok": True, "provider": pid}
+    return _json(api.set_model(payload))
 
 
 @app.get("/api/memory")
 def get_memory(q: str = "", project: str = None, k: int = 25):
-    return {"results": memory.recall(q, project=project, top_k=k),
-            "preferences": memory.preference_block(project=project)}
+    return api.memory_payload(q, project=project, k=k)
 
 
 @app.get("/api/history")
 def get_history(n: int = 50):
-    return {"history": sandbox.history(n)}
+    return api.history_payload(n)
 
 
 @app.get("/api/sync/pull")
 def sync_pull(since: float = 0, project: str = None):
-    """A peer asks for everything we've learned since `since`."""
-    return sync.export_bundle(since=since, project=project)
+    return api.sync_pull(since=since, project=project)
 
 
 @app.post("/api/sync/push")
 async def sync_push(request: Request):
-    """A peer sends us what it learned. Merged idempotently."""
-    return sync.merge_bundle(await request.json())
+    return api.sync_push(await request.json())
 
 
 @app.get("/api/sync/status")
 def sync_status():
-    return sync.status()
+    return api.sync_status()
 
 
 @app.post("/api/sync/run")
 def sync_run(payload: dict):
-    """Trigger a sync from the UI. {"peer": "host:port"} or {"dir": "/path"}"""
-    if payload.get("peer"):
-        return sync.sync_peer(payload["peer"], token=payload.get("token"),
-                              full=payload.get("full", False))
-    target = payload.get("dir") or config.SYNC_DIR
-    if not target:
-        return JSONResponse({"error": "no peer or dir given, and OMERTA_SYNC_DIR unset"},
-                            status_code=400)
-    return sync.sync_file(target, full=payload.get("full", False))
+    return _json(api.sync_run(payload))
 
 
 @app.post("/api/plugins/reload")
 def reload_plugins():
-    plugins.load_all()
-    return {"ok": True, "plugins": list(plugins.loaded())}
+    return api.reload_plugins()
 
 
 @app.post("/api/connectors/reconnect")
 def reconnect():
-    mcp.disconnect_all()
-    return {"results": mcp.connect_all()}
+    return api.reconnect()
 
 
-@app.websocket("/ws/{project}")
-async def ws(websocket: WebSocket, project: str):
-    client = websocket.client.host if websocket.client else ""
-    spoofable = any(h in websocket.headers for h in
-                    ("x-forwarded-for", "x-real-ip", "forwarded"))
-    tok = (websocket.query_params.get("token")
-           or websocket.cookies.get(auth.COOKIE))
-    if not auth.check(tok, client, spoofable=spoofable):
-        await websocket.close(code=4401, reason="unauthorized")
-        return
-    await websocket.accept()
-    agent = get_agent(project)
-    try:
-        while True:
-            msg = json.loads(await websocket.receive_text())
-            kind = msg.get("kind", "message")
-            if kind == "message":
-                res = agent.turn(msg["text"])
-            elif kind == "approve":
-                res = agent.approve()
-            elif kind == "deny":
-                res = agent.deny(note=msg.get("note", ""))
-            elif kind == "edit":
-                res = agent.edit_and_approve(msg["cmd"])
-            elif kind == "reset":
-                agent.reset(); res = {"text": "Conversation cleared. Memory kept.",
-                                      "pending": None, "tool_log": []}
-            else:
-                res = {"text": f"unknown action '{kind}'", "pending": None, "tool_log": []}
-            await websocket.send_text(json.dumps(res, default=str))
-    except WebSocketDisconnect:
-        pass
+@app.get("/api/secret")
+def secret_status():
+    return api.secret_status()
 
 
-if (HERE / "assets").exists():
-    app.mount("/assets", StaticFiles(directory=str(HERE / "assets")), name="assets")
+@app.post("/api/secret")
+def set_secret(payload: dict, request: Request):
+    # defense in depth: a secret can only be written from the local device,
+    # on top of core.api's ALLOW_SECRET_API flag.
+    client = request.client.host if request.client else ""
+    if not auth.is_loopback(client):
+        return JSONResponse({"error": "secrets can only be set locally"},
+                            status_code=403)
+    return _json(api.set_secret(payload))
+
+
+if config.ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(config.ASSETS_DIR)), name="assets")
+
 
 def run():
     import uvicorn

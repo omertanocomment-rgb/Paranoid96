@@ -43,19 +43,32 @@ def _default_data_dir() -> Path:
 
 DATA_DIR = _default_data_dir()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# RES_DIR is where read-only resources live: persona, connectors, skills,
+# plugins, assets and the web UI. Normally that is the package/checkout root.
+# But when the code is imported from a virtual filesystem where __file__ has
+# no real on-disk parent — most importantly the Android app, where Chaquopy
+# serves .py modules from the APK's asset store — ROOT points nowhere useful.
+# The host then extracts the payload to a real directory and points us at it
+# with OMERTA_HOME. Resource paths hang off RES_DIR; writable state stays in
+# DATA_DIR, which is always a real, per-user directory.
+_home = os.environ.get("OMERTA_HOME")
+RES_DIR = Path(_home).expanduser() if _home else ROOT
+
 MEMORY_DB = DATA_DIR / "memory.sqlite3"
 SETTINGS_FILE = DATA_DIR / "settings.json"
-MODEL_DIR = ROOT / "models"
-PERSONA_FILE = ROOT / "persona.yaml"
-SKILLS_DIR = Path(os.environ.get("OMERTA_SKILLS_DIR", ROOT / "skills"))
-PLUGINS_DIR = Path(os.environ.get("OMERTA_PLUGINS_DIR", ROOT / "plugins"))
+MODEL_DIR = RES_DIR / "models"
+PERSONA_FILE = RES_DIR / "persona.yaml"
+SKILLS_DIR = Path(os.environ.get("OMERTA_SKILLS_DIR", RES_DIR / "skills"))
+PLUGINS_DIR = Path(os.environ.get("OMERTA_PLUGINS_DIR", RES_DIR / "plugins"))
 # an installed copy keeps its bundled connectors.yaml read-only; the user's
 # editable copy lives beside their data so upgrades never clobber it.
 _user_conn = DATA_DIR / "connectors.yaml"
-CONNECTORS_FILE = _user_conn if _user_conn.exists() else ROOT / "connectors.yaml"
+CONNECTORS_FILE = _user_conn if _user_conn.exists() else RES_DIR / "connectors.yaml"
 USER_SKILLS_DIR = DATA_DIR / "skills"
 USER_PLUGINS_DIR = DATA_DIR / "plugins"
-ASSETS_DIR = ROOT / "assets"
+ASSETS_DIR = RES_DIR / "assets"
+WEBUI_DIR = Path(os.environ.get("OMERTA_WEBUI_DIR", RES_DIR / "webui"))
 
 _runtime = {}
 if SETTINGS_FILE.exists():
@@ -79,6 +92,69 @@ def set_setting(key, value):
 
 def all_settings():
     return dict(_runtime)
+
+
+# ── secrets (API keys / local-model hosts) ─────────────────────────────────
+# Persisted separately from settings.json, 0600, and loaded into the process
+# environment on start so the provider modules (which read os.environ directly)
+# pick them up. This is what lets the Android app store an API key with no
+# terminal, and it works the same on desktop.
+SECRETS_FILE = DATA_DIR / "secrets.json"
+# Only these may be written through the secret API — never arbitrary env vars.
+ALLOWED_SECRET_KEYS = {
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
+    "GROQ_API_KEY", "GEMINI_API_KEY",
+    "OMERTA_OPENAI_BASE", "OMERTA_OLLAMA_HOST", "OMERTA_LLAMACPP_HOST",
+    "OMERTA_LMSTUDIO_HOST",
+}
+
+
+def _load_secrets():
+    if not SECRETS_FILE.exists():
+        return
+    try:
+        data = json.loads(SECRETS_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+    for k, v in data.items():
+        # environment set by the launcher wins; persisted secrets fill the gap
+        if isinstance(v, str) and v and not os.environ.get(k):
+            os.environ[k] = v
+
+
+def put_secret(key, value):
+    """Persist an allowed secret (0600) and apply it to the live process."""
+    if key not in ALLOWED_SECRET_KEYS:
+        raise ValueError(f"secret '{key}' is not writable")
+    data = {}
+    if SECRETS_FILE.exists():
+        try:
+            data = json.loads(SECRETS_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            data = {}
+    if value:
+        data[key] = value
+        os.environ[key] = value
+    else:
+        data.pop(key, None)
+        os.environ.pop(key, None)
+    SECRETS_FILE.write_text(json.dumps(data, indent=2))
+    try:
+        import stat as _stat
+        os.chmod(SECRETS_FILE, _stat.S_IRUSR | _stat.S_IWUSR)  # 0600
+    except OSError:
+        pass
+    return True
+
+
+_load_secrets()
+
+# Whether the network API may set secrets. Off by default: a LAN-exposed
+# server must never let a client write API keys. The Android app turns it on
+# because it binds to loopback only, and the transport still requires the
+# request to originate from loopback.
+ALLOW_SECRET_API = str(get("OMERTA_ALLOW_SECRET_API", "0")).lower() in \
+    ("1", "true", "yes")
 
 
 # ── Safety ───────────────────────────────────────────────────────────────

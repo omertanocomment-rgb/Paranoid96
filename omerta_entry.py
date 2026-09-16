@@ -12,8 +12,14 @@ def main():
     cmd = argv[0] if argv and not argv[0].startswith("-") else None
     if cmd == "serve":
         sys.argv = [sys.argv[0]] + argv[1:]
-        import server
-        return server.run() if hasattr(server, "run") else None
+        try:
+            import server
+            return server.run() if hasattr(server, "run") else None
+        except ImportError:
+            # FastAPI/uvicorn not installed — fall back to the dependency-free
+            # stdlib server. Same protocol, same approval gate.
+            from core import httpd
+            return httpd.run()
     if cmd == "doctor":
         sys.argv = [sys.argv[0]] + argv[1:]
         import runpy
