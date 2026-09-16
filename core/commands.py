@@ -16,7 +16,8 @@ import sys
 
 HANDLED = {"firmware", "teach", "learn", "memory", "forget", "rules",
            "index", "search", "symbol", "deps", "sandbox",
-           "agent", "plan", "review", "build", "test", "debug", "role", "calls"}
+           "agent", "plan", "review", "build", "test", "debug", "role", "calls",
+           "workflow"}
 
 
 def _plugin_tool(name):
@@ -275,6 +276,30 @@ def _debug(argv):
                       "propose a fix, and verify it.\n\n" + err, role="debugger")
 
 
+def _workflow(argv):
+    from . import orchestrator
+    if not argv:
+        print("usage: omerta workflow [pipeline] \"task\"\n"
+              f"pipelines: {', '.join(sorted(orchestrator.PIPELINES))}")
+        return 1
+    if argv[0] in orchestrator.PIPELINES:
+        pipeline, task = argv[0], " ".join(argv[1:]).strip()
+    else:
+        pipeline, task = "default", " ".join(argv).strip()
+    if not task:
+        print("give a task"); return 1
+    res = orchestrator.run(task, pipeline=pipeline)
+    if res.get("status") != "ok":
+        _emit(res); return 1
+    for st in res["transcript"]:
+        print(f"\n=== [{st['role']}] ({st.get('provider') or '?'}) ===")
+        print(st["text"] or "(no output)")
+        if st.get("pending"):
+            print(f"  ⚠ pending approval: {st['pending'].get('action')}")
+            print(f"  {st.get('stopped', '')}")
+    return 0
+
+
 def _role(argv):
     from . import roles, config
     if not argv:
@@ -318,4 +343,5 @@ def dispatch(argv):
         "test": _test,
         "debug": _debug,
         "role": _role,
+        "workflow": _workflow,
     }[verb](rest)

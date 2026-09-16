@@ -70,11 +70,12 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Packaging: wheel/sdist, Electron, APK, Docker/OCI, .deb | Implemented | `scripts/build_all.sh`, `docker/Dockerfile`, `packaging/build-deb.sh` (built + validated) |
 | AppImage | Partial (recipe) | `packaging/build-appimage.sh` — thin AppImage, needs `appimagetool` |
 | Engineering roles (Architect/Developer/Reviewer/…) | Implemented (as focus profiles) | `core/roles.py` — 10 roles steer the one agent; `omerta plan/review/build/test/debug`, `omerta role`; `tests/test_roles.py` |
-| Parallel multi-agent orchestration | Planned | roles focus one agent; concurrent orchestrated agents are a follow-up |
+| Multi-role pipeline (sequential) | Implemented | `core/orchestrator.py` — plan→review etc., feeds output forward, halts on approval; `omerta workflow`; `tests/test_orchestrator.py` |
+| Parallel/concurrent multi-agent orchestration | Planned | sequential role pipeline done; running agents concurrently is a follow-up |
 
 ## Not yet built (tracked, not claimed)
 
-- Parallel multi-agent orchestration (roles focus a single agent today).
+- Parallel/concurrent multi-agent orchestration (a sequential role pipeline is done).
 - vendor_boot / super **repack** (classic boot v0–v2 repack is done).
 - Fat AppImage bundling its own Python (a thin, host-python recipe exists).
 
