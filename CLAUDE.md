@@ -10,8 +10,20 @@ workaround immediately.**
   Jetpack Compose. Dark operator-console theme, amber accent (`#FFB300`), JetBrains
   Mono for all typography.
 - `backend/` — Node/Express gateway to the Anthropic Messages API (SSE streaming).
-- The app never calls Anthropic directly; it calls the backend. The API key lives
-  only on the backend.
+
+## Engine modes (how the app reaches Claude)
+The app has a compiled-in engine and picks one at runtime (`EngineMode` in
+`SettingsStore.kt`):
+- **EMBEDDED (default):** the app calls the Anthropic Messages API **in-process**
+  (`data/remote/AnthropicClient.kt`) — there is **no external backend to run**.
+  Requires an Anthropic API key on the device (entered in Settings, or baked at build
+  time via `-PanthropicApiKey=`). The key ships in the APK / lives on-device and is
+  extractable — this is the documented tradeoff for zero-setup operation.
+- **REMOTE:** the app calls the `backend/` Node service
+  (`data/remote/OmertaApiClient.kt`); the key stays server-side. Use this when the key
+  must not be on the device.
+Both engines emit the same `StreamEvent`s; `ChatRepository` selects between them.
+The two implementations MUST stay behavior-compatible (thinking/effort/streaming).
 
 ## Build commands
 

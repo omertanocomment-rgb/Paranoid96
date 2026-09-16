@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ai.omerta.assistant.data.local.EngineMode
 import ai.omerta.assistant.ui.theme.OmertaAmber
 import ai.omerta.assistant.ui.theme.OmertaBlack
 import ai.omerta.assistant.ui.theme.OmertaBorder
@@ -57,12 +58,16 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val s = settings ?: return
 
+    var engineMode by remember(s.engineMode) { mutableStateOf(s.engineMode) }
+    var apiKey by remember(s.anthropicApiKey) { mutableStateOf(s.anthropicApiKey) }
     var url by remember(s.backendUrl) { mutableStateOf(s.backendUrl) }
     var token by remember(s.appToken) { mutableStateOf(s.appToken) }
     var model by remember(s.model) { mutableStateOf(s.model) }
     var effort by remember(s.effort) { mutableStateOf(s.effort) }
     var system by remember(s.systemPrompt) { mutableStateOf(s.systemPrompt) }
     var streaming by remember(s.streaming) { mutableStateOf(s.streaming) }
+
+    val embedded = engineMode == EngineMode.EMBEDDED
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = OmertaSurface,
@@ -95,20 +100,44 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            SectionLabel("BACKEND")
-            OutlinedTextField(
-                value = url, onValueChange = { url = it },
-                label = { Text("Backend URL") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth(), colors = fieldColors,
-                textStyle = MaterialTheme.typography.bodyMedium,
-            )
-            OutlinedTextField(
-                value = token, onValueChange = { token = it },
-                label = { Text("App token (x-omerta-key)") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(), colors = fieldColors,
-                textStyle = MaterialTheme.typography.bodyMedium,
-            )
+            SectionLabel("ENGINE")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ModeButton("EMBEDDED", "in-app · no server", embedded, Modifier.weight(1f)) {
+                    engineMode = EngineMode.EMBEDDED
+                }
+                ModeButton("REMOTE", "via Node backend", !embedded, Modifier.weight(1f)) {
+                    engineMode = EngineMode.REMOTE
+                }
+            }
+
+            if (embedded) {
+                OutlinedTextField(
+                    value = apiKey, onValueChange = { apiKey = it },
+                    label = { Text("Anthropic API key") }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "The app calls Claude directly — no backend to run. The key is stored " +
+                        "on this device and is extractable from the APK; use REMOTE if it must stay off-device.",
+                    style = MaterialTheme.typography.labelSmall, color = OmertaTextSecondary,
+                )
+            } else {
+                OutlinedTextField(
+                    value = url, onValueChange = { url = it },
+                    label = { Text("Backend URL") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = token, onValueChange = { token = it },
+                    label = { Text("App token (x-omerta-key)") }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                )
+            }
 
             SectionLabel("MODEL")
             MODELS.forEach { m ->
@@ -157,12 +186,39 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
 
             Button(
                 onClick = {
-                    vm.saveSettings(url, token, model, system, effort, streaming)
+                    vm.saveSettings(
+                        engineMode = engineMode, anthropicApiKey = apiKey,
+                        backendUrl = url, appToken = token, model = model,
+                        systemPrompt = system, effort = effort, streaming = streaming,
+                    )
                     onBack()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = OmertaAmber, contentColor = OmertaBlack),
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             ) { Text("SAVE & RECONNECT", style = MaterialTheme.typography.labelLarge) }
+        }
+    }
+}
+
+@Composable
+private fun ModeButton(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) OmertaAmber else OmertaSurface,
+            contentColor = if (selected) OmertaBlack else OmertaTextSecondary,
+        ),
+        modifier = modifier,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, style = MaterialTheme.typography.labelLarge)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

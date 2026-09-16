@@ -11,19 +11,31 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "omerta_settings")
 
+/** How the app reaches Claude. */
+object EngineMode {
+    const val EMBEDDED = "embedded" // in-process: app calls the Anthropic API directly
+    const val REMOTE = "remote"     // via the external Omerta AI Node backend
+}
+
 /** Persisted user/operator settings. */
 data class OmertaSettings(
+    val engineMode: String,
+    val anthropicApiKey: String,
     val backendUrl: String,
     val appToken: String,
     val model: String,
     val systemPrompt: String,
     val effort: String,
     val streaming: Boolean,
-)
+) {
+    val embedded: Boolean get() = engineMode == EngineMode.EMBEDDED
+}
 
 class SettingsStore(private val context: Context) {
 
     private object Keys {
+        val ENGINE_MODE = stringPreferencesKey("engine_mode")
+        val ANTHROPIC_KEY = stringPreferencesKey("anthropic_api_key")
         val BACKEND_URL = stringPreferencesKey("backend_url")
         val APP_TOKEN = stringPreferencesKey("app_token")
         val MODEL = stringPreferencesKey("model")
@@ -44,7 +56,11 @@ class SettingsStore(private val context: Context) {
     }
 
     val settings: Flow<OmertaSettings> = context.dataStore.data.map { p ->
+        val defaultMode = if (BuildConfig.EMBEDDED_MODE) EngineMode.EMBEDDED else EngineMode.REMOTE
         OmertaSettings(
+            engineMode = p[Keys.ENGINE_MODE] ?: defaultMode,
+            anthropicApiKey = p[Keys.ANTHROPIC_KEY]?.takeIf { it.isNotBlank() }
+                ?: BuildConfig.ANTHROPIC_API_KEY,
             backendUrl = p[Keys.BACKEND_URL]?.takeIf { it.isNotBlank() } ?: BuildConfig.OMERTA_BACKEND_URL,
             appToken = p[Keys.APP_TOKEN] ?: "",
             model = p[Keys.MODEL] ?: DEFAULT_MODEL,
@@ -55,6 +71,8 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun update(
+        engineMode: String? = null,
+        anthropicApiKey: String? = null,
         backendUrl: String? = null,
         appToken: String? = null,
         model: String? = null,
@@ -63,6 +81,8 @@ class SettingsStore(private val context: Context) {
         streaming: Boolean? = null,
     ) {
         context.dataStore.edit { p ->
+            engineMode?.let { p[Keys.ENGINE_MODE] = it }
+            anthropicApiKey?.let { p[Keys.ANTHROPIC_KEY] = it.trim() }
             backendUrl?.let { p[Keys.BACKEND_URL] = it.trim() }
             appToken?.let { p[Keys.APP_TOKEN] = it.trim() }
             model?.let { p[Keys.MODEL] = it }

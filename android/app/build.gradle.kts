@@ -19,6 +19,14 @@ val keystoreProps = Properties().apply {
 val backendUrl: String = (project.findProperty("omertaBackendUrl") as String?)
     ?: "https://omerta-ai-backend.onrender.com"
 
+// Embedded mode: the app calls the Anthropic API in-process (no external backend
+// to run). Default true so the app "just works" once a key is present. Optionally
+// bake the key at build time so there is zero in-app setup:
+//   ./gradlew :app:assembleRelease -PanthropicApiKey=sk-ant-...
+val embeddedMode: String = (project.findProperty("omertaEmbedded") as String?) ?: "true"
+val bakedApiKey: String = (project.findProperty("anthropicApiKey") as String?)
+    ?: (System.getenv("ANTHROPIC_API_KEY") ?: "")
+
 android {
     namespace = "ai.omerta.assistant"
     compileSdk = 34
@@ -34,6 +42,8 @@ android {
         vectorDrawables { useSupportLibrary = true }
 
         buildConfigField("String", "OMERTA_BACKEND_URL", "\"$backendUrl\"")
+        buildConfigField("boolean", "EMBEDDED_MODE", embeddedMode)
+        buildConfigField("String", "ANTHROPIC_API_KEY", "\"$bakedApiKey\"")
     }
 
     signingConfigs {

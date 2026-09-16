@@ -55,6 +55,9 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
         }
     }
 
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val needsKey = settings?.let { it.embedded && it.anthropicApiKey.isBlank() } ?: false
+
     Scaffold(
         containerColor = OmertaBlack,
         topBar = {
@@ -77,7 +80,8 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (state.messages.isEmpty()) {
-                EmptyState(onPick = { vm.updateInput(it); vm.send() })
+                EmptyState(needsKey = needsKey, onSettings = onSettings,
+                    onPick = { vm.updateInput(it); vm.send() })
             } else {
                 LazyColumn(
                     state = listState,
@@ -100,7 +104,7 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun EmptyState(onPick: (String) -> Unit) {
+private fun EmptyState(needsKey: Boolean, onSettings: () -> Unit, onPick: (String) -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -108,12 +112,27 @@ private fun EmptyState(onPick: (String) -> Unit) {
     ) {
         Text("OMERTA AI", style = MaterialTheme.typography.displaySmall, color = OmertaAmber)
         Text(
-            "operator-grade assistant · wired to your backend",
+            "operator-grade assistant · Claude built in",
             style = MaterialTheme.typography.bodySmall,
             color = OmertaTextSecondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp, bottom = 28.dp),
         )
+        if (needsKey) {
+            Text(
+                "› Add your Anthropic API key to start",
+                style = MaterialTheme.typography.bodyMedium,
+                color = OmertaAmber,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(OmertaSurface)
+                    .border(1.dp, OmertaAmber, RoundedCornerShape(8.dp))
+                    .clickable { onSettings() }
+                    .padding(14.dp),
+            )
+        }
         suggestions.forEach { s ->
             Text(
                 text = "› $s",

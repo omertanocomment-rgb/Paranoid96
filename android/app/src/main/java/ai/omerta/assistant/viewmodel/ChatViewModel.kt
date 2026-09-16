@@ -195,11 +195,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- settings passthrough ---
     fun saveSettings(
+        engineMode: String? = null, anthropicApiKey: String? = null,
         backendUrl: String? = null, appToken: String? = null, model: String? = null,
         systemPrompt: String? = null, effort: String? = null, streaming: Boolean? = null,
     ) {
         viewModelScope.launch {
-            settingsStore.update(backendUrl, appToken, model, systemPrompt, effort, streaming)
+            settingsStore.update(
+                engineMode, anthropicApiKey, backendUrl, appToken,
+                model, systemPrompt, effort, streaming,
+            )
             checkConnection()
         }
     }

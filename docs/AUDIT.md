@@ -67,3 +67,14 @@ _Audit performed as part of "audit and build APK with backend wired into APK."_
 - Add the four `RELEASE_*` signing secrets to GitHub for CI-signed releases.
 - Optional: on-device history persistence, a thinking pane (the `thinking` SSE
   channel is already emitted), and a shared MCP/tool bridge to the OMERTA scripts.
+
+## 7. Follow-up: backend embedded into the app
+
+Per request ("no additional backend commands once the app is opened"), the gateway is
+now **compiled into the app**. A Kotlin in-process engine (`AnthropicClient`) calls the
+Anthropic Messages API directly, selected by an `EngineMode` setting:
+- **EMBEDDED** (default) — no server to run; needs an on-device/baked API key.
+- **REMOTE** — the original Node backend, for keeping the key off-device.
+
+The Node `backend/` remains fully supported for REMOTE deployments. Security tradeoff of
+the embedded key (extractable from the APK) is documented in the README and Settings UI.
