@@ -60,7 +60,7 @@ class Handler(BaseHTTPRequestHandler):
     # here: it goes through the gate, so a token is enough for it.
     LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path",
                   "/api/localai", "/api/attach",
-                  "/api/models")
+                  "/api/models", "/api/adb")
 
     def _is_local_only(self, path):
         return any(path == p.rstrip("/") or path.startswith(p)
@@ -331,6 +331,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.localai_control(self._body()))
         if path == "/api/models":
             return self._json(api.models_control(self._body()))
+        if path == "/api/adb":
+            return self._json(api.adb_control(self._body()))
         if path == "/api/attach/delete":
             return self._json(api.attachment_delete(self._body()))
         if path == "/api/attach":

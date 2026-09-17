@@ -27,5 +27,7 @@ echo "=== conversation persistence ===" && python3 tests/test_persistence.py
 echo "=== attachments ===" && python3 tests/test_attach.py
 echo "=== model catalogue ===" && python3 tests/test_models.py
 echo "=== chat copy buttons ===" && python3 tests/test_ui_copy.py
+echo "=== python runtime ===" && python3 tests/test_python_runtime.py
+echo "=== adb over TCP ===" && python3 tests/test_adb.py
 echo "=== doctor ==="            && python3 scripts/doctor.py > /dev/null && echo "doctor ran clean"
 echo && echo "ALL TESTS PASSED"

@@ -39,6 +39,7 @@ Everything else is linked. The list is read from the binary itself rather than
 hardcoded here, so it stays true if the binary is ever replaced.
 """
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -54,7 +55,8 @@ UNSAFE = {
     "insmod", "rmmod", "modprobe", "depmod",
 }
 
-_state = {"bin_dir": None, "count": 0, "version": "", "reason": ""}
+_state = {"bin_dir": None, "count": 0, "version": "", "reason": "",
+          "python": None, "py_reason": ""}
 
 
 def _candidates():
@@ -255,6 +257,105 @@ def _write_manifest(base, applets, linked):
 def bin_dir():
     """The installed bin dir, installing it on first use."""
     return _state["bin_dir"] or install()
+
+
+PY_VER = "3.13"
+PY_BIN = "libpython3bin.so"
+
+
+def python_home(data_dir=None):
+    """Where the interpreter is told to find its own standard library.
+
+    CPython needs a prefix containing lib/python3.13/. The pure-Python part of
+    the standard library is ordinary text, so it can live in the app's data
+    directory -- nothing is executed from there. Its compiled extension
+    modules cannot: Android refuses to dlopen a .so out of an app's writable
+    home just as firmly as it refuses to execve one. They ship in the native
+    library directory instead, and lib-dynload is a symlink pointing at it.
+    """
+    base = Path(data_dir or os.environ.get("OMERTA_DATA_DIR")
+                or os.path.expanduser("~"))
+    return base / "python"
+
+
+def install_python(data_dir=None, payload=None):
+    """Lay out the interpreter's prefix. Returns its path, or None.
+
+    Safe to repeat: the stdlib is only copied when missing or stale, and the
+    lib-dynload symlink is always repointed, because an app update moves the
+    native library directory and a dangling symlink looks exactly like a
+    working one until something imports.
+    """
+    binary = locate()
+    lib_dir = binary.parent if binary else None
+    if lib_dir is None or not (lib_dir / PY_BIN).is_file():
+        return None
+
+    src = Path(payload or os.environ.get("OMERTA_HOME")
+               or Path(__file__).resolve().parent.parent) / "python-stdlib"
+    if not src.is_dir():
+        _state["py_reason"] = f"standard library not found at {src}"
+        return None
+
+    home = python_home(data_dir)
+    dest = home / "lib" / f"python{PY_VER}"
+    try:
+        marker = dest / ".stdlib_version"
+        stamp = f"{PY_VER}:{sum(1 for _ in src.rglob('*.py'))}"
+        if not marker.is_file() or marker.read_text(encoding="utf-8") != stamp:
+            if dest.exists():
+                shutil.rmtree(dest, ignore_errors=True)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(src, dest)
+            marker.write_text(stamp, encoding="utf-8")
+        link = dest / "lib-dynload"
+        if link.is_symlink() or link.exists():
+            if link.is_symlink() and os.readlink(link) == str(lib_dir):
+                pass
+            else:
+                link.unlink()
+                link.symlink_to(lib_dir)
+        else:
+            link.symlink_to(lib_dir)
+    except OSError as e:
+        _state["py_reason"] = f"could not lay out the python prefix: {e}"
+        return None
+
+    # python3 on PATH, alongside the BusyBox applets
+    bd = bin_dir()
+    if bd:
+        for name in ("python3", "python", f"python{PY_VER}"):
+            link = Path(bd) / name
+            try:
+                if link.is_symlink() or link.exists():
+                    link.unlink()
+                link.symlink_to(lib_dir / PY_BIN)
+            except OSError:
+                pass
+    _state["python"] = str(home)
+    _state["py_reason"] = ""
+    return str(home)
+
+
+def python_env(env=None, data_dir=None):
+    """Environment additions that let the bundled interpreter start."""
+    env = dict(env or {})
+    home = _state.get("python") or install_python(data_dir)
+    if not home:
+        return env
+    env["PYTHONHOME"] = home
+    # Bytecode cannot be written next to a read-only stdlib copy, and a phone
+    # is not the place to leave __pycache__ scattered through it.
+    env.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    return env
+
+
+def python_stats():
+    home = _state.get("python")
+    binary = locate()
+    have = bool(binary and (binary.parent / PY_BIN).is_file())
+    return {"available": have, "version": PY_VER if have else "",
+            "home": home or "", "reason": _state.get("py_reason", "")}
 
 
 def path_with_tools(path=None):

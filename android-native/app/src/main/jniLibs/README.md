@@ -74,3 +74,47 @@ though the upstream commit is recorded above regardless.
 
 Model weights are NOT bundled and are not covered by this licence. A GGUF file
 carries whatever licence its creator chose, and that is between you and them.
+
+## The CPython 3.13 runtime
+
+A real `python3` for the terminal. Android's own userland has no interpreter,
+and the one Chaquopy embeds runs inside the app's process rather than as a
+program the shell can start.
+
+These files form one component and are listed here as a group rather than
+individually:
+
+| File(s) | What |
+|---|---|
+| `libpython3bin.so` | the `python3` executable |
+| `libpython3.13.so` | the interpreter itself |
+| `*.cpython-313-aarch64-linux-android.so` | 68 standard-library extension modules |
+| `libssl_py313.so`, `libcrypto_py313.so`, `libsqlite3_py313.so` | OpenSSL and SQLite for the above |
+
+The pure-Python standard library is NOT here — it is ordinary text and ships in
+the payload as `python-stdlib/`, laid out at runtime by `core/toolbox.py`. Only
+the parts Android refuses to load from app storage live in this directory.
+
+### Why three libraries are renamed
+
+Chaquopy already ships `libssl_python.so`, `libcrypto_python.so` and
+`libsqlite3_python.so`, built for **its** Python 3.11. Two different builds
+cannot share one filename in `lib/arm64-v8a`, and letting one silently win
+would be a guess with an obscure failure mode — imports breaking at runtime
+rather than the build failing. Ours carry a `_py313` suffix, their SONAMEs were
+rewritten to match, and every dependant was repointed with `patchelf`. The
+audit gate checks that nothing still asks for the original names.
+
+### Provenance
+
+    https://github.com/python/cpython, branch 3.13
+    built with Android/android.py against NDK 26.3.11579264,
+    ANDROID_ABI=arm64-v8a, then llvm-strip --strip-all
+
+### Licence
+
+CPython is distributed under the **PSF License Agreement**, which permits
+redistribution in source or binary form provided the copyright notice is
+retained — see LICENSE-cpython.txt next to this file. It imposes no source
+obligation. The bundled OpenSSL is **Apache-2.0** and SQLite is **public
+domain**.

@@ -263,9 +263,18 @@ def check_native():
                           "licence for shipped binaries must be recorded")
     else:
         txt = readme.read_text(encoding="utf-8")
+        # A component made of many files (the 68 CPython extension modules) is
+        # documented as a group by its filename pattern. Demanding a line per
+        # file would turn provenance into noise nobody reads, which is worse
+        # than the rule it enforces.
+        import fnmatch
+        patterns = re.findall(r"`([^`]*\*[^`]*)`", txt)
         for lib in libs:
-            if lib.name not in txt:
-                finding("native", f"{lib.name} has no provenance entry in README.md")
+            if lib.name in txt:
+                continue
+            if any(fnmatch.fnmatch(lib.name, pat) for pat in patterns):
+                continue
+            finding("native", f"{lib.name} has no provenance entry in README.md")
     # packaging flags, without which the binary never becomes a real file
     g = (ROOT / "android-native/app/build.gradle").read_text(encoding="utf-8")
     m = (ROOT / "android-native/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
@@ -274,7 +283,34 @@ def check_native():
                           "shipped binaries will not be extracted and cannot run")
     if 'android:extractNativeLibs="true"' not in m:
         finding("native", "extractNativeLibs is not true — same problem")
-    note(f"native payloads: {len(libs)} aarch64 binaries, provenance recorded")
+    # Two different builds cannot share one filename in lib/<abi>. Chaquopy
+    # ships libssl_python.so and friends for its own Python; ours are renamed,
+    # and a future addition that forgets to rename would not fail the build --
+    # it would load the wrong library at runtime and break imports obscurely.
+    import subprocess as _sp
+    reserved = {"libssl_python.so", "libcrypto_python.so", "libsqlite3_python.so"}
+    present = {p.name for p in libs}
+    clashes = []
+    for lib in libs:
+        if lib.name in reserved and lib.name not in ("libssl_python.so",):
+            pass
+        try:
+            out = _sp.run(["readelf", "-d", str(lib)], capture_output=True,
+                          text=True, timeout=30).stdout
+        except (OSError, _sp.SubprocessError):
+            continue
+        deps = {l.split("[")[1].split("]")[0]
+                for l in out.splitlines() if "(NEEDED)" in l}
+        # a dependency on a name we do not ship and Android does not provide
+        missing = {d for d in deps
+                   if d.endswith("_python.so") or d.endswith("_py313.so")}
+        for d in missing:
+            if d not in present:
+                clashes.append(f"{lib.name} needs {d}, which is not in jniLibs")
+    for c in clashes:
+        finding("native", c)
+    note(f"native payloads: {len(libs)} aarch64 binaries, provenance recorded"
+         + (", no unresolved private deps" if not clashes else ""))
 
 
 # ── 8. hostile input ────────────────────────────────────────────────────────

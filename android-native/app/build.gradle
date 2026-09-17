@@ -147,7 +147,7 @@ tasks.register('stageOmertaPayload', Copy) {
     into layout.buildDirectory.dir("omerta-assets/omerta_payload")
     from(repoRoot) {
         include 'core/**', 'tools/**', 'webui/**', 'assets/**',
-                'skills/**', 'plugins/**',
+                'skills/**', 'plugins/**', 'python-stdlib/**',
                 'persona.yaml', 'connectors.yaml', 'omerta_android.py'
         exclude '**/__pycache__/**', '**/*.pyc'
     }

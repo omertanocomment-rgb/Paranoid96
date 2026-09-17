@@ -43,7 +43,7 @@ MAX_BODY = 16 * 1024 * 1024
 # /api/chat is deliberately absent: it DOES go through the gate.
 LOCAL_ONLY_PREFIXES = ("/api/term", "/api/ws/", "/api/scratch",
                        "/api/learn/path", "/api/localai", "/api/attach",
-                       "/api/models")
+                       "/api/models", "/api/adb")
 
 
 def _is_local_only(path: str) -> bool:
@@ -126,6 +126,11 @@ def models_status():
 @app.post("/api/models")
 def models_control(payload: dict):
     return api.models_control(payload)
+
+
+@app.post("/api/adb")
+def adb_control(payload: dict):
+    return api.adb_control(payload)
 
 
 @app.get("/api/attach")

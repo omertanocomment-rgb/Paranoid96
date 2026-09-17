@@ -56,7 +56,9 @@ def start(files_dir, home_dir, port=8787, native_lib_dir=None):
     try:
         # Relink on every start: an app update moves the native library, and a
         # dangling symlink looks identical to a working one until it is run.
-        toolbox.install(os.path.join(files_dir, "data"))
+        data = os.path.join(files_dir, "data")
+        toolbox.install(data)
+        toolbox.install_python(data, payload=home_dir)
     except Exception:  # noqa: BLE001 -- a missing toolset must not stop the app
         pass
     from core import httpd

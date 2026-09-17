@@ -18,7 +18,7 @@ import time
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
                index as codeindex, scratch, theme, version, toolbox, localai,
-               attach, models as modelstore)
+               attach, models as modelstore, adbclient)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -174,6 +174,34 @@ def attachment_delete(payload) -> dict:
     return attach.delete(aid)
 
 
+def adb_control(payload) -> dict:
+    """Talk to a device over the network.
+
+    Local-only, like the terminal: this reaches out from your device to
+    another one, which is you operating your own hardware rather than the
+    agent acting, so it does not pass the approval gate -- and therefore must
+    not be drivable from a third machine.
+    """
+    p = payload or {}
+    action = p.get("action", "")
+    host = str(p.get("host", "")).strip()
+    port = int(p.get("port") or adbclient.DEFAULT_PORT)
+    if action == "pubkey":
+        return {"status": "ok", "key": adbclient.public_key_text()}
+    if not host:
+        return {"error": "host is required, e.g. 192.168.1.50"}
+    if action == "connect":
+        return adbclient.connect(host, port)
+    if action == "info":
+        return adbclient.info(host, port)
+    if action == "shell":
+        cmd = p.get("cmd", "")
+        if not cmd:
+            return {"error": "cmd is required"}
+        return adbclient.shell(host, cmd, port=port)
+    return {"error": f"unknown action: {action!r} (connect, info, shell, pubkey)"}
+
+
 def models_status() -> dict:
     """The catalogue, what is installed, and any download in flight."""
     return modelstore.status()
@@ -216,6 +244,7 @@ def status_payload() -> dict:
         "terminal": {"shell": terminal._shell(),
                      "guard": terminal.guarded(),
                      "tools": toolbox.stats(),
+                     "python": toolbox.python_stats(),
                      "sessions": len(terminal.SESSIONS)},
         "memory": memory.stats(),
         "skills": [{"name": s["name"], "description": s["description"]}
