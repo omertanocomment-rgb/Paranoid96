@@ -129,7 +129,7 @@ tasks.register('stampOmertaBuild', Exec) {
     description = "Write core/build_stamp.json so the APK knows its own build"
     workingDir rootProject.file("..")
     commandLine 'python3', 'scripts/stamp_build.py', 'android'
-    isIgnoreExitValue = true
+    ignoreExitValue = true
 }
 
 tasks.register('stageOmertaPayload', Copy) {
@@ -145,8 +145,15 @@ tasks.register('stageOmertaPayload', Copy) {
     }
 }
 
-// Make sure the payload is staged before assets are merged, for every variant.
-tasks.matching { it.name.startsWith('merge') && it.name.endsWith('Assets') }
-     .configureEach { dependsOn 'stageOmertaPayload' }
+// The asset dir above is a plain path, so Gradle cannot tell who produces it
+// and every consumer has to say so itself. Assets are merged AND read by lint
+// (lintVitalAnalyzeRelease is what caught this), so both are named here. If a
+// future AGP adds another consumer this list needs it too -- the symptom is a
+// build failure naming the task, not a silently empty payload.
+tasks.matching {
+    (it.name.startsWith('merge') && it.name.endsWith('Assets')) ||
+    it.name.startsWith('lint') ||
+    (it.name.startsWith('generate') && it.name.contains('Lint'))
+}.configureEach { dependsOn 'stageOmertaPayload' }
 
 dependencies { }
