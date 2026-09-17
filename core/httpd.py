@@ -165,6 +165,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(html.encode(), "text/html; charset=utf-8")
         if path == "/api/status":
             return self._json(api.status_payload())
+        if path == "/api/version":
+            return self._json(api.version_payload())
         if path == "/api/memory":
             q = self._query()
             return self._json(api.memory_payload(

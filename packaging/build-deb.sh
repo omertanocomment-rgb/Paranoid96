@@ -8,7 +8,10 @@ cd "$(dirname "$0")/.."
 VER="$(python3 - <<'PY'
 import re
 m=re.search(r'version\s*=\s*"([^"]+)"', open("pyproject.toml").read())
-print(m.group(1) if m else "1.1.0")
+if not m:
+    raise SystemExit("pyproject.toml has no version -- refusing to label the "
+                     "package with a guess")
+print(m.group(1))
 PY
 )"
 PKG="omerta-agent_${VER}_all"

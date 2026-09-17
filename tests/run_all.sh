@@ -20,5 +20,6 @@ echo "=== terminal ==="          && python3 tests/test_terminal.py
 echo "=== workspace / sandbox / theme ===" && python3 tests/test_workspace.py
 echo "=== mode + history ==="     && python3 tests/test_mode_history.py
 echo "=== multi-device sync ===" && python3 tests/test_sync.py
+echo "=== version + build stamp ===" && python3 tests/test_version.py
 echo "=== doctor ==="            && python3 scripts/doctor.py > /dev/null && echo "doctor ran clean"
 echo && echo "ALL TESTS PASSED"

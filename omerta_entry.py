@@ -10,8 +10,20 @@ from core import config  # noqa: E402
 VERSION_FLAGS = ("version", "--version", "-V")
 
 
-def _version():
-    """Single source of truth: the installed metadata, else pyproject."""
+def _version(full=False):
+    """Single source of truth: the build stamp, else metadata, else pyproject.
+
+    The stamp comes first because it is the only one that identifies the
+    *build* rather than the version number -- two artifacts can share a version
+    and still differ, and "which build am I running" is the question that
+    actually gets asked.
+    """
+    try:
+        from core import version as _v
+        if _v.BUILD.get("stamped"):
+            return _v.describe() if full else _v.VERSION
+    except Exception:
+        pass
     try:
         from importlib.metadata import version
         return version("omerta-agent")
@@ -46,7 +58,8 @@ def main():
     # a leading flag is not a subcommand — except the version flags, which
     # would otherwise fall through to argparse and die as "unrecognized".
     if argv and argv[0] in VERSION_FLAGS:
-        print(f"omerta-agent {_version()}")
+        v = _version(full=True)
+        print(v if v.startswith("OMERTA") else f"omerta-agent {v}")
         return 0
     cmd = argv[0] if argv and not argv[0].startswith("-") else None
     if cmd == "serve":
@@ -81,7 +94,8 @@ def main():
             print("set OMERTA_SYNC_DIR, or: omerta sync <host:port|/path>")
         return 0
     if cmd in VERSION_FLAGS:
-        print(f"omerta-agent {_version()}")
+        v = _version(full=True)
+        print(v if v.startswith("OMERTA") else f"omerta-agent {v}")
         return 0
     # firmware / teach / memory / index / search / rules
     from core import commands

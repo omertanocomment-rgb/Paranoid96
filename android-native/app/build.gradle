@@ -3,6 +3,22 @@ plugins {
     id 'com.chaquo.python'
 }
 
+// The version is read from pyproject.toml -- the repo's single source of truth
+// -- rather than typed here as a second copy. versionCode is derived from it
+// (1.2.0 -> 10200) because Android refuses to install a build whose code is
+// lower than the installed one, so it must move exactly when the version does.
+def omertaVersion = {
+    def f = rootProject.file("../pyproject.toml")
+    def m = f.text =~ /(?m)^version\s*=\s*"([^"]+)"/
+    if (!m) throw new GradleException("pyproject.toml has no version")
+    return m[0][1]
+}()
+def omertaVersionCode = {
+    def n = (omertaVersion =~ /\d+/).collect { it as int }
+    while (n.size() < 3) n << 0
+    return n[0] * 10000 + n[1] * 100 + n[2]
+}()
+
 android {
     namespace 'com.omerta.agent'
     compileSdk 34
@@ -11,8 +27,8 @@ android {
         applicationId "com.omerta.agent"
         minSdk 24
         targetSdk 34
-        versionCode 2
-        versionName "1.1.0"
+        versionCode omertaVersionCode
+        versionName omertaVersion
 
         // Chaquopy: which CPython to embed, and the pure-Python deps the agent
         // backend needs. Both wheels are pure Python (no Rust / native build),
@@ -104,7 +120,20 @@ android {
 
 // Copy the single-source agent payload (code + resources) into an asset dir.
 // The app ships this inside the APK and extracts it once per version.
+// Stamp the build before staging it. An APK has no git checkout and no
+// pyproject inside it, so without this the app on the phone cannot tell you
+// which build it is -- which is exactly the question you ask when a rebuild
+// looks like it did not take. Best-effort: a missing python3 must not fail
+// the whole APK build, it just leaves the copy unstamped and honest about it.
+tasks.register('stampOmertaBuild', Exec) {
+    description = "Write core/build_stamp.json so the APK knows its own build"
+    workingDir rootProject.file("..")
+    commandLine 'python3', 'scripts/stamp_build.py', 'android'
+    isIgnoreExitValue = true
+}
+
 tasks.register('stageOmertaPayload', Copy) {
+    dependsOn 'stampOmertaBuild'
     description = "Stage the agent Python payload into assets/omerta_payload"
     def repoRoot = rootProject.file("..")
     into layout.buildDirectory.dir("omerta-assets/omerta_payload")

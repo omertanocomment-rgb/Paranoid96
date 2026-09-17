@@ -111,6 +111,11 @@ def status():
     return api.status_payload()
 
 
+@app.get("/api/version")
+def version():
+    return api.version_payload()
+
+
 @app.post("/api/chat")
 def chat(payload: dict):
     """One chat turn: {project, kind, text|cmd|note} -> full agent result."""

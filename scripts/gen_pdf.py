@@ -10,6 +10,23 @@ README / INSTALL / AUDIT docs so the PDF stays a faithful single-file rundown.
 import sys
 from pathlib import Path
 
+import re as _re
+from pathlib import Path as _Path
+
+# The guide states a version on its cover; a guide that claims a version the
+# build does not have is worse than one that claims none. Read the one source.
+def _version():
+    try:
+        txt = (_Path(__file__).resolve().parent.parent / "pyproject.toml").read_text()
+        m = _re.search(r'^version\s*=\s*"([^"]+)"', txt, _re.M)
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return "unknown"
+
+VERSION = _version()
+
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import LETTER
@@ -112,7 +129,7 @@ def cover(canvas, doc):
         canvas.drawCentredString(w / 2, h - (4.95 + i * 0.24) * inch, line)
     canvas.setFillColor(AMBER_BR)
     canvas.setFont("Helvetica-Bold", 11)
-    canvas.drawCentredString(w / 2, 1.5 * inch, "Version 1.1.0")
+    canvas.drawCentredString(w / 2, 1.5 * inch, f"Version {VERSION}")
     canvas.setFillColor(colors.HexColor("#6b6455"))
     canvas.setFont("Courier", 9)
     canvas.drawCentredString(w / 2, 1.2 * inch,
@@ -131,7 +148,7 @@ def chrome(canvas, doc):
     canvas.setFillColor(colors.HexColor("#8a8272"))
     canvas.setFont("Helvetica", 8)
     canvas.drawRightString(w - 0.75 * inch, h - 0.42 * inch,
-                           "Features & Usage Guide · v1.1.0")
+                           f"Features & Usage Guide · v{VERSION}")
     canvas.setStrokeColor(BORDER)
     canvas.setLineWidth(0.5)
     canvas.line(0.75 * inch, 0.6 * inch, w - 0.75 * inch, 0.6 * inch)
@@ -446,7 +463,7 @@ def build():
 
     S.append(Spacer(1, 14))
     S.append(HRFlowable(color=BORDER, thickness=0.6))
-    S.append(P("OMERTA AGENT v1.1.0 — offline-capable coding &amp; firmware agent that "
+    S.append(P(f"OMERTA AGENT v{VERSION} — offline-capable coding &amp; firmware agent that "
                "asks before it acts. This guide is generated from the repository docs.",
                SMALL))
 

@@ -16,7 +16,7 @@ import threading
 
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
-               index as codeindex, scratch, theme)
+               index as codeindex, scratch, theme, version)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -57,8 +57,19 @@ def startup_sync():
 
 
 # ── read views ────────────────────────────────────────────────────────────
+def version_payload() -> dict:
+    """Which build this actually is.
+
+    Deliberately reachable on its own as well as inside /api/status: when you
+    are asking "did the new build install?" you want one small answer, not a
+    page of provider state to read it out of.
+    """
+    return version.info()
+
+
 def status_payload() -> dict:
     return {
+        "build": version.info(),
         "providers": router.provider_status(),
         "active": config.get("OMERTA_PROVIDER", config.ACTIVE_PROVIDER),
         "mode": config._norm_mode(config.get("OMERTA_MODE", config.MODE)),

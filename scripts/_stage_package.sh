@@ -6,7 +6,10 @@ rm -rf build_pkg/omerta_agent
 mkdir -p build_pkg/omerta_agent
 cp -r core tools skills plugins webui assets persona.yaml connectors.yaml build_pkg/omerta_agent/
 cp pyproject.toml README.md build_pkg/
-printf '"""OMERTA AGENT."""\n__version__ = "1.1.0"\n' > build_pkg/omerta_agent/__init__.py
+# The version lives in pyproject.toml and nowhere else; derive it rather than
+# writing a second copy that can drift out of step with the first.
+VER="$(python3 -c 'import re,pathlib; print(re.search(r"^version\s*=\s*\"([^\"]+)\"", pathlib.Path("pyproject.toml").read_text(), re.M).group(1))')"
+printf '"""OMERTA AGENT."""\n__version__ = "%s"\n' "$VER" > build_pkg/omerta_agent/__init__.py
 python3 - <<'PY'
 from pathlib import Path
 src = Path("cli.py").read_text().replace('if __name__ == "__main__":\n    sys.exit(main())', '')
@@ -30,13 +33,24 @@ if _PKG not in sys.path:
 VERSION_FLAGS = ("version", "--version", "-V")
 
 
+def _describe():
+    """Prefer the build stamp: it identifies the build, not just the number."""
+    try:
+        from core import version as _v
+        if _v.BUILD.get("stamped"):
+            return _v.describe()
+    except Exception:
+        pass
+    from omerta_agent import __version__
+    return f"omerta-agent {__version__}"
+
+
 def main():
     argv = sys.argv[1:]
     # a leading flag is not a subcommand -- except the version flags, which
     # would otherwise fall through to argparse and die as "unrecognized".
     if argv and argv[0] in VERSION_FLAGS:
-        from omerta_agent import __version__
-        print(f"omerta-agent {__version__}")
+        print(_describe())
         return 0
     cmd = argv[0] if argv and not argv[0].startswith("-") else None
     if cmd == "serve":
@@ -63,8 +77,7 @@ def main():
             print("set OMERTA_SYNC_DIR, or: omerta sync <host:port|/path>")
         return 0
     if cmd in VERSION_FLAGS:
-        from omerta_agent import __version__
-        print(f"omerta-agent {__version__}")
+        print(_describe())
         return 0
     from core import commands
     if cmd in commands.HANDLED:
