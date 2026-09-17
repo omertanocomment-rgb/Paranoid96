@@ -203,3 +203,61 @@ this environment — `docker build -f docker/Dockerfile .` is a one-liner where
 one exists) and the **macOS/Windows Electron installers** (Apple's signing
 tools are macOS-only; Windows needs a Windows host or wine). These are platform
 limits, stated rather than papered over.
+
+## Sandbox containment pass — protecting the device, not only the project
+
+The scratch sandbox originally protected your project tree from an experiment
+and said so plainly: it did not protect the *device* from what ran inside. This
+pass closed that, as far as each platform allows, and made the remaining gap
+visible rather than implied.
+
+**What was wrong.** `isolate.wrap()` built a bubblewrap invocation with
+`--ro-bind / /` — the whole filesystem, read-only. A command inside could read
+your home directory, your source, anything the process could reach; only a
+handful of key stores were shadowed. It also never cleared the environment, so
+a "sandboxed" process still held every API key in `os.environ`. Containment
+that leaves your credentials in reach is not containment against the threat it
+exists for.
+
+**What it does now.** `isolate.jail()` is deny-by-default: the system paths are
+bound read-only and *nothing else is present at all*, the work directory is the
+only writable thing, `/proc`, `/dev` and `/tmp` are fresh, the network is a
+separate empty namespace, and `--clearenv` is followed by an allow-list of
+variables a build legitimately needs. PID/IPC/UTS namespaces and
+`--new-session` come along, so the sandbox cannot see or signal your processes
+and cannot push characters back onto the controlling terminal.
+
+Verified by running probes inside a real sandbox, not by reading the flags:
+
+| Probe | Result |
+|---|---|
+| `cat ~/.omerta_test_secret` | not found — `$HOME` is the sandbox |
+| `ls /` | `bin dev etc lib lib64 opt proc sbin tmp usr` — no `/home`, no `/root` |
+| `env` | 11 variables, no `ANTHROPIC_API_KEY`, no `*_TOKEN`, no `*_SECRET` |
+| connect to `1.1.1.1:53` | `OSError: Network is unreachable` |
+| `ls /proc \| grep -c '^[0-9]*$'` | 4 pids, against 80 on the host |
+| `echo x > /etc/EVIL` | succeeded **inside the sandbox's tmpfs**; the host `/etc/EVIL` does not exist |
+
+**The honest part.** Containment is not uniform, so `capabilities()` reports
+what this device can actually enforce and every run carries the level it got:
+
+- **strict** — bubblewrap/firejail with unprivileged namespaces (the table above).
+- **relaxed** — readable but read-only filesystem, key stores shadowed, network denied.
+- **limits** — resource caps and a scrubbed environment only, *no namespaces*.
+
+`limits` is what an unrooted Android app gets, because the kernel and SELinux
+deny an app the ability to create namespaces. The Android app sandbox still
+confines the process to the app's own UID and data directory — that is real,
+but it is the OS's doing and not something this code can claim credit for. The
+UI prints the level in the sandbox pane rather than leaving the word "sandbox"
+to imply the best case, and `jail()` caps a requested level at what the device
+can deliver instead of returning a command that merely looks contained.
+
+A command in a sandbox still goes through the approval gate, and the gate still
+classifies and displays the command *you* asked for — not the bubblewrap
+incantation wrapped around it. An approval prompt full of mount flags is one
+nobody reads, and checking the deny-list against the wrapper instead of the
+command would be checking the wrong string.
+
+Network is off by default and opened per command (`run +net`), so the case that
+genuinely needs it — installing dependencies — is the only thing that gets it.

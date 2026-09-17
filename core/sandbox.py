@@ -98,23 +98,32 @@ def propose(cmd, cwd=".", project="general", reason="") -> dict:
             "danger": tier == Tier.HIGH_RISK}
 
 
-def run(cmd, cwd=".", timeout=None, project="general") -> dict:
-    """Execute. Only call after the user approved this exact command."""
+def run(cmd, cwd=".", timeout=None, project="general", exec_cmd=None) -> dict:
+    """Execute. Only call after the user approved this exact command.
+
+    `exec_cmd` lets a caller (a scratch sandbox) supply an already-contained
+    form of the command. `cmd` stays what gets classified, displayed, logged
+    and learned from, because that is what the user actually approved — an
+    approval prompt full of bwrap mount flags is one nobody reads, and a deny
+    check against the wrapper instead of the command would be checking the
+    wrong string.
+    """
     if classify(cmd) == Tier.DENY:
         return {"status": "denied_by_policy", "cmd": cmd,
                 "reason": "hard-deny pattern"}
     timeout = timeout or config.COMMAND_TIMEOUT
     start = time.time()
-    # opt-in containment: wrap with resource limits + fs/net isolation. Off by
-    # default so the audited execution path (and tests) run the command verbatim.
-    exec_cmd = cmd
-    try:
-        from . import isolate
-        if isolate.enabled():
-            net = config.flag("OMERTA_ISOLATE_NET")
-            exec_cmd = isolate.wrap(cmd, workdir=cwd, net=net)
-    except Exception:  # noqa: BLE001
+    if exec_cmd is None:
+        # opt-in containment for ordinary commands. Off by default so the
+        # audited execution path (and tests) run the command verbatim.
         exec_cmd = cmd
+        try:
+            from . import isolate
+            if isolate.enabled():
+                net = config.flag("OMERTA_ISOLATE_NET")
+                exec_cmd = isolate.wrap(cmd, workdir=cwd, net=net)
+        except Exception:  # noqa: BLE001
+            exec_cmd = cmd
     try:
         p = subprocess.run(exec_cmd, shell=True, cwd=cwd, timeout=timeout,
                            capture_output=True, text=True)

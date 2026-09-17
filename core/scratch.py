@@ -14,12 +14,21 @@ workstation is not much use in something whose point is running on a handset.
 A copy works everywhere. It costs disk and a few seconds; the cost of the
 alternative is discovering your project tree is full of a failed experiment.
 
-What this is NOT: it is not isolation from the machine. A command running in a
-scratch can still reach the network and the rest of the filesystem — for that,
-`core/isolate` wraps commands in bubblewrap/firejail where it exists, and this
-module uses it when it is switched on. A scratch protects your *project* from
-your experiment; it does not protect your *device* from a hostile program.
-Commands still go through the approval gate.
+A scratch protects your project from your experiment. It also, where the
+platform allows it, protects the DEVICE from what runs inside: commands are
+executed through `core/isolate`, which by default gives the sandbox its own
+mount, network, PID, IPC and UTS namespaces, a read-only system, no view of
+your home directory, no network, and no access to your API keys.
+
+That containment is not uniform, so `run()` reports the level it actually
+achieved — `strict`, `relaxed` or `limits` — rather than implying the best one.
+On an unrooted Android app there are no namespaces to be had (the kernel and
+SELinux deny them), so the level there is `limits`: resource caps and a
+scrubbed environment, on top of the app sandbox the OS already enforces. Saying
+that plainly matters more than the feature does; a sandbox you over-trust is
+worse than one you know the edges of.
+
+Commands still go through the approval gate either way.
 """
 import difflib
 import hashlib
@@ -164,11 +173,15 @@ def _manifest(sid):
 
 
 def run(args=None):
-    """Run a command inside the scratch.
+    """Run a command inside the scratch, contained.
 
     Goes through sandbox.run like every other command, so it is gated, tiered
     and audited identically — being in a scratch makes it reversible, not
-    unsupervised.
+    unsupervised. On top of that it is wrapped by core/isolate, so the command
+    also cannot reach your files, your network or your keys.
+
+    Network is off by default. Pass net=true for the cases that genuinely need
+    it (installing dependencies), and it is then the only thing opened.
     """
     a = args or {}
     rec = _get(a.get("id"))
@@ -179,7 +192,23 @@ def run(args=None):
     cmd = a.get("cmd", "")
     if not str(cmd).strip():
         return {"status": "error", "reason": "nothing to run"}
-    res = sandbox.run(cmd, cwd=rec["path"], project=a.get("project", "general"))
+
+    contained = config.flag("OMERTA_SCRATCH_ISOLATE", "1")
+    jailed = None
+    if contained:
+        jailed = isolate.jail(cmd, workdir=rec["path"],
+                              net=bool(a.get("net")),
+                              level=a.get("level"),
+                              allow_read=a.get("allow_read") or ())
+        run_cmd = jailed["cmd"]
+    else:
+        run_cmd = cmd
+
+    # The user approves the command THEY asked for, not the bwrap incantation
+    # wrapped around it — an approval prompt full of mount flags is one nobody
+    # reads. sandbox.run classifies and displays `cmd`; `exec_cmd` is what runs.
+    res = sandbox.run(cmd, cwd=rec["path"], project=a.get("project", "general"),
+                      exec_cmd=run_cmd)
     idx = _index()
     entry = {"cmd": cmd, "at": time.time(),
              "status": res.get("status"), "code": res.get("returncode")}
@@ -189,7 +218,15 @@ def run(args=None):
     _save(idx)
     out = dict(res)
     out["sandbox"] = rec["id"]
-    out["isolated"] = isolate.enabled()
+    if jailed:
+        out["isolation"] = {"level": jailed["level"], "network": jailed["net"],
+                            "backend": jailed["backend"]}
+        if jailed["level"] == "limits":
+            out["isolation"]["note"] = jailed.get(
+                "note", "no namespace support on this device")
+    else:
+        out["isolation"] = {"level": "off", "network": True,
+                            "note": "OMERTA_SCRATCH_ISOLATE=0"}
     return out
 
 
@@ -363,4 +400,8 @@ def discard(args=None):
 
 def stats():
     idx = _index()
-    return {"sandboxes": len(idx["sandboxes"]), "dir": str(ROOT)}
+    caps = isolate.capabilities()
+    return {"sandboxes": len(idx["sandboxes"]), "dir": str(ROOT),
+            "isolation": config.flag("OMERTA_SCRATCH_ISOLATE", "1"),
+            "level": caps["best"], "backend": caps["backend"],
+            "reason": caps["reason"]}

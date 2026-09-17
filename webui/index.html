@@ -354,6 +354,7 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
         <div class="tiny">A working copy that builds and runs for real. Your
           project does not change until you accept — take everything, take some
           files, or throw it away.</div>
+        <div class="tiny" id="sbIsolation" style="margin-top:6px"></div>
         <label class="fld"><span>sandbox a directory</span>
           <div class="grid2"><input id="sbSource" placeholder="/path/to/project">
             <button class="mini" onclick="sbCreate()">create</button></div></label>
@@ -363,7 +364,9 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
           <h3>Sandbox <span id="sbName" style="text-transform:none;color:var(--text)"></span></h3>
           <label class="fld"><span>run inside the sandbox (goes through the approval gate)</span>
             <div class="grid2"><input id="sbCmd" placeholder="npm test">
-              <button class="mini" onclick="sbRun()">run</button></div></label>
+              <button class="mini" onclick="sbRun()">run</button>
+              <button class="mini" onclick="sbRun(true)" title="allow network for this command only">run +net</button>
+            </div></label>
           <pre class="diff" id="sbOut" style="display:none"></pre>
           <div class="grid2" style="margin:8px 0">
             <button class="mini" onclick="sbChanges()">refresh changes</button>
@@ -832,6 +835,21 @@ async function reindex(){
 /* --- scratch sandboxes --- */
 async function sbList(){
   const r=await get('/api/scratch');
+  /* say what containment this device can actually enforce, rather than
+     letting the word "sandbox" imply more than it delivers */
+  const lvl=r.level||'limits';
+  const blurb={
+    strict:'Strict containment: separate namespaces, read-only system, no view '+
+           'of your files, no network, no API keys.',
+    relaxed:'Partial containment: the filesystem is readable but read-only, key '+
+            'stores are hidden, network denied.',
+    limits:'Resource limits only — this device cannot create namespaces (normal '+
+           'on Android). Your project is still protected; the device is not.'
+  }[lvl];
+  const el=document.getElementById('sbIsolation');
+  if(el) el.innerHTML=`<b style="color:${lvl==='strict'?'var(--ok)':'var(--warn)'}">`+
+    `${esc(lvl.toUpperCase())}</b> — ${esc(blurb)}`+
+    (r.backend&&r.backend!=='none'?` <span class="tiny">(${esc(r.backend)})</span>`:'');
   document.getElementById('sbList').innerHTML=(r.sandboxes||[]).map(x=>`
     <div class="row"><span class="grow" onclick="sbOpen('${x.id}','${esc(x.name)}')">${esc(x.name)}
       <small>${x.files} files · ${esc(x.source)}${x.exists?'':' · MISSING'}</small></span>
@@ -856,14 +874,15 @@ function sbOpen(id,name){
   document.getElementById('sbDiff').style.display='none';
   sbChanges();
 }
-async function sbRun(){
+async function sbRun(net){
   const cmd=document.getElementById('sbCmd').value.trim(); if(!cmd||!sbId)return;
   const out=document.getElementById('sbOut');
   out.style.display='block'; out.textContent='running…';
-  const r=await post('/api/scratch/run',{id:sbId,cmd:cmd});
+  const r=await post('/api/scratch/run',{id:sbId,cmd:cmd,net:!!net});
+  const iso=r.isolation?`[${r.isolation.level}${r.isolation.network?'':' · no network'}]\n`:'';
   out.textContent = r.status==='awaiting_approval'
     ? `${r.action||cmd}\n\nThis needs approval — approve it in Chat.`
-    : ((r.stdout||'')+(r.stderr||'')+(r.reason||'')||`(${r.status})`).slice(0,6000);
+    : iso+((r.stdout||'')+(r.stderr||'')+(r.reason||'')||`(${r.status})`).slice(0,6000);
   sbChanges();
 }
 async function sbChanges(){
