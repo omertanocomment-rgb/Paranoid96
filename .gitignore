@@ -25,3 +25,10 @@ android-native/app/build/
 
 # packaging output
 dist/
+
+# build scratch (gradle caches, PyInstaller work dirs, generated specs)
+.gradle/
+android-native/.gradle/
+android-native/build/
+build/
+*.spec
