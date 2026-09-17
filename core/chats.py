@@ -411,6 +411,114 @@ def queue_clear(chat_id, item_id=None):
     return {"status": "ok", "queue": rec["queue"]}
 
 
+# ── export / import ─────────────────────────────────────────────────────────
+EXPORT_VERSION = 1
+
+
+def export_chat(chat_id, include_branches=True):
+    """A portable copy of a chat, and by default its branches.
+
+    A private chat exports STILL ENCRYPTED — the ciphertext and its salt move
+    together, and the passcode never does. It lands locked on the other device
+    and opens with the same passcode. Exporting a locked chat as plaintext
+    because it happens to be unlocked in this process would quietly undo the
+    reason it was locked.
+    """
+    idx = _index()
+    rec = idx["chats"].get(chat_id)
+    if not rec:
+        return {"status": "error", "reason": "no such chat"}
+
+    wanted = [rec]
+    if include_branches:
+        wanted += [r for r in idx["chats"].values()
+                   if r.get("parent") == chat_id and r["id"] != chat_id]
+
+    out = []
+    for r in wanted:
+        try:
+            payload = json.loads(_path(r["id"]).read_text())
+        except (OSError, ValueError):
+            continue
+        out.append({"meta": {k: v for k, v in r.items()}, "payload": payload})
+    return {"status": "ok", "version": EXPORT_VERSION,
+            "exported": time.time(), "count": len(out), "chats": out}
+
+
+def import_chats(bundle, project=None):
+    """Merge an exported bundle. Ids are preserved so re-importing is a no-op
+    rather than a duplicate; a clashing id with different content gets a new
+    one instead of silently overwriting what is already here."""
+    if not isinstance(bundle, dict) or "chats" not in bundle:
+        return {"status": "error", "reason": "not a chat export"}
+    if _num_version(bundle.get("version", 1)) > EXPORT_VERSION:
+        return {"status": "error",
+                "reason": f"export version {bundle.get('version')} is newer "
+                          f"than this build supports ({EXPORT_VERSION})"}
+    rows = bundle.get("chats")
+    if not isinstance(rows, list):
+        return {"status": "error", "reason": "malformed export: 'chats' must be a list"}
+
+    idx = _index()
+    added = skipped = renamed = 0
+    id_map = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            skipped += 1
+            continue
+        meta = dict(row.get("meta") or {})
+        payload = row.get("payload")
+        cid = str(meta.get("id") or "")[:32]
+        if not cid or payload is None:
+            skipped += 1
+            continue
+        if cid in idx["chats"]:
+            try:
+                same = json.loads(_path(cid).read_text()) == payload
+            except (OSError, ValueError):
+                same = False
+            if same:
+                skipped += 1
+                id_map[cid] = cid
+                continue
+            new_id = uuid.uuid4().hex[:12]
+            id_map[cid] = new_id
+            meta["id"] = new_id
+            meta["title"] = f"{meta.get('title', 'chat')} (imported)"[:120]
+            cid = new_id
+            renamed += 1
+        else:
+            id_map[meta["id"]] = cid
+        if project:
+            meta["project"] = project
+        meta.setdefault("project", "general")
+        meta.setdefault("queue", [])
+        meta["imported"] = time.time()
+        tmp = _path(cid).with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload))
+        os.replace(tmp, _path(cid))
+        idx["chats"][cid] = meta
+        idx["projects"].setdefault(meta["project"],
+                                   {"name": meta["project"], "created": time.time()})
+        added += 1
+
+    # keep parent links pointing at whatever those chats became here
+    for cid, meta in idx["chats"].items():
+        par = meta.get("parent")
+        if par and par in id_map and id_map[par] != par:
+            meta["parent"] = id_map[par]
+    _save(idx)
+    return {"status": "ok", "added": added, "skipped": skipped,
+            "renamed": renamed, "ids": id_map}
+
+
+def _num_version(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0
+
+
 def stats():
     idx = _index()
     rows = list(idx["chats"].values())

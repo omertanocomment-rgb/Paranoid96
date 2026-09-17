@@ -167,7 +167,26 @@ def forget(fact_id):
     return f"forgot fact {fact_id}"
 
 
-def recall(query="", project=None, top_k=8, kind=None):
+SHARED_PROJECT = "general"
+
+
+def _project_clause(project, shared):
+    """SQL fragment + params for 'this project, plus shared knowledge'.
+
+    Scoping recall to a project is right — notes about one device should not
+    bleed into work on another. But scoping it to ONLY that project hides
+    everything learned before the project existed, which is how an agent ends
+    up asking you something you taught it last week. So `general` rides along
+    unless the caller asks for strict isolation.
+    """
+    if not project:
+        return "", []
+    if not shared or project == SHARED_PROJECT:
+        return "AND project = ? ", [project]
+    return "AND project IN (?,?) ", [project, SHARED_PROJECT]
+
+
+def recall(query="", project=None, top_k=8, kind=None, shared=True):
     init()
     with _conn() as c:
         if query:
@@ -178,9 +197,9 @@ def recall(query="", project=None, top_k=8, kind=None):
                        "ON facts.id = facts_fts.rowid WHERE facts_fts MATCH ? "
                        "AND COALESCE(facts.deleted,0)=0 ")
                 params = [match]
-                if project:
-                    sql += "AND facts.project = ? "
-                    params.append(project)
+                clause, extra = _project_clause(project, shared)
+                sql += clause.replace("project", "facts.project", 1)
+                params += extra
                 if kind:
                     sql += "AND facts.kind = ? "
                     params.append(kind)
@@ -191,9 +210,9 @@ def recall(query="", project=None, top_k=8, kind=None):
                 except sqlite3.OperationalError:
                     pass
         sql, params = "SELECT * FROM facts WHERE COALESCE(deleted,0)=0 ", []
-        if project:
-            sql += "AND project = ? "
-            params.append(project)
+        clause, extra = _project_clause(project, shared)
+        sql += clause
+        params += extra
         if kind:
             sql += "AND kind = ? "
             params.append(kind)
@@ -288,9 +307,15 @@ def predict(raw, project=None):
             "detail": f"approved {a}x, denied {d}x"}
 
 
-def preference_block(project=None, top_k=12) -> str:
-    """Learned preferences rendered for the system prompt."""
-    prefs = recall("", project=project, top_k=top_k, kind="preference")
+def preference_block(project=None, top_k=12, shared=True) -> str:
+    """Learned preferences rendered for the system prompt.
+
+    Takes `shared` like recall does — strict project isolation has to cover
+    preferences too, or the one channel that actually steers behaviour leaks
+    across projects while the facts stay separated.
+    """
+    prefs = recall("", project=project, top_k=top_k, kind="preference",
+                   shared=shared)
     stats = choice_stats(project=project)
     lines = []
     if prefs:
@@ -322,8 +347,8 @@ def end_session(sid, summary):
                   (time.time(), summary, sid))
 
 
-def context_block(query, project=None, top_k=8) -> str:
-    hits = recall(query, project=project, top_k=top_k)
+def context_block(query, project=None, top_k=8, shared=True) -> str:
+    hits = recall(query, project=project, top_k=top_k, shared=shared)
     if not hits:
         return ""
     lines = ["[Recalled memory from past sessions]"]

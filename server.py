@@ -28,7 +28,9 @@ def _json(payload: dict):
     return JSONResponse(payload)
 
 
-PUBLIC_PATHS = {"/favicon.ico", "/icon.svg"}
+# The stylesheet and theme images are public like the favicon: a page whose
+# CSS 401s is an unreadable page, and none of it is secret.
+PUBLIC_PATHS = {"/favicon.ico", "/icon.svg", "/theme.css"}
 
 # Parity with the embedded stdlib server (`httpd.Handler.MAX_BODY`): a request
 # body is bounded so one client cannot exhaust memory on the LAN server either.
@@ -40,7 +42,8 @@ async def auth_gate(request: Request, call_next):
     """Token check on every HTTP route. Accepts ?token=, X-Omerta-Token
     header, or the cookie set after a successful query-param handshake."""
     path = request.url.path
-    if path in PUBLIC_PATHS or path.startswith("/assets"):
+    if (path in PUBLIC_PATHS or path.startswith("/assets")
+            or path.startswith("/theme/asset/")):
         return await call_next(request)
     try:
         declared = int(request.headers.get("content-length") or 0)
@@ -244,6 +247,141 @@ def chats_open(id: str = ""):
 @app.post("/api/chats/new")
 def chats_new(payload: dict):
     return _json(api.chat_new(payload))
+
+
+@app.get("/theme.css")
+def theme_css():
+    from fastapi.responses import Response
+    return Response(api.theme_css(), media_type="text/css")
+
+
+@app.get("/theme/asset/{name}")
+def theme_asset(name: str):
+    from core import theme as _t
+    p = _t.image_path(name)
+    if not p:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(p)
+
+
+@app.get("/api/theme")
+def theme_list():
+    return api.theme_list()
+
+
+@app.post("/api/theme/use")
+def theme_use(payload: dict):
+    return _json(api.theme_use(payload))
+
+
+@app.post("/api/theme/save")
+def theme_save(payload: dict):
+    return _json(api.theme_save(payload))
+
+
+@app.post("/api/theme/delete")
+def theme_delete(payload: dict):
+    return _json(api.theme_delete(payload))
+
+
+@app.post("/api/theme/image")
+def theme_image(payload: dict):
+    return _json(api.theme_image(payload))
+
+
+@app.post("/api/theme/clear")
+def theme_clear(payload: dict):
+    return _json(api.theme_clear_image(payload))
+
+
+@app.get("/api/scratch")
+def scratch_list():
+    return api.scratch_list()
+
+
+@app.post("/api/scratch/new")
+def scratch_new(payload: dict):
+    return _json(api.scratch_new(payload))
+
+
+@app.post("/api/scratch/run")
+def scratch_run(payload: dict):
+    return _json(api.scratch_run(payload))
+
+
+@app.post("/api/scratch/changes")
+def scratch_changes(payload: dict):
+    return _json(api.scratch_changes(payload))
+
+
+@app.post("/api/scratch/diff")
+def scratch_diff(payload: dict):
+    return _json(api.scratch_diff(payload))
+
+
+@app.post("/api/scratch/propose")
+def scratch_propose(payload: dict):
+    return _json(api.scratch_propose(payload))
+
+
+@app.post("/api/scratch/accept")
+def scratch_accept(payload: dict):
+    return _json(api.scratch_accept(payload))
+
+
+@app.post("/api/scratch/discard")
+def scratch_discard(payload: dict):
+    return _json(api.scratch_discard(payload))
+
+
+@app.get("/api/ws/backups")
+def ws_backups():
+    return api.ws_backups()
+
+
+@app.post("/api/ws/tree")
+def ws_tree(payload: dict):
+    return _json(api.ws_tree(payload))
+
+
+@app.post("/api/ws/read")
+def ws_read(payload: dict):
+    return _json(api.ws_read(payload))
+
+
+@app.post("/api/ws/propose")
+def ws_propose(payload: dict):
+    return _json(api.ws_propose(payload))
+
+
+@app.post("/api/ws/commit")
+def ws_commit(payload: dict):
+    return _json(api.ws_commit(payload))
+
+
+@app.post("/api/ws/backup")
+def ws_backup(payload: dict):
+    return _json(api.ws_backup_read(payload))
+
+
+@app.post("/api/ws/reindex")
+def ws_reindex(payload: dict):
+    return _json(api.ws_reindex(payload))
+
+
+@app.post("/api/ws/search")
+def ws_search(payload: dict):
+    return _json(api.ws_search(payload))
+
+
+@app.post("/api/chats/export")
+def chats_export(payload: dict):
+    return _json(api.chat_action({**(payload or {}), "action": "export"}))
+
+
+@app.post("/api/chats/import")
+def chats_import(payload: dict):
+    return _json(api.chat_action({**(payload or {}), "action": "import"}))
 
 
 @app.post("/api/chats/action")

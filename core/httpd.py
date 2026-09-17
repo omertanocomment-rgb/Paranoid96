@@ -13,6 +13,7 @@ There is no websocket and nothing to install or configure: chat is a normal
 backend (see `omerta_android.py`) and works as a drop-in `omerta serve`
 fallback on any machine where FastAPI isn't installed.
 """
+import os
 import json
 import threading
 from http.cookies import SimpleCookie
@@ -111,6 +112,18 @@ class Handler(BaseHTTPRequestHandler):
         ctype = _CTYPES.get(path.suffix, "application/octet-stream")
         self._send(path.read_bytes(), ctype)
 
+    def _serve_theme_asset(self, name):
+        from . import theme as _t
+        p = _t.image_path(name)
+        if not p:
+            return self._send(b"not found", "text/plain", 404)
+        ext = os.path.splitext(p)[1].lower()
+        ctype = {".png": "image/png", ".jpg": "image/jpeg",
+                 ".gif": "image/gif", ".webp": "image/webp"}.get(ext,
+                                                                 "image/png")
+        with open(p, "rb") as f:
+            self._send(f.read(), ctype)
+
     # -- GET ------------------------------------------------------------------
     def do_GET(self):
         path = urlparse(self.path).path
@@ -122,6 +135,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_asset("icon.svg")
         if path.startswith("/assets/"):
             return self._serve_asset(path[len("/assets/"):])
+        if path == "/theme.css":
+            return self._send(api.theme_css().encode(), "text/css; charset=utf-8")
+        if path.startswith("/theme/asset/"):
+            return self._serve_theme_asset(path[len("/theme/asset/"):])
 
         if not self._authorized():
             return self._unauthorized()
@@ -170,6 +187,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.chat_list(
                 (q.get("project") or [None])[0],
                 archived=(q.get("archived") or ["0"])[0] in ("1", "true")))
+        if path == "/api/theme":
+            return self._json(api.theme_list())
+        if path == "/api/scratch":
+            return self._json(api.scratch_list())
+        if path == "/api/ws/backups":
+            return self._json(api.ws_backups())
         if path == "/api/chats/projects":
             return self._json(api.chat_projects())
         if path == "/api/chats/open":
@@ -227,6 +250,41 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.learn_forget(self._body()))
         if path == "/api/chats/new":
             return self._json(api.chat_new(self._body()))
+        if path.startswith("/api/theme/"):
+            verbs = {"use": api.theme_use, "save": api.theme_save,
+                     "delete": api.theme_delete, "image": api.theme_image,
+                     "clear": api.theme_clear_image}
+            fn = verbs.get(path[len("/api/theme/"):])
+            if fn:
+                return self._json(fn(self._body()))
+        if path.startswith("/api/scratch/"):
+            verbs = {"new": api.scratch_new, "run": api.scratch_run,
+                     "changes": api.scratch_changes, "diff": api.scratch_diff,
+                     "propose": api.scratch_propose, "accept": api.scratch_accept,
+                     "discard": api.scratch_discard}
+            fn = verbs.get(path[len("/api/scratch/"):])
+            if fn:
+                return self._json(fn(self._body()))
+        if path == "/api/ws/tree":
+            return self._json(api.ws_tree(self._body()))
+        if path == "/api/ws/read":
+            return self._json(api.ws_read(self._body()))
+        if path == "/api/ws/propose":
+            return self._json(api.ws_propose(self._body()))
+        if path == "/api/ws/commit":
+            return self._json(api.ws_commit(self._body()))
+        if path == "/api/ws/backup":
+            return self._json(api.ws_backup_read(self._body()))
+        if path == "/api/ws/reindex":
+            return self._json(api.ws_reindex(self._body()))
+        if path == "/api/ws/search":
+            return self._json(api.ws_search(self._body()))
+        if path == "/api/chats/export":
+            return self._json(api.chat_action(
+                {**(self._body() or {}), "action": "export"}))
+        if path == "/api/chats/import":
+            return self._json(api.chat_action(
+                {**(self._body() or {}), "action": "import"}))
         if path == "/api/chats/action":
             return self._json(api.chat_action(self._body()))
         # A terminal is a shell on this device. It is local-only on every

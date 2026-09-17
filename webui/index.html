@@ -14,39 +14,63 @@
   font-display:swap;font-weight:400}
 
 :root{
+  /* Fallbacks only — /theme.css overrides all of these. Kept so the page is
+     still legible if the stylesheet fails to load. */
   --bg:#0a0506; --panel:#140b0d; --panel2:#1c1013; --border:#3a1c21;
   --red:#c81e28; --red-bright:#ff2d3c; --red-dim:#7a1219; --ember:#ff5a4a;
   --text:#e8dcd8; --muted:#8a7470; --ok:#4dff88; --warn:#ffb020;
-  --shadow:0 0 22px rgba(200,30,40,.22);
+  --danger:#ff2d3c; --glow:.22;
+  --display-font:'Unifraktur',ui-serif,Georgia,serif;
+  --ui-font:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --mono-font:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+:root{
+  --shadow:0 0 22px rgba(0,0,0,0);
+  --rule:linear-gradient(90deg,transparent,var(--red-dim),var(--red),var(--red-dim),transparent);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100dvh;overflow:hidden}
-body{background:var(--bg);color:var(--text);
-  font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+body{background:var(--bg);color:var(--text);font-family:var(--ui-font);
   display:flex;flex-direction:column}
+/* A faint pinstripe, the way a good suit has one — you should notice it only
+   if you look. Pure CSS so it costs nothing and themes inherit it. */
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(ellipse at 50% -10%,rgba(200,30,40,.16),transparent 62%)}
+  background:
+    repeating-linear-gradient(90deg,
+      transparent 0 7px,
+      color-mix(in srgb, var(--text) 4%, transparent) 7px 8px),
+    radial-gradient(ellipse at 50% -12%,
+      color-mix(in srgb, var(--red) 28%, transparent), transparent 64%);
+  opacity:.85}
 
 /* ── banner ─────────────────────────────────────────────────────────── */
 /* Two rows: the wordmark never competes with the pills for width, and the
    slogan gets the full line so it is never truncated. It is the motto; a
    motto with an ellipsis in it is worse than no motto. */
-header{position:relative;z-index:1;padding:7px 12px 6px;
-  background:linear-gradient(180deg,#180c0f,#0e0709);
-  border-bottom:1px solid var(--border);padding-top:max(7px,env(safe-area-inset-top))}
+header{position:relative;z-index:1;padding:7px 12px 8px;
+  background:linear-gradient(180deg,
+    color-mix(in srgb,var(--panel2) 80%,var(--bg)), var(--bg));
+  border-bottom:1px solid var(--border);
+  padding-top:max(7px,env(safe-area-inset-top))}
+/* the thin accent rule under the banner — a bit of deco trim */
+header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:var(--rule);opacity:.85}
 .hrow{display:flex;align-items:center;gap:10px}
 .crest{width:28px;height:28px;flex:none}
 /* The wordmark owns the first row outright. Sharing it with the status pills
    meant a long provider name ("mock · offline") pushed the name into an
    ellipsis — a truncated logo looks broken, so the pills move down instead. */
-.wordmark{font-family:'Unifraktur',ui-serif,Georgia,serif;
+.wordmark{font-family:var(--display-font);
   font-size:clamp(1.3rem,7vw,1.8rem);color:var(--red-bright);letter-spacing:.02em;
-  text-shadow:0 0 12px rgba(255,45,60,.5),0 1px 0 #000;white-space:nowrap;
+  text-shadow:0 0 14px color-mix(in srgb,var(--red-bright) 55%,transparent),
+              0 1px 0 rgba(0,0,0,.9);white-space:nowrap;
   line-height:1.15;flex:none}
+.wordmark img{height:1.55em;width:auto;display:block;
+  filter:drop-shadow(0 0 10px color-mix(in srgb,var(--red) 45%,transparent))}
 .srow{display:flex;align-items:center;gap:8px;margin-top:4px}
 .slogan{font-size:clamp(.47rem,2.2vw,.58rem);color:var(--muted);
-  letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+  letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;font-style:italic}
 .spacer{flex:1}
 .pill{font-size:.63rem;padding:3px 7px;border:1px solid var(--border);border-radius:99px;
   color:var(--muted);white-space:nowrap;cursor:pointer;background:none;font-family:inherit}
@@ -60,18 +84,28 @@ header{position:relative;z-index:1;padding:7px 12px 6px;
 nav{position:relative;z-index:1;display:flex;background:var(--panel);
   border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
-nav button{flex:1;min-width:76px;padding:9px 6px;background:none;border:none;
+/* six tabs have to fit a 412px phone without clipping the last one, so they
+   share the width rather than each claiming a minimum. */
+nav button{flex:1 1 0;min-width:0;padding:9px 2px;background:none;border:none;
   border-bottom:2px solid transparent;color:var(--muted);font-family:inherit;
-  font-size:.68rem;letter-spacing:.09em;cursor:pointer;text-transform:uppercase}
-nav button.on{color:var(--red-bright);border-bottom-color:var(--red)}
+  font-size:clamp(.55rem,2.5vw,.68rem);letter-spacing:.06em;cursor:pointer;
+  text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:clip}
+nav button.on{color:var(--red-bright);border-bottom-color:var(--red);
+  text-shadow:0 0 9px color-mix(in srgb,var(--red-bright) 45%,transparent)}
 
 main{position:relative;z-index:1;flex:1;overflow:hidden;display:flex}
 .view{display:none;flex:1;flex-direction:column;overflow:hidden}
 .view.on{display:flex}
 
 /* ── chat ───────────────────────────────────────────────────────────── */
-#log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:11px;
-  -webkit-overflow-scrolling:touch}
+#log{position:relative;flex:1;overflow-y:auto;padding:14px;display:flex;
+  flex-direction:column;gap:11px;-webkit-overflow-scrolling:touch}
+/* the empty conversation gets a watermark rather than a void */
+#log::before{content:'OMERTA';position:absolute;left:0;right:0;top:42%;
+  text-align:center;font-family:var(--display-font);
+  font-size:clamp(2.6rem,17vw,4.6rem);color:var(--text);opacity:.035;
+  pointer-events:none;letter-spacing:.04em;z-index:0}
+#log>*{position:relative;z-index:1}
 .msg{max-width:93%;padding:9px 12px;border-radius:7px;line-height:1.52;font-size:.86rem;
   white-space:pre-wrap;word-break:break-word}
 .you{align-self:flex-end;background:#251013;border:1px solid var(--red-dim)}
@@ -80,8 +114,13 @@ main{position:relative;z-index:1;flex:1;overflow:hidden;display:flex}
 .msg code{background:#000;padding:1px 5px;border-radius:3px;color:var(--ember);font-size:.85em}
 .msg pre{background:#000;padding:10px;border-radius:6px;overflow-x:auto;border:1px solid var(--border)}
 .msg pre code{background:none;padding:0;color:var(--text)}
-.approve{align-self:stretch;background:var(--panel2);border:1px solid var(--red);
-  border-radius:8px;padding:12px;box-shadow:var(--shadow)}
+.approve{position:relative;align-self:stretch;background:var(--panel2);
+  border:1px solid var(--red);border-radius:8px;padding:13px;
+  box-shadow:0 0 26px color-mix(in srgb,var(--red) calc(var(--glow)*100%),transparent)}
+.approve::before,.approve::after{content:'';position:absolute;width:11px;height:11px;
+  border:1px solid var(--red-bright);opacity:.75}
+.approve::before{top:4px;left:4px;border-right:none;border-bottom:none}
+.approve::after{bottom:4px;right:4px;border-left:none;border-top:none}
 .approve.danger{border-color:var(--red-bright);background:#2a0a0c}
 .approve .hdr{font-size:.68rem;letter-spacing:.1em;color:var(--red-bright);
   margin-bottom:8px;font-weight:700}
@@ -110,7 +149,8 @@ main{position:relative;z-index:1;flex:1;overflow:hidden;display:flex}
 #queueStrip.on{display:flex}
 
 /* ── terminal ───────────────────────────────────────────────────────── */
-#termOut{flex:1;overflow-y:auto;background:#000;color:#ddd;padding:10px;margin:0;
+#termOut{flex:1;overflow-y:auto;background:#000;color:var(--text);padding:10px;
+  margin:0;font-family:var(--mono-font);
   font-size:var(--termsize,12px);line-height:1.38;white-space:pre-wrap;word-break:break-all}
 #termBar{display:flex;gap:6px;padding:8px;background:var(--panel);
   border-top:1px solid var(--border);padding-bottom:max(8px,env(safe-area-inset-bottom))}
@@ -124,10 +164,46 @@ main{position:relative;z-index:1;flex:1;overflow:hidden;display:flex}
   border-radius:5px;padding:5px 9px;font-family:inherit;font-size:.68rem;cursor:pointer;flex:none}
 .keyrow button:active{border-color:var(--red);color:var(--red-bright)}
 
+/* ── code / editor ──────────────────────────────────────────────────── */
+.subtabs{display:flex;gap:5px;padding:6px 9px;background:var(--panel);
+  border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.subtabs::-webkit-scrollbar{display:none}
+.subtabs button{flex:none;background:var(--bg);border:1px solid var(--border);
+  color:var(--muted);border-radius:5px;padding:5px 10px;font-family:inherit;
+  font-size:.66rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em}
+.subtabs button.on{border-color:var(--red);color:var(--red-bright)}
+.pane{display:none;flex:1;flex-direction:column;overflow:hidden}
+.pane.on{display:flex}
+.crumb{font-size:.64rem;color:var(--muted);padding:6px 10px;
+  border-bottom:1px solid var(--border);word-break:break-all;background:var(--panel)}
+#editArea{flex:1;width:100%;background:#000;color:var(--text);border:none;
+  padding:10px;font-family:inherit;font-size:.78rem;line-height:1.45;resize:none;
+  white-space:pre;overflow:auto}
+#editArea:focus{outline:none}
+.editbar{display:flex;gap:6px;padding:7px;background:var(--panel);
+  border-top:1px solid var(--border);align-items:center;
+  padding-bottom:max(7px,env(safe-area-inset-bottom))}
+.editbar .name{flex:1;font-size:.66rem;color:var(--muted);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+pre.diff{background:#000;border:1px solid var(--border);border-radius:6px;
+  padding:9px;font-size:.68rem;line-height:1.4;overflow-x:auto;margin:8px 0;
+  white-space:pre}
+pre.diff .add{color:var(--ok)} pre.diff .del{color:var(--red-bright)}
+pre.diff .hunk{color:var(--muted)}
+.chk{display:flex;align-items:center;gap:7px;font-size:.72rem;padding:6px 0;
+  border-bottom:1px solid var(--border)}
+.chk input{width:auto;flex:none}
+.chk .k{font-size:.6rem;padding:1px 5px;border-radius:3px;border:1px solid var(--border);
+  color:var(--muted);flex:none}
+.chk .k.added{color:var(--ok);border-color:var(--ok)}
+.chk .k.removed{color:var(--red-bright);border-color:var(--red-dim)}
+
 /* ── lists / panels ─────────────────────────────────────────────────── */
 .scroll{flex:1;overflow-y:auto;padding:12px}
-h3{color:var(--red-bright);font-size:.72rem;letter-spacing:.11em;margin:16px 0 7px;
-  text-transform:uppercase}
+h3{color:var(--red-bright);font-size:.7rem;letter-spacing:.17em;margin:18px 0 8px;
+  text-transform:uppercase;padding-bottom:5px;position:relative}
+h3::after{content:'';position:absolute;left:0;bottom:0;width:38px;height:1px;
+  background:var(--rule)}
 h3:first-child{margin-top:0}
 .row{font-size:.75rem;padding:8px 0;border-bottom:1px solid var(--border);
   display:flex;justify-content:space-between;gap:9px;align-items:center}
@@ -155,12 +231,17 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
 .noteline{font-size:.66rem;color:var(--muted);margin-top:5px;line-height:1.5}
 .empty{color:var(--muted);font-size:.74rem;padding:18px 4px;text-align:center}
 </style>
+<!-- Loaded AFTER the block above on purpose: those :root values are only
+     fallbacks for when this file is missing, so the theme has to come second
+     to win. Same specificity, later declaration. -->
+<link rel="stylesheet" href="/theme.css">
 </head>
 <body>
 
 <header>
   <div class="hrow">
-  <svg class="crest" viewBox="0 0 64 64" aria-hidden="true">
+  <img class="crest" id="crestImg" alt="" style="display:none">
+  <svg class="crest" id="crestSvg" viewBox="0 0 64 64" aria-hidden="true">
     <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ff2d3c"/><stop offset="1" stop-color="#7a1219"/>
     </linearGradient></defs>
@@ -170,10 +251,10 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
           fill="none" stroke="url(#g)" stroke-width="2"/>
     <circle cx="32" cy="26" r="3.4" fill="#ff2d3c"/>
   </svg>
-  <span class="wordmark">OMERTA AI</span>
+  <span class="wordmark" id="wordmark">OMERTA AI</span>
   </div>
   <div class="srow">
-    <span class="slogan">Silence Is The Only Unbreakable Code</span>
+    <span class="slogan" id="sloganText">Silence Is The Only Unbreakable Code</span>
     <button class="pill" id="policyPill" onclick="go('settings')">ASKS FIRST</button>
     <button class="pill" id="brainPill" onclick="go('settings')">—</button>
   </div>
@@ -182,6 +263,7 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
 <nav>
   <button class="on" data-view="chat"    onclick="go('chat')">Chat</button>
   <button           data-view="term"     onclick="go('term')">Terminal</button>
+  <button           data-view="code"     onclick="go('code')">Code</button>
   <button           data-view="chats"    onclick="go('chats')">Chats</button>
   <button           data-view="learn"    onclick="go('learn')">Learn</button>
   <button           data-view="settings" onclick="go('settings')">Settings</button>
@@ -193,11 +275,14 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
     <div style="display:flex;gap:5px;padding:6px 9px;background:var(--panel);
                 border-bottom:1px solid var(--border);overflow-x:auto" id="modeRow"></div>
     <div id="log"></div>
-    <div id="queueStrip"><span id="queueText"></span>
-      <button class="mini" onclick="runQueue()">run next</button>
+    <div id="queueStrip"><span id="queueText" style="flex:1;overflow:hidden;
+        text-overflow:ellipsis;white-space:nowrap"></span>
+      <button class="mini" id="queueToggle" onclick="toggleQueue()">pause</button>
       <button class="mini" onclick="clearQueue()">clear</button></div>
     <div id="bar">
       <textarea id="msg" rows="1" placeholder="what do you want built?"></textarea>
+      <button class="iconbtn" title="queue this instead of sending now"
+              onclick="queueCurrent()">+Q</button>
       <button onclick="send()">▶</button>
     </div>
   </section>
@@ -223,6 +308,86 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
     </div>
   </section>
 
+  <!-- CODE: editor / search / sandbox / archive -->
+  <section class="view" id="v-code">
+    <div class="subtabs">
+      <button class="on" data-pane="files"   onclick="codePane('files')">Files</button>
+      <button          data-pane="editor"  onclick="codePane('editor')">Editor</button>
+      <button          data-pane="search"  onclick="codePane('search')">Search</button>
+      <button          data-pane="sandbox" onclick="codePane('sandbox')">Sandbox</button>
+      <button          data-pane="archive" onclick="codePane('archive')">Archive</button>
+    </div>
+
+    <div class="pane on" id="p-files">
+      <div class="crumb" id="crumb">—</div>
+      <div class="scroll" id="fileList"></div>
+    </div>
+
+    <div class="pane" id="p-editor">
+      <div class="crumb" id="editPath">no file open</div>
+      <textarea id="editArea" spellcheck="false" autocomplete="off"
+                autocapitalize="off" autocorrect="off"
+                placeholder="open a file from Files"></textarea>
+      <div class="editbar">
+        <span class="name" id="editState">—</span>
+        <button class="mini" onclick="reloadFile()">reload</button>
+        <button class="mini" onclick="saveFile()">save…</button>
+      </div>
+    </div>
+
+    <div class="pane" id="p-search">
+      <div class="scroll">
+        <label class="fld"><span>search the code index</span>
+          <div class="grid2"><input id="searchQ" placeholder="text or symbol name">
+            <button class="mini" onclick="codeSearch(false)">find</button></div></label>
+        <div class="grid2" style="margin-bottom:8px">
+          <button class="mini" onclick="codeSearch(true)">as symbol</button>
+          <button class="mini" onclick="reindex()">re-index</button>
+        </div>
+        <div id="searchResults"></div>
+      </div>
+    </div>
+
+    <div class="pane" id="p-sandbox">
+      <div class="scroll">
+        <h3>Scratch sandboxes</h3>
+        <div class="tiny">A working copy that builds and runs for real. Your
+          project does not change until you accept — take everything, take some
+          files, or throw it away.</div>
+        <label class="fld"><span>sandbox a directory</span>
+          <div class="grid2"><input id="sbSource" placeholder="/path/to/project">
+            <button class="mini" onclick="sbCreate()">create</button></div></label>
+        <div id="sbList"></div>
+
+        <div id="sbDetail" style="display:none">
+          <h3>Sandbox <span id="sbName" style="text-transform:none;color:var(--text)"></span></h3>
+          <label class="fld"><span>run inside the sandbox (goes through the approval gate)</span>
+            <div class="grid2"><input id="sbCmd" placeholder="npm test">
+              <button class="mini" onclick="sbRun()">run</button></div></label>
+          <pre class="diff" id="sbOut" style="display:none"></pre>
+          <div class="grid2" style="margin:8px 0">
+            <button class="mini" onclick="sbChanges()">refresh changes</button>
+            <button class="mini" onclick="sbAccept(true)">accept selected…</button>
+            <button class="mini" onclick="sbAccept(false)">accept all…</button>
+            <button class="mini danger" onclick="sbDiscard()">discard</button>
+          </div>
+          <div id="sbChanges"></div>
+          <pre class="diff" id="sbDiff" style="display:none"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane" id="p-archive">
+      <div class="scroll">
+        <h3>Archived code</h3>
+        <div class="tiny">Every edit takes a snapshot first. This is that
+          archive — open one to see what the file used to be.</div>
+        <div id="backupList"></div>
+        <pre class="diff" id="backupView" style="display:none"></pre>
+      </div>
+    </div>
+  </section>
+
   <!-- CHATS / PROJECTS -->
   <section class="view" id="v-chats">
     <div class="scroll">
@@ -238,7 +403,10 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
         <button class="mini" onclick="newChat(false)">+ new chat</button>
         <button class="mini" onclick="newChat(true)">+ private chat</button>
         <button class="mini" id="archToggle" onclick="toggleArchived()">show archived</button>
+        <button class="mini" onclick="document.getElementById('importFile').click()">import</button>
       </div>
+      <input type="file" id="importFile" accept=".json,application/json"
+             style="display:none" onchange="importChat()">
       <div id="chatList"></div>
     </div>
   </section>
@@ -250,6 +418,11 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
       <div class="tiny">Drop in notes, source, datasheets, logs. It is chunked
         into memory and recalled like anything else it knows. Everything stays
         on this device.</div>
+      <label class="fld"><span>file it under</span>
+        <select id="learnProject" onchange="setLearnProject()"></select></label>
+      <div class="tiny">Material filed under a project is recalled when you work
+        on that project. <b>general</b> is the shared pool — recalled everywhere,
+        unless you turn on strict project recall in Settings.</div>
       <label class="fld"><span>upload files</span>
         <input type="file" id="learnFile" multiple onchange="uploadLearn()"></label>
       <label class="fld"><span>or a path on this device (file or folder)</span>
@@ -258,6 +431,9 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
       <div class="noteline" id="learnMsg"></div>
 
       <h3>Learned documents</h3>
+      <div class="grid2" style="margin-bottom:8px">
+        <select id="docFilter" onchange="loadDocs()"></select>
+      </div>
       <div id="docList"></div>
 
       <h3>Learned behaviour</h3>
@@ -304,6 +480,44 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
       <h3>Settings</h3>
       <div id="settingsList"></div>
 
+      <h3>Appearance</h3>
+      <div class="tiny">Colours, fonts, wordmark and images. Pick a preset, or
+        build your own — custom themes live on this device and survive an
+        update.</div>
+      <label class="fld"><span>theme</span>
+        <select id="themeSel" onchange="useTheme()"></select></label>
+      <div class="grid2" style="margin-bottom:8px">
+        <button class="mini" onclick="toggleThemeEditor()" id="themeEditBtn">customise…</button>
+        <button class="mini danger" onclick="deleteTheme()">delete custom</button>
+      </div>
+
+      <div id="themeEditor" style="display:none">
+        <label class="fld"><span>theme name</span>
+          <input id="thName" placeholder="my theme"></label>
+        <label class="fld"><span>wordmark text</span>
+          <input id="thTitle" placeholder="OMERTA AI"></label>
+        <label class="fld"><span>slogan</span>
+          <input id="thSlogan" placeholder="Silence Is The Only Unbreakable Code"></label>
+        <label class="fld"><span>banner font</span>
+          <input id="thDisplayFont" placeholder="Unifraktur"></label>
+        <label class="fld"><span>interface font</span>
+          <input id="thUiFont" placeholder="'JetBrains Mono', monospace"></label>
+        <label class="fld"><span>terminal font</span>
+          <input id="thMonoFont" placeholder="'JetBrains Mono', monospace"></label>
+
+        <h3>Colours</h3>
+        <div id="thColors"></div>
+
+        <h3>Images</h3>
+        <div class="tiny">PNG, JPEG, GIF or WebP. SVG is not accepted — it can
+          carry script, and these render inside the app.</div>
+        <div id="thImages"></div>
+
+        <button class="mini" style="width:100%;margin-top:10px"
+                onclick="saveTheme()">save &amp; apply</button>
+        <div class="noteline" id="thMsg"></div>
+      </div>
+
       <h3>System</h3>
       <div id="sysInfo"></div>
       <div class="grid2" style="margin-top:8px">
@@ -339,9 +553,10 @@ function go(v){
   document.querySelectorAll('nav button').forEach(b=>
     b.classList.toggle('on', b.dataset.view===v));
   if(v==='term') termInit();
+  if(v==='code') codeInit();
   if(v==='chats') loadChats();
-  if(v==='learn'){loadDocs();loadBehaviour();}
-  if(v==='settings'){loadStatus();loadSettings();loadSecrets();}
+  if(v==='learn'){loadLearnProjects().then(loadDocs);loadBehaviour();}
+  if(v==='settings'){loadStatus();loadSettings();loadSecrets();loadTheme();}
 }
 
 /* ───────── chat ───────── */
@@ -398,9 +613,18 @@ function addApproval(p){
 
 async function chat(payload){
   payload.project=project;
-  try{ render(await post('/api/chat',payload)); }
+  try{
+    const data = await post('/api/chat',payload);
+    render(data);
+    /* The queue drains itself. It pauses on a pending approval, because the
+       whole point of the gate is that you look at each one — a queue that
+       kept going would answer the question for you. It also stops on an
+       error, rather than firing the rest of the queue into a broken backend. */
+    if(!data.pending && !queuePaused) scheduleQueue();
+  }
   catch(e){ document.querySelectorAll('.thinking').forEach(x=>x.remove());
-            addMsg('agent','⚠ backend unreachable — '+e.message); }
+            addMsg('agent','⚠ backend unreachable — '+e.message);
+            queuePaused = true; loadQueue(); }
 }
 const box=document.getElementById('msg');
 box.addEventListener('input',()=>{box.style.height='auto';
@@ -413,6 +637,10 @@ function send(){
   addMsg('you',t); thinking(); chat({kind:'message',text:t});
   if(chatId) post('/api/chats/action',
     {id:chatId,action:'append',message:{role:'user',content:t}});
+}
+function queueCurrent(){
+  const t=box.value.trim(); if(!t) return;
+  box.value=''; box.style.height='auto'; enqueue(t);
 }
 function resetChat(){log.innerHTML='';chat({kind:'reset'});go('chat');}
 
@@ -500,6 +728,207 @@ const termIn=document.getElementById('termIn');
 termIn.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();termEnter();}});
 function termEnter(){const v=termIn.value;termIn.value='';termSend(v);}
 
+/* ───────── code: files, editor, search, sandbox, archive ───────── */
+let cwd=null, openPath=null, openOriginal='', sbId=null;
+
+function codePane(n){
+  document.querySelectorAll('#v-code .pane').forEach(e=>e.classList.remove('on'));
+  document.getElementById('p-'+n).classList.add('on');
+  document.querySelectorAll('.subtabs button').forEach(b=>
+    b.classList.toggle('on', b.dataset.pane===n));
+  if(n==='sandbox') sbList();
+  if(n==='archive') loadBackups();
+}
+function codeInit(){ if(!cwd) browse(null); }
+
+function fmtSize(n){
+  return n>=1048576 ? (n/1048576).toFixed(1)+' MB'
+       : n>=1024    ? (n/1024).toFixed(1)+' KB' : n+' B';
+}
+async function browse(path){
+  const r=await post('/api/ws/tree',{path:path});
+  if(r.status!=='ok'){alert(r.reason);return;}
+  cwd=r.path;
+  document.getElementById('crumb').textContent=r.path||'workspace roots';
+  const up = r.parent
+    ? `<div class="row"><span class="grow" onclick="browse('${esc(r.parent)}')">📁 ..</span></div>`
+    : (r.path?`<div class="row"><span class="grow" onclick="browse(null)">📁 roots</span></div>`:'');
+  document.getElementById('fileList').innerHTML = up + (r.entries||[]).map(e=>
+    e.dir
+      ? `<div class="row"><span class="grow" onclick="browse('${esc(e.path)}')">📁 ${esc(e.name)}</span></div>`
+      : `<div class="row"><span class="grow" onclick="openFile('${esc(e.path)}')">${e.text?'📄':'▪'} ${esc(e.name)}<small>${fmtSize(e.size)}${e.text?'':' · binary'}</small></span></div>`
+  ).join('') || '<div class="empty">empty</div>';
+}
+async function openFile(path){
+  const r=await post('/api/ws/read',{path:path});
+  if(r.status!=='ok'){alert(r.reason);return;}
+  openPath=r.path; openOriginal=r.content||'';
+  document.getElementById('editPath').textContent=r.path;
+  const ta=document.getElementById('editArea');
+  ta.value=openOriginal; ta.readOnly=!!r.binary;
+  document.getElementById('editState').textContent=
+    r.binary?'binary — read only':`${r.lines||0} lines · ${fmtSize(r.size)}`;
+  codePane('editor');
+}
+function reloadFile(){ if(openPath) openFile(openPath); }
+async function saveFile(){
+  if(!openPath) return;
+  const content=document.getElementById('editArea').value;
+  /* A save is a side effect, so it uses the same gate as everything else:
+     propose first, write only after you approve it in the chat view. */
+  const pr=await post('/api/ws/propose',{path:openPath,content:content});
+  if(pr.status==='unchanged'){document.getElementById('editState').textContent='no changes';return;}
+  if(pr.status!=='awaiting_approval'){alert(pr.reason||'could not save');return;}
+  go('chat');
+  addMsg('agent','Editor wants to save a file.');
+  const d=document.createElement('div'); d.className='approve';
+  d.innerHTML=`<div class="hdr">APPROVAL NEEDED</div>
+    <div class="cmd">${esc(pr.action)}</div>
+    <pre class="diff">${colourDiff(pr.diff||'')}</pre>`;
+  const btns=document.createElement('div'); btns.className='btns';
+  const yes=document.createElement('button'); yes.className='b-yes'; yes.textContent='SAVE';
+  yes.onclick=async()=>{
+    d.remove();
+    const res=await post('/api/ws/commit',{path:openPath,content:content});
+    addMsg('agent', res.status==='ok'
+      ? `Saved ${res.path}${res.backup?` (backup: ${res.backup})`:''}`
+      : `Save failed: ${res.reason}`);
+    openOriginal=content;
+  };
+  const no=document.createElement('button'); no.className='b-no'; no.textContent='CANCEL';
+  no.onclick=()=>{d.remove(); addMsg('agent','Save cancelled. Nothing was written.');};
+  btns.append(yes,no); d.appendChild(btns);
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+}
+function colourDiff(t){
+  return esc(t).split('\n').map(l=>
+    l.startsWith('+')&&!l.startsWith('+++') ? `<span class="add">${l}</span>` :
+    l.startsWith('-')&&!l.startsWith('---') ? `<span class="del">${l}</span>` :
+    l.startsWith('@@') ? `<span class="hunk">${l}</span>` : l).join('\n');
+}
+async function codeSearch(sym){
+  const q=document.getElementById('searchQ').value.trim(); if(!q)return;
+  const r=await post('/api/ws/search',{q:q,symbol:sym});
+  const box=document.getElementById('searchResults');
+  if(r.status!=='ok'){box.innerHTML=`<div class="empty">${esc(r.reason)}</div>`;return;}
+  const rows=r.results||[];
+  /* the index stores paths relative to its root, the editor needs absolute */
+  const abs=f=> f.startsWith('/') ? f : ((r.root||'').replace(/\/$/,'')+'/'+f);
+  box.innerHTML=rows.length? rows.slice(0,80).map(x=>{
+    const f=x.file||x.path||''; const ln=x.line||x.lineno||'';
+    return `<div class="row"><span class="grow" onclick="openFile('${esc(abs(f))}')">${esc(f.split('/').pop())}
+      <small>${esc(f)}${ln?(' : '+ln):''}${x.name?(' · '+esc(x.name)):''}</small></span></div>`;
+  }).join('') : '<div class="empty">nothing found</div>';
+}
+async function reindex(){
+  const box=document.getElementById('searchResults');
+  box.innerHTML='<div class="empty">indexing…</div>';
+  const r=await post('/api/ws/reindex',{root:cwd||undefined});
+  box.innerHTML = r.status==='ok'
+    ? `<div class="empty">indexed ${r.files} files, ${r.symbols} symbols</div>`
+    : `<div class="empty">${esc(r.reason)}</div>`;
+}
+
+/* --- scratch sandboxes --- */
+async function sbList(){
+  const r=await get('/api/scratch');
+  document.getElementById('sbList').innerHTML=(r.sandboxes||[]).map(x=>`
+    <div class="row"><span class="grow" onclick="sbOpen('${x.id}','${esc(x.name)}')">${esc(x.name)}
+      <small>${x.files} files · ${esc(x.source)}${x.exists?'':' · MISSING'}</small></span>
+      <button class="mini" onclick="sbOpen('${x.id}','${esc(x.name)}')">open</button></div>`
+  ).join('')||'<div class="empty">no sandboxes yet</div>';
+  if(!document.getElementById('sbSource').value && cwd)
+    document.getElementById('sbSource').value=cwd;
+}
+async function sbCreate(){
+  const src=document.getElementById('sbSource').value.trim()||cwd;
+  if(!src){alert('pick a directory first (Files tab)');return;}
+  document.getElementById('sbList').innerHTML='<div class="empty">copying…</div>';
+  const r=await post('/api/scratch/new',{source:src});
+  if(r.status!=='ok'){alert(r.reason);return sbList();}
+  await sbList(); sbOpen(r.id,r.name);
+}
+function sbOpen(id,name){
+  sbId=id;
+  document.getElementById('sbDetail').style.display='block';
+  document.getElementById('sbName').textContent=name;
+  document.getElementById('sbOut').style.display='none';
+  document.getElementById('sbDiff').style.display='none';
+  sbChanges();
+}
+async function sbRun(){
+  const cmd=document.getElementById('sbCmd').value.trim(); if(!cmd||!sbId)return;
+  const out=document.getElementById('sbOut');
+  out.style.display='block'; out.textContent='running…';
+  const r=await post('/api/scratch/run',{id:sbId,cmd:cmd});
+  out.textContent = r.status==='awaiting_approval'
+    ? `${r.action||cmd}\n\nThis needs approval — approve it in Chat.`
+    : ((r.stdout||'')+(r.stderr||'')+(r.reason||'')||`(${r.status})`).slice(0,6000);
+  sbChanges();
+}
+async function sbChanges(){
+  if(!sbId)return;
+  const r=await post('/api/scratch/changes',{id:sbId});
+  const box=document.getElementById('sbChanges');
+  if(r.status!=='ok'){box.innerHTML=`<div class="empty">${esc(r.reason)}</div>`;return;}
+  if(r.clean){box.innerHTML='<div class="empty">identical to the project</div>';return;}
+  box.innerHTML=`<div class="tiny">+${r.added} added · ~${r.modified} modified · −${r.removed} removed</div>`+
+    r.changes.map(c=>`<label class="chk">
+      <input type="checkbox" class="sbfile" value="${esc(c.path)}" checked>
+      <span class="k ${c.kind}">${c.kind[0].toUpperCase()}</span>
+      <span class="grow" onclick="sbShowDiff('${esc(c.path)}')">${esc(c.path)}</span>
+    </label>`).join('');
+}
+async function sbShowDiff(path){
+  const r=await post('/api/scratch/diff',{id:sbId,path:path});
+  const el=document.getElementById('sbDiff');
+  el.style.display='block';
+  el.innerHTML=r.status==='ok'?colourDiff(r.diff||'(no textual diff)'):esc(r.reason);
+}
+async function sbAccept(selectedOnly){
+  if(!sbId)return;
+  const paths=selectedOnly
+    ? [...document.querySelectorAll('.sbfile:checked')].map(e=>e.value)
+    : null;
+  if(selectedOnly && !paths.length){alert('nothing selected');return;}
+  const pr=await post('/api/scratch/propose',
+    Object.assign({id:sbId}, paths?{paths:paths}:{}));
+  if(pr.status==='unchanged'){alert(pr.note);return;}
+  if(pr.status!=='awaiting_approval'){alert(pr.reason||'cannot accept');return;}
+  if(!confirm(`${pr.action}\n\n${pr.count} file(s)`+
+      (pr.deletes&&pr.deletes.length?`\nDELETES: ${pr.deletes.join(', ')}`:'')+
+      '\n\nEvery replaced file is backed up first. Proceed?')) return;
+  const r=await post('/api/scratch/accept',
+    Object.assign({id:sbId}, paths?{paths:paths}:{}));
+  alert(r.status==='ok'
+    ? `accepted ${r.written.length} file(s)`+
+      (r.deleted.length?`, deleted ${r.deleted.length}`:'')+
+      (r.failed.length?`, ${r.failed.length} failed`:'')
+    : (r.reason||'failed'));
+  sbChanges();
+}
+async function sbDiscard(){
+  if(!sbId)return;
+  if(!confirm('Throw this sandbox away? Your project is untouched either way.'))return;
+  await post('/api/scratch/discard',{id:sbId});
+  sbId=null; document.getElementById('sbDetail').style.display='none'; sbList();
+}
+
+/* --- archived code --- */
+async function loadBackups(){
+  const r=await get('/api/ws/backups');
+  document.getElementById('backupList').innerHTML=(r.backups||[]).map(b=>`
+    <div class="row"><span class="grow" onclick="showBackup('${esc(b.path)}')">${esc(b.origin)}
+      <small>${esc(b.stamp)} · ${fmtSize(b.size)}</small></span></div>`
+  ).join('')||'<div class="empty">no snapshots yet</div>';
+}
+async function showBackup(path){
+  const r=await post('/api/ws/backup',{path:path});
+  const el=document.getElementById('backupView');
+  el.style.display='block';
+  el.textContent=r.status==='ok'?r.content.slice(0,20000):(r.reason||'');
+}
+
 /* ───────── chats & projects ───────── */
 function toggleArchived(){showArchived=!showArchived;
   document.getElementById('archToggle').classList.toggle('on',showArchived);
@@ -526,6 +955,7 @@ async function loadChats(){
         <button class="mini" onclick="chatAct('${c.id}','branch')">branch</button>
         <button class="mini" onclick="renameChat('${c.id}')">rename</button>
         <button class="mini" onclick="chatAct('${c.id}','archive',{archived:${!c.archived}})">${c.archived?'unarchive':'archive'}</button>
+        <button class="mini" onclick="exportChat('${c.id}')">export</button>
         <button class="mini danger" onclick="delChat('${c.id}')">delete</button>
       </div>
     </div>`).join('')||'<div class="empty">no chats yet</div>';
@@ -564,24 +994,80 @@ async function delChat(id){
   if(!confirm('Delete this chat permanently? This cannot be undone.')) return;
   await chatAct(id,'delete'); if(chatId===id){chatId=null;log.innerHTML='';}
 }
+async function exportChat(id){
+  const r=await post('/api/chats/export',{id:id,branches:true});
+  if(r.status!=='ok'){alert(r.reason||'export failed');return;}
+  /* A private chat exports as ciphertext — the passcode never travels with
+     it, so it lands locked on the other device and opens with the same one. */
+  const blob=new Blob([JSON.stringify(r,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`omerta-chat-${id}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+async function importChat(){
+  const inp=document.getElementById('importFile');
+  const f=inp.files[0]; if(!f) return;
+  let bundle;
+  try{ bundle=JSON.parse(await f.text()); }
+  catch(e){ alert('that is not a chat export'); inp.value=''; return; }
+  const r=await post('/api/chats/import',{bundle:bundle});
+  inp.value='';
+  alert(r.status==='ok'
+    ? `imported ${r.added}, skipped ${r.skipped} already here`+
+      (r.renamed?`, ${r.renamed} renamed to avoid a clash`:'')
+    : (r.reason||'import failed'));
+  loadChats();
+}
 async function lockAll(){await post('/api/chats/action',{action:'lock_all'});
   alert('private chats locked');loadChats();}
 
 /* queued messages */
+let queuePaused=false, queueTimer=null;
+
 async function loadQueue(){
-  if(!chatId){document.getElementById('queueStrip').classList.remove('on');return;}
+  const strip=document.getElementById('queueStrip');
+  if(!chatId){strip.classList.remove('on');return 0;}
   const r=await post('/api/chats/action',{id:chatId,action:'queue'});
   const n=(r.queue||[]).length;
-  document.getElementById('queueStrip').classList.toggle('on',n>0);
-  document.getElementById('queueText').textContent=
-    n?`${n} queued: ${r.queue.map(q=>q.text).join(' · ').slice(0,60)}`:'';
+  strip.classList.toggle('on',n>0);
+  document.getElementById('queueText').textContent = n
+    ? `${n} queued${queuePaused?' · paused':' · running'}: `+
+      r.queue.map(q=>q.text).join(' · ').slice(0,52)
+    : '';
+  document.getElementById('queueToggle').textContent = queuePaused?'resume':'pause';
+  return n;
+}
+function scheduleQueue(){
+  clearTimeout(queueTimer);
+  queueTimer=setTimeout(runQueue, 400);   // let the last reply paint first
 }
 async function runQueue(){
+  if(!chatId || queuePaused) return;
   const r=await post('/api/chats/action',{id:chatId,action:'dequeue'});
   await loadQueue();
-  if(r.next){addMsg('you',r.next.text);thinking();chat({kind:'message',text:r.next.text});}
+  if(!r.next) return;
+  addMsg('you',r.next.text); thinking();
+  post('/api/chats/action',
+    {id:chatId,action:'append',message:{role:'user',content:r.next.text}});
+  chat({kind:'message',text:r.next.text});   // chat() re-arms on completion
 }
-async function clearQueue(){await post('/api/chats/action',{id:chatId,action:'queue_clear'});loadQueue();}
+function toggleQueue(){
+  queuePaused=!queuePaused;
+  loadQueue();
+  if(!queuePaused) scheduleQueue();
+}
+async function clearQueue(){
+  clearTimeout(queueTimer);
+  await post('/api/chats/action',{id:chatId,action:'queue_clear'});
+  loadQueue();
+}
+async function enqueue(text){
+  if(!chatId){addMsg('agent','open or create a chat first to queue messages');return;}
+  await post('/api/chats/action',{id:chatId,action:'enqueue',text:text});
+  loadQueue();
+}
 
 /* ───────── learning ───────── */
 async function uploadLearn(){
@@ -602,14 +1088,32 @@ async function uploadLearn(){
 async function learnPath(){
   const p=document.getElementById('learnPath').value.trim(); if(!p)return;
   const msg=document.getElementById('learnMsg'); msg.textContent='reading…';
-  const r=await post('/api/learn/path',{path:p,project:project});
+  const r=await post('/api/learn/path',{path:p,project:learnProject||project});
   msg.textContent=r.status==='ok'
     ? (r.count!==undefined?`learned ${r.count} file(s)`:`learned ${r.name}`)
     : (r.reason||r.error);
   loadDocs(); loadBehaviour();
 }
+let learnProject=null;
+function setLearnProject(){learnProject=document.getElementById('learnProject').value;}
+
+async function loadLearnProjects(){
+  const p=await get('/api/chats/projects');
+  const names=p.projects.map(x=>x.name);
+  if(!names.includes('general')) names.unshift('general');
+  if(!names.includes(project)) names.push(project);
+  learnProject=learnProject||project;
+  document.getElementById('learnProject').innerHTML=names.map(n=>
+    `<option value="${esc(n)}"${n===learnProject?' selected':''}>${esc(n)}</option>`).join('');
+  const f=document.getElementById('docFilter'); const cur=f.value;
+  f.innerHTML='<option value="">all projects</option>'+names.map(n=>
+    `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if(cur) f.value=cur;
+}
+
 async function loadDocs(){
-  const d=await get('/api/learn');
+  const filter=document.getElementById('docFilter').value;
+  const d=await get('/api/learn'+(filter?('?project='+encodeURIComponent(filter)):''));
   document.getElementById('docList').innerHTML=(d.documents||[]).map(x=>`
     <div class="row"><span class="grow">${esc(x.name)}
       <small>${x.chunks} chunk(s) · ${(x.bytes/1024).toFixed(1)} KB · ${esc(x.project)}${x.text?'':' · binary'}</small></span>
@@ -727,9 +1231,145 @@ async function saveSecret(){
   loadSecrets();
 }
 
+/* ───────── theme ───────── */
+let TH={};
+
+async function loadTheme(){
+  const r=await get('/api/theme'); TH=r;
+  const cur=r.current||{};
+  /* the wordmark is text unless a logo image is set, and the crest falls back
+     to the built-in mark — so a half-finished theme still renders */
+  const img=cur.images||{};
+  const wm=document.getElementById('wordmark');
+  if(img.logo){
+    wm.innerHTML=`<img src="/theme/asset/${esc(img.logo)}" alt="${esc(cur.title||'')}">`;
+  } else {
+    wm.textContent=cur.title||'OMERTA AI';
+  }
+  const ci=document.getElementById('crestImg'), cs=document.getElementById('crestSvg');
+  if(img.crest){ci.src='/theme/asset/'+img.crest;ci.style.display='block';cs.style.display='none';}
+  else {ci.style.display='none';cs.style.display='block';}
+  document.getElementById('sloganText').textContent=cur.slogan||'';
+  document.title=cur.title||'OMERTA AI';
+  if(img.thumbnail){
+    let l=document.querySelector("link[rel='icon']");
+    if(l) l.href='/theme/asset/'+img.thumbnail;
+  }
+  const sel=document.getElementById('themeSel');
+  if(sel) sel.innerHTML=(r.themes||[]).map(t=>
+    `<option value="${esc(t.name)}"${t.name===r.active?' selected':''}>${esc(t.label)}${t.builtin?'':' ·'}</option>`).join('');
+  return r;
+}
+/* re-fetch the stylesheet without reloading the page */
+function refreshThemeCss(){
+  const l=document.querySelector("link[href^='/theme.css']");
+  if(l) l.href='/theme.css?v='+Date.now();
+}
+async function useTheme(){
+  const name=document.getElementById('themeSel').value;
+  await post('/api/theme/use',{name:name});
+  refreshThemeCss(); await loadTheme(); fillThemeEditor();
+}
+function toggleThemeEditor(){
+  const e=document.getElementById('themeEditor');
+  const on=e.style.display==='none';
+  e.style.display=on?'block':'none';
+  document.getElementById('themeEditBtn').textContent=on?'hide editor':'customise…';
+  if(on) fillThemeEditor();
+}
+function fillThemeEditor(){
+  const cur=(TH.current)||{}; const c=cur.colors||{};
+  const nameIn=document.getElementById('thName');
+  if(!nameIn.value || cur.builtin===false) nameIn.value=cur.builtin?'':cur.name||'';
+  document.getElementById('thTitle').value=cur.title||'';
+  document.getElementById('thSlogan').value=cur.slogan||'';
+  document.getElementById('thDisplayFont').value=cur.display_font||'';
+  document.getElementById('thUiFont').value=cur.ui_font||'';
+  document.getElementById('thMonoFont').value=cur.mono_font||'';
+
+  document.getElementById('thColors').innerHTML=
+    Object.entries(TH.tokens||{}).map(([k,label])=>{
+      const v=c[k]||'';
+      if(k==='glow') return `<label class="fld"><span>${esc(label)}</span>
+        <input id="th_${k}" type="number" min="0" max="1" step="0.02" value="${esc(v)}"></label>`;
+      return `<label class="fld"><span>${esc(label)}</span>
+        <div class="grid2">
+          <input id="th_${k}" value="${esc(v)}" placeholder="#rrggbb">
+          <input id="thp_${k}" type="color" value="${/^#[0-9a-f]{6}$/i.test(v)?esc(v):'#000000'}"
+                 oninput="document.getElementById('th_${k}').value=this.value"
+                 style="max-width:54px;padding:2px">
+        </div></label>`;
+    }).join('');
+
+  const imgs=cur.images||{};
+  document.getElementById('thImages').innerHTML=
+    Object.entries(TH.image_fields||{}).map(([slot,label])=>`
+      <div class="row"><span class="grow">${esc(label)}
+        <small>${imgs[slot]?'set':'not set'}</small></span>
+        ${imgs[slot]?`<img src="/theme/asset/${esc(imgs[slot])}" style="height:26px;width:auto;border:1px solid var(--border);border-radius:4px">`:''}
+        <button class="mini" onclick="pickThemeImage('${esc(slot)}')">upload</button>
+        ${imgs[slot]?`<button class="mini danger" onclick="clearThemeImage('${esc(slot)}')">×</button>`:''}
+      </div>`).join('');
+}
+function pickThemeImage(slot){
+  const i=document.createElement('input');
+  i.type='file'; i.accept='image/png,image/jpeg,image/gif,image/webp';
+  i.onchange=async()=>{
+    const f=i.files[0]; if(!f) return;
+    const b64=await new Promise(res=>{const r=new FileReader();
+      r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(f);});
+    const name=document.getElementById('thName').value.trim()||undefined;
+    const r=await post('/api/theme/image',
+      {name:name,slot:slot,content_b64:b64});
+    document.getElementById('thMsg').textContent=
+      r.status==='ok'?`${slot} set (${r.mime})`:(r.reason||'failed');
+    if(r.status==='ok'){document.getElementById('thName').value=r.name;
+      refreshThemeCss(); await loadTheme(); fillThemeEditor();}
+  };
+  i.click();
+}
+async function clearThemeImage(slot){
+  const name=document.getElementById('thName').value.trim()||TH.active;
+  await post('/api/theme/clear',{name:name,slot:slot});
+  refreshThemeCss(); await loadTheme(); fillThemeEditor();
+}
+async function saveTheme(){
+  const colors={};
+  Object.keys(TH.tokens||{}).forEach(k=>{
+    const v=document.getElementById('th_'+k);
+    if(v && v.value.trim()) colors[k]=v.value.trim();
+  });
+  const body={
+    name: document.getElementById('thName').value.trim()||'my theme',
+    from: TH.active,
+    label: document.getElementById('thName').value.trim()||'my theme',
+    title: document.getElementById('thTitle').value,
+    slogan: document.getElementById('thSlogan').value,
+    display_font: document.getElementById('thDisplayFont').value,
+    ui_font: document.getElementById('thUiFont').value,
+    mono_font: document.getElementById('thMonoFont').value,
+    colors: colors, activate: true,
+  };
+  const r=await post('/api/theme/save',body);
+  const msg=document.getElementById('thMsg');
+  if(r.status==='error'){msg.textContent=r.reason;return;}
+  const bad=Object.entries(r.rejected||{});
+  msg.textContent=bad.length
+    ? `saved as "${r.name}" — ignored: `+bad.map(([k,why])=>`${k} (${why})`).join(', ')
+    : `saved and applied as "${r.name}"`;
+  refreshThemeCss(); await loadTheme(); fillThemeEditor();
+}
+async function deleteTheme(){
+  const name=document.getElementById('themeSel').value;
+  if(!confirm(`Delete the theme "${name}"?`)) return;
+  const r=await post('/api/theme/delete',{name:name});
+  if(r.status!=='ok'){alert(r.reason);return;}
+  refreshThemeCss(); await loadTheme(); fillThemeEditor();
+}
+
 /* ───────── boot ───────── */
 (async function(){
-  await loadStatus(); await loadModes(); await loadSecrets();
+  await loadTheme(); await loadStatus(); await loadModes(); await loadSecrets();
   addMsg('agent','OMERTA online. Ask, or switch to PLAN to think it through first.');
 })();
 </script>

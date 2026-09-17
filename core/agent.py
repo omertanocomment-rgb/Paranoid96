@@ -94,6 +94,15 @@ COMPACT_VOICE = ("You are OMERTA, a terse coding/firmware agent for an expert "
                  "Give complete commands, not fragments.")
 
 
+def _share_across_projects():
+    """Does recall include the shared `general` pool as well as this project?
+
+    On unless OMERTA_STRICT_PROJECT is set. Strict is real isolation: nothing
+    learned elsewhere reaches this conversation.
+    """
+    return not config.flag("OMERTA_STRICT_PROJECT")
+
+
 def system_prompt(project, user_text=""):
     p = _persona()
     if config.COMPACT:
@@ -101,7 +110,8 @@ def system_prompt(project, user_text=""):
         # and the tools; drops persona prose, the skill catalog and most
         # recalled memory, which is what blows a 2-4k context on a phone.
         mem = memory.context_block(user_text, project=project,
-                                   top_k=config.COMPACT_RECALL)
+                                   top_k=config.COMPACT_RECALL,
+                                   shared=_share_across_projects())
         blocks = [COMPACT_VOICE, f"""TOOLS — to use one reply with ONLY:
 ```tool
 {{"tool": "<name>", "args": {{...}}}}
@@ -154,10 +164,12 @@ When finished, reply in plain text with no tool block.
 """.strip())
 
     mem = memory.context_block(user_text, project=project,
-                               top_k=p.get("memory", {}).get("recall_top_k", 8))
+                               top_k=p.get("memory", {}).get("recall_top_k", 8),
+                               shared=_share_across_projects())
     if mem:
         parts.append(mem)
-    prefs = memory.preference_block(project=project)
+    prefs = memory.preference_block(project=project,
+                                    shared=_share_across_projects())
     if prefs:
         parts.append(prefs)
     cat = skills.catalog()

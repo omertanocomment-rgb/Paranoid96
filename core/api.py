@@ -15,7 +15,8 @@ from a test harness with no server at all.
 import threading
 
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
-               policy, terminal, modes, learn, chats)
+               policy, terminal, modes, learn, chats, workspace,
+               index as codeindex, scratch, theme)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -66,6 +67,9 @@ def status_payload() -> dict:
         "work_mode": modes.explain(),
         "learned": learn.stats(),
         "chats": chats.stats(),
+        "scratch": scratch.stats(),
+        "workspace": workspace.stats(),
+        "theme": theme.stats(),
         "terminal": {"shell": terminal._shell(),
                      "guard": terminal.guarded(),
                      "sessions": len(terminal.SESSIONS)},
@@ -232,6 +236,7 @@ WRITABLE_SETTINGS = {
     "OMERTA_THEME": ("UI theme", "choice", ["omerta", "black"]),
     "OMERTA_COMPACT": ("Compact prompt (low-RAM devices)", "bool", None),
     "OMERTA_HISTORY_LIMIT": ("Context window (messages kept)", "int", None),
+    "OMERTA_STRICT_PROJECT": ("Recall only this project (hide shared)", "bool", None),
     "OMERTA_TERM_GUARD": ("Terminal refuses hard-deny commands", "bool", None),
     "OMERTA_TERM_SHELL": ("Terminal shell", "text", None),
     "OMERTA_TERM_CWD": ("Terminal start directory", "text", None),
@@ -417,9 +422,140 @@ def chat_action(payload: dict) -> dict:
         "queue_clear": lambda: chats.queue_clear(cid, p.get("item")),
         "append": lambda: chats.append(cid, p.get("message") or {}),
         "new_project": lambda: chats.create_project(p.get("project", "")),
+        "export": lambda: chats.export_chat(
+            cid, include_branches=p.get("branches", True)),
+        "import": lambda: chats.import_chats(p.get("bundle"),
+                                             project=p.get("project")),
     }
     fn = verbs.get(act)
     if not fn:
         return {"error": f"unknown chat action {act!r}",
                 "actions": sorted(verbs), "_status": 400}
     return fn()
+
+
+# ── workspace / editor ──────────────────────────────────────────────────────
+# Saves from the editor route through the SAME approval gate as everything
+# else: propose_save returns awaiting_approval and writes nothing; only
+# ws_commit writes, and the UI only calls it after you approve.
+def ws_tree(payload=None) -> dict:
+    return workspace.tree(payload)
+
+
+def ws_read(payload=None) -> dict:
+    return workspace.read(payload)
+
+
+def ws_propose(payload=None) -> dict:
+    return workspace.propose_save(payload)
+
+
+def ws_commit(payload=None) -> dict:
+    return workspace.commit_save(payload)
+
+
+def ws_backups(payload=None) -> dict:
+    return workspace.backups(payload)
+
+
+def ws_backup_read(payload=None) -> dict:
+    return workspace.read_backup(payload)
+
+
+def ws_reindex(payload=None) -> dict:
+    p = payload or {}
+    root = p.get("root") or (workspace.roots() or ["."])[0]
+    try:
+        out = codeindex.build(root=root, save=True)
+    except Exception as e:                         # noqa: BLE001
+        return {"status": "error", "reason": str(e)}
+    # index.build returns the file LIST and the symbol TABLE; a UI wants
+    # counts, and shipping the whole index back would be ~80 KB of paths.
+    def _n(v):
+        return len(v) if isinstance(v, (list, dict)) else (v or 0)
+    return {"status": "ok", "root": root,
+            "files": _n(out.get("files")), "symbols": _n(out.get("symbols")),
+            "languages": out.get("languages")}
+
+
+def ws_search(payload=None) -> dict:
+    p = payload or {}
+    root = p.get("root") or (workspace.roots() or ["."])[0]
+    q = p.get("q", "")
+    if not q:
+        return {"status": "error", "reason": "nothing to search for", "_status": 400}
+    try:
+        if p.get("symbol"):
+            hit = codeindex.symbol(q, root=root)
+            return {"status": "ok", "kind": "symbol", "root": root,
+                    "results": hit.get("definitions", []), "count": hit.get("count", 0)}
+        hit = codeindex.search(q, root=root)
+        # symbol matches first: an exact definition beats a mention of the word
+        results = list(hit.get("symbols", [])) + list(hit.get("files", []))
+        return {"status": "ok", "kind": "search", "root": root,
+                "results": results, "counts": hit.get("counts", {})}
+    except Exception as e:                         # noqa: BLE001
+        return {"status": "error", "reason": str(e)}
+
+
+# ── scratch sandboxes ───────────────────────────────────────────────────────
+# Build and run for real; the project tree only changes when you accept.
+def scratch_list(payload=None) -> dict:
+    return scratch.listing(payload)
+
+
+def scratch_new(payload=None) -> dict:
+    return scratch.create(payload)
+
+
+def scratch_run(payload=None) -> dict:
+    return scratch.run(payload)
+
+
+def scratch_changes(payload=None) -> dict:
+    return scratch.changes(payload)
+
+
+def scratch_diff(payload=None) -> dict:
+    return scratch.diff(payload)
+
+
+def scratch_propose(payload=None) -> dict:
+    return scratch.propose_accept(payload)
+
+
+def scratch_accept(payload=None) -> dict:
+    return scratch.accept(payload)
+
+
+def scratch_discard(payload=None) -> dict:
+    return scratch.discard(payload)
+
+
+# ── themes ──────────────────────────────────────────────────────────────────
+def theme_css(name=None) -> str:
+    return theme.css(name)
+
+
+def theme_list(payload=None) -> dict:
+    return theme.listing()
+
+
+def theme_use(payload=None) -> dict:
+    return theme.use((payload or {}).get("name"))
+
+
+def theme_save(payload=None) -> dict:
+    return theme.save(payload)
+
+
+def theme_delete(payload=None) -> dict:
+    return theme.delete((payload or {}).get("name"))
+
+
+def theme_image(payload=None) -> dict:
+    return theme.put_image(payload)
+
+
+def theme_clear_image(payload=None) -> dict:
+    return theme.clear_image(payload)
