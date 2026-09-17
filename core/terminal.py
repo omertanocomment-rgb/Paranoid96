@@ -21,9 +21,11 @@ Two things worth being explicit about:
     Set OMERTA_TERM_GUARD=0 if you genuinely need to run one; the refusal
     message says so. Every command is logged either way.
 """
+import fcntl
 import os
 import re
 import signal
+import termios
 import shutil
 import threading
 import subprocess
@@ -57,6 +59,36 @@ def _shell():
     return "/bin/sh"
 
 
+def _become_session_leader(slave_fd):
+    """Build the child-side setup that gives the shell a CONTROLLING terminal.
+
+    setsid() alone is not enough, and the difference is visible: the shell
+    starts, prints
+
+        open /dev/tty: No such device or address
+        warning: won't have full job control
+
+    and then cannot stop a job, cannot Ctrl-C into the foreground process
+    group, and cannot run anything that opens /dev/tty (an editor, a password
+    prompt, less). setsid() detaches the child into a brand new session with
+    NO controlling terminal; something then has to attach one, and on Linux
+    that is TIOCSCTTY on the pty slave, issued by the session leader.
+
+    Runs in the forked child between fork and exec, so it must stay small and
+    must not raise into the parent -- a failure here should cost job control,
+    not the whole terminal.
+    """
+    def setup():
+        os.setsid()
+        try:
+            fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
+        except OSError:
+            # Degrade exactly as before rather than killing the session: the
+            # shell still runs, it just warns about job control.
+            pass
+    return setup
+
+
 class Session:
     """One shell. Output is accumulated into a bounded buffer that clients read
     by offset, so a dropped or slow poller never loses or duplicates bytes."""
@@ -85,6 +117,14 @@ class Session:
             "PS1": r"\[\e[91m\]omerta\[\e[0m\]:\w\$ ",
             "OMERTA_TERMINAL": "1",
         })
+        # The bundled BusyBox, if this device has it. Done here rather than in
+        # the process environment so it applies to the terminal without
+        # changing PATH for the agent's own tool calls.
+        try:
+            from . import toolbox
+            environ["PATH"] = toolbox.path_with_tools(environ.get("PATH"))
+        except Exception:  # noqa: BLE001 -- no toolset is not a broken terminal
+            pass
         environ.update(env or {})
         # never hand the agent's own auth token to an interactive shell
         environ.pop("OMERTA_TOKEN", None)
@@ -97,7 +137,8 @@ class Session:
             except Exception:                      # noqa: BLE001 — cosmetic
                 pass
             self.proc = subprocess.Popen(
-                [self.shell, "-i"], preexec_fn=os.setsid, cwd=self.cwd, env=environ,
+                [self.shell, "-i"], preexec_fn=_become_session_leader(slave),
+                cwd=self.cwd, env=environ,
                 stdin=slave, stdout=slave, stderr=slave, close_fds=True)
             os.close(slave)
             self._reader = threading.Thread(target=self._pump_pty, daemon=True)
@@ -321,6 +362,11 @@ def open_session(args=None):
     out = {"status": "ok"}
     out.update(s.info())
     out["guard"] = guarded()
+    try:
+        from . import toolbox
+        out["tools"] = toolbox.summary()
+    except Exception:  # noqa: BLE001
+        out["tools"] = ""
     return out
 
 

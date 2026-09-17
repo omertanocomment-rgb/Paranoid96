@@ -16,7 +16,7 @@ import threading
 
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
-               index as codeindex, scratch, theme, version)
+               index as codeindex, scratch, theme, version, toolbox)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -83,6 +83,7 @@ def status_payload() -> dict:
         "theme": theme.stats(),
         "terminal": {"shell": terminal._shell(),
                      "guard": terminal.guarded(),
+                     "tools": toolbox.stats(),
                      "sessions": len(terminal.SESSIONS)},
         "memory": memory.stats(),
         "skills": [{"name": s["name"], "description": s["description"]}

@@ -116,6 +116,14 @@ android {
     }
 
     packagingOptions { resources { excludes += ['META-INF/*.kotlin_module'] } }
+
+    // libbusybox.so is a BusyBox executable, not a library. Android only lets
+    // an app execute files out of the native-library directory, and it only
+    // lands there as a real file if it is extracted at install time. AGP 8
+    // defaults this to false (libs stay compressed in the APK and are mapped
+    // straight from it), which is right for actual libraries and fatal for
+    // this one -- the file would simply not exist to exec.
+    packaging { jniLibs { useLegacyPackaging = true } }
 }
 
 // Copy the single-source agent payload (code + resources) into an asset dir.

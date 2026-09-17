@@ -40,9 +40,14 @@ final class OmertaPython {
             }
             homeDir = OmertaAssets.ensure(app);
             String filesDir = app.getFilesDir().getAbsolutePath();
+            // The only directory this app is allowed to execute from. Python
+            // cannot work it out for itself -- it is assigned per install --
+            // so it is passed in rather than guessed at.
+            String nativeLibDir = app.getApplicationInfo().nativeLibraryDir;
             Python py = Python.getInstance();
             PyObject boot = py.getModule("omerta_boot");
-            String res = boot.callAttr("start", filesDir, homeDir, PORT).toString();
+            String res = boot.callAttr("start", filesDir, homeDir, PORT,
+                                       nativeLibDir).toString();
             try {
                 JSONObject j = new JSONObject(res);
                 port = j.optInt("port", PORT);

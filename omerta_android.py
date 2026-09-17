@@ -18,7 +18,7 @@ import os
 import json
 
 
-def _prepare_env(files_dir, home_dir, port):
+def _prepare_env(files_dir, home_dir, port, native_lib_dir=None):
     # These MUST be set before core.config is imported the first time, because
     # config reads the environment at import time.
     data_dir = os.path.join(files_dir, "data")
@@ -35,19 +35,30 @@ def _prepare_env(files_dir, home_dir, port):
     os.environ.setdefault("OMERTA_COMPACT", "0")
     # HOME is often unset/again read-only in an app sandbox; keep tools honest.
     os.environ.setdefault("HOME", files_dir)
+    if native_lib_dir:
+        # Where the bundled BusyBox lives. See core/toolbox.py for why this is
+        # the only place on the device we can execute anything from.
+        os.environ["OMERTA_NATIVE_LIB_DIR"] = native_lib_dir
 
 
 _STATE = {"server": None, "thread": None, "token": None, "port": None}
 
 
-def start(files_dir, home_dir, port=8787):
+def start(files_dir, home_dir, port=8787, native_lib_dir=None):
     """Start (idempotently) the embedded backend. Returns a JSON string with
     {"port", "token", "running"} so the Java side can build the WebView URL."""
     if _STATE["server"] is not None:
         return json.dumps({"port": _STATE["port"], "token": _STATE["token"],
                            "running": True})
-    _prepare_env(files_dir, home_dir, port)
+    _prepare_env(files_dir, home_dir, port, native_lib_dir)
     # import lazily, AFTER the environment is in place
+    from core import toolbox
+    try:
+        # Relink on every start: an app update moves the native library, and a
+        # dangling symlink looks identical to a working one until it is run.
+        toolbox.install(os.path.join(files_dir, "data"))
+    except Exception:  # noqa: BLE001 -- a missing toolset must not stop the app
+        pass
     from core import httpd
     srv, thread, token = httpd.serve_background()
     _STATE.update(server=srv, thread=thread, token=token,
