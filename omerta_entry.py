@@ -7,8 +7,38 @@ if getattr(sys, "frozen", False):
 from core import config  # noqa: E402
 
 
+VERSION_FLAGS = ("version", "--version", "-V")
+
+
+def _version():
+    """Single source of truth: the installed metadata, else pyproject."""
+    try:
+        from importlib.metadata import version
+        return version("omerta-agent")
+    except Exception:
+        pass
+    import re
+    for base in (getattr(sys, "_MEIPASS", None), os.environ.get("OMERTA_HOME"),
+                 os.path.dirname(os.path.abspath(__file__))):
+        if not base:
+            continue
+        try:
+            txt = open(os.path.join(base, "pyproject.toml")).read()
+        except OSError:
+            continue
+        m = re.search(r'version\s*=\s*"([^"]+)"', txt)
+        if m:
+            return m.group(1)
+    return "unknown"
+
+
 def main():
     argv = sys.argv[1:]
+    # a leading flag is not a subcommand — except the version flags, which
+    # would otherwise fall through to argparse and die as "unrecognized".
+    if argv and argv[0] in VERSION_FLAGS:
+        print(f"omerta-agent {_version()}")
+        return 0
     cmd = argv[0] if argv and not argv[0].startswith("-") else None
     if cmd == "serve":
         sys.argv = [sys.argv[0]] + argv[1:]
@@ -41,8 +71,8 @@ def main():
         else:
             print("set OMERTA_SYNC_DIR, or: omerta sync <host:port|/path>")
         return 0
-    if cmd in ("version", "--version", "-V"):
-        print("omerta-agent 1.1.0")
+    if cmd in VERSION_FLAGS:
+        print(f"omerta-agent {_version()}")
         return 0
     # firmware / teach / memory / index / search / rules
     from core import commands

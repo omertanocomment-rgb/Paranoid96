@@ -70,13 +70,27 @@ code. Status is one of **Implemented**, **Partial**, or **Planned**.
 | Token auth, spoof-proof, on-device secrets | Implemented | `core/auth.py`; `docs/AUDIT.md`; tests on both servers |
 | Secret scanning in CI | Implemented | `.github/workflows/ci.yml` gitleaks |
 | Packaging: wheel/sdist, Electron, APK, Docker/OCI, .deb | Implemented | `scripts/build_all.sh`, `docker/Dockerfile`, `packaging/build-deb.sh` (built + validated) |
-| AppImage | Partial (recipe) | `packaging/build-appimage.sh` — thin AppImage, needs `appimagetool` |
+| AppImage (fat — bundles its own Python) | Implemented | `packaging/build-appimage.sh` — relocatable CPython 3.12 + deps inside; falls back to PyInstaller, then host-python; self-acquires `appimagetool` and emits a self-extracting `.run` if it can't; smoke-tests what it builds |
 | Engineering roles (Architect/Developer/Reviewer/…) | Implemented (as focus profiles) | `core/roles.py` — 10 roles steer the one agent; `omerta plan/review/build/test/debug`, `omerta role`; `tests/test_roles.py` |
 | Multi-role pipeline (sequential) | Implemented | `core/orchestrator.py` — plan→review etc., feeds output forward, halts on approval; `omerta workflow`; `tests/test_orchestrator.py` |
 | Parallel/concurrent multi-agent orchestration | Implemented | `core/orchestrator.py` `run_parallel` — a role 'team' runs concurrently (thread-local roles); `omerta workflow team`; `tests/test_orchestrator.py` |
 
 ## Not yet built (tracked, not claimed)
 
-- Fat AppImage bundling its own Python (a thin, host-python recipe exists).
+Nothing outstanding from the v1.0 specification: **41 Implemented, 0 Partial,
+0 Planned.** The last gap (a fat AppImage carrying its own Python) closed with
+the build above, verified by running the produced AppImage on a machine whose
+system Python is a *different* version (3.11) from the bundled one (3.12).
 
-These are honest gaps. OMERTA should say so rather than imply they exist.
+Known environment-dependent behavior, stated rather than hidden:
+
+- The AppImage's own runtime prints `No suitable fusermount binary found` on
+  hosts without FUSE and then transparently extracts-and-runs. It works; the
+  message is the AppImage runtime's, not OMERTA's. Set
+  `APPIMAGE_EXTRACT_AND_RUN=1` to silence it.
+- The PyInstaller fallback excludes `cryptography`: OMERTA never imports it,
+  and its PyInstaller hook imports a Rust binding that hard-panics on some
+  distributions' system packages.
+- Cross-building is still a platform limit, not a choice — an APK needs the
+  Android SDK, a macOS app needs a Mac. `scripts/build_all.sh` says so per
+  artifact instead of failing silently.

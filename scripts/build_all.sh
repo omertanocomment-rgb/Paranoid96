@@ -80,10 +80,14 @@ if command -v dpkg-deb >/dev/null; then
 else
   echo "  deb: skipped (install dpkg-deb)"
 fi
-if command -v appimagetool >/dev/null; then
-  bash packaging/build-appimage.sh && cp dist/OMERTA_AGENT-*.AppImage "$OUT"/ 2>/dev/null || true
+# The AppImage recipe is self-sufficient: it fetches its own relocatable
+# CPython and its own appimagetool, and emits a self-extracting .run if
+# appimagetool cannot be had. It smoke-tests whatever it produces.
+if bash packaging/build-appimage.sh; then
+  cp dist/OMERTA_AGENT-*.AppImage "$OUT"/ 2>/dev/null || true
+  cp dist/OMERTA_AGENT-*.run "$OUT"/ 2>/dev/null || true
 else
-  echo "  appimage: skipped (install appimagetool)"
+  echo "  appimage: failed (see output above)"
 fi
 
 say "6/6  checksums"

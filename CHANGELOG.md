@@ -44,8 +44,13 @@ Self-contained mobile app and a normal, dependency-free backend.
   agent; `omerta agent/plan/review/build/test/debug` and `omerta role`.
   `tests/test_roles.py`.
 - **Packaging**: `docker/Dockerfile` (OCI), `packaging/build-deb.sh` (built +
-  validated), and a thin `packaging/build-appimage.sh`; wired into
-  `scripts/build_all.sh`.
+  validated), and a **fat AppImage** (`packaging/build-appimage.sh`) that
+  carries its own relocatable CPython 3.12 and dependencies — one file, nothing
+  to install on the target. It degrades rather than fails: relocatable CPython
+  → PyInstaller bundle → host python, and self-acquires `appimagetool`, falling
+  back to a self-extracting `.run` on hosts that have neither it nor FUSE. It
+  smoke-tests whatever it produced before reporting success. All four paths
+  were built and run. Wired into `scripts/build_all.sh`.
 - **Evidence & confidence** (`core/evidence.py`, `plugins/evidence_tools.py`): a general CONFIRMED/LIKELY/INFERRED/UNKNOWN facility — shared record shape, weakest-link combine, and a durable per-project evidence log; `omerta evidence`. Firmware tools reuse it. `tests/test_evidence.py`.
 - **Multi-agent orchestration** (`core/orchestrator.py`): sequential role pipelines (`omerta workflow plan|analyze|full`) and a **concurrent** role 'team' (`omerta workflow team`) with thread-local role isolation; `tests/test_orchestrator.py`.
 - **Git intelligence** (`core/gitx.py`, `plugins/git_tools.py`): read-only structured `status/diff/log/branch/show/review`; mutating git stays behind the approval gate. `omerta git …`; `tests/test_gitx.py`.
@@ -62,6 +67,10 @@ Self-contained mobile app and a normal, dependency-free backend.
 - `tools/importers.py` used a PEP 701 nested-quote f-string that failed to
   import on Python 3.9–3.11 (the supported range); rewritten portably.
 - Per-project dispatch lock and a POST-body size cap in the embedded server.
+- `omerta --version` was unreachable: the entry point only treated a *non-flag*
+  first argument as a subcommand, so the flag fell through to argparse and died
+  as "unrecognized arguments". The version string was also hardcoded — it now
+  comes from the installed metadata, falling back to `pyproject.toml`.
 
 ### Security
 Second audit pass, focused on untrusted input. Full write-up in `docs/AUDIT.md`.
