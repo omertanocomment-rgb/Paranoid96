@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Omerta" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#0b0a08</item>
-        <item name="android:navigationBarColor">#0b0a08</item>
-        <item name="android:windowBackground">#0b0a08</item>
+        <item name="android:statusBarColor">@color/omerta_bg</item>
+        <item name="android:navigationBarColor">@color/omerta_bg</item>
+        <item name="android:windowBackground">@color/omerta_bg</item>
+        <item name="android:colorAccent">@color/omerta_red_bright</item>
+        <item name="android:colorPrimary">@color/omerta_red</item>
+        <!-- light-on-dark: the bars are near-black, so keep the icons light -->
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

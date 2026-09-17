@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0b0a08</color>
+    <!-- OMERTA AI: red on black. Matches the web UI tokens exactly so the
+         native chrome and the WebView are one surface, not two. -->
+    <color name="omerta_bg">#0A0506</color>
+    <color name="omerta_panel">#140B0D</color>
+    <color name="omerta_red">#C81E28</color>
+    <color name="omerta_red_bright">#FF2D3C</color>
+    <color name="ic_launcher_background">#0A0506</color>
 </resources>
