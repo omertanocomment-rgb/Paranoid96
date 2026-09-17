@@ -18,7 +18,7 @@ import time
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
                index as codeindex, scratch, theme, version, toolbox, localai,
-               attach, models as modelstore, adbclient)
+               attach, models as modelstore, adbclient, backup, usage)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -174,6 +174,40 @@ def attachment_delete(payload) -> dict:
     return attach.delete(aid)
 
 
+def usage_summary(days=30, project=None) -> dict:
+    return usage.summary(days=days, project=project)
+
+
+def usage_control(payload) -> dict:
+    p = payload or {}
+    if p.get("action") == "reset":
+        return usage.reset()
+    return {"error": "unknown action (reset)"}
+
+
+def backup_control(payload) -> dict:
+    """Make, inspect or restore an encrypted backup.
+
+    Local-only: the archive is everything you own, and the passphrase travels
+    with the request. Neither belongs on a wire that leaves the device.
+    """
+    p = payload or {}
+    action = p.get("action", "")
+    if action == "estimate":
+        return backup.estimate()
+    if action == "create":
+        return backup.create(p.get("passphrase", ""), dest=p.get("path"))
+    if action == "inspect":
+        return backup.inspect(p.get("path", ""))
+    if action == "restore":
+        if not p.get("path"):
+            return {"error": "path is required"}
+        return backup.restore(p["path"], p.get("passphrase", ""),
+                              dry_run=bool(p.get("dry_run")))
+    return {"error": f"unknown action: {action!r} "
+                     "(estimate, create, inspect, restore)"}
+
+
 def adb_control(payload) -> dict:
     """Talk to a device over the network.
 
@@ -240,6 +274,8 @@ def status_payload() -> dict:
         "theme": theme.stats(),
         "localai": localai.stats(),
         "attachments": attach.stats(),
+        "backup": backup.stats(),
+        "usage": usage.stats(),
         "models": modelstore.stats(),
         "terminal": {"shell": terminal._shell(),
                      "guard": terminal.guarded(),
@@ -418,10 +454,15 @@ def set_policy(payload: dict) -> dict:
     It cannot be loosened past HIGH_RISK: `core/policy` has no rank for that
     tier, so every policy still stops there, and DENY is refused regardless.
     """
-    name = (payload or {}).get("policy", policy.ALWAYS)
-    before = policy.current()
-    after = policy.set_policy(name)
-    sandbox.log_event({"kind": "policy_change", "from": before, "to": after})
+    p = payload or {}
+    name = p.get("policy", policy.ALWAYS)
+    project = p.get("project")
+    before = policy.current(project)
+    after = policy.set_policy(name, project=project)
+    sandbox.log_event({"kind": "policy_change", "from": before,
+                       "to": after, "project": project or ""})
+    if isinstance(after, dict):                    # a per-project override
+        return {"ok": True, **after, **policy.explain(project=project)}
     return {"ok": True, **policy.explain(after)}
 
 

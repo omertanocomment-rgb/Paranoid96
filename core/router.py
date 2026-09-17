@@ -82,6 +82,19 @@ def _try(pid, messages, system, max_tokens, stream_cb):
     _ensure_managed(pid, spec)
     fn = KINDS[spec["kind"]]
     text = fn(spec, messages, system=system, max_tokens=max_tokens, stream_cb=stream_cb)
+    # Meter it. No provider here reports real token usage, so the counts are
+    # estimated from text length and flagged as such -- an indicative figure
+    # that says it is indicative beats a precise-looking one that is invented.
+    try:
+        from . import usage
+        sent = sum(len(str(m.get("content", ""))) for m in messages) + len(system)
+        usage.record(pid, spec.get("model", ""),
+                     tokens_in=usage.estimate_tokens("x" * sent),
+                     tokens_out=usage.estimate_tokens(text),
+                     project=config.get("OMERTA_PROJECT", "general"),
+                     estimated=True)
+    except Exception:  # noqa: BLE001 — metering must never break a reply
+        pass
     return {"text": text, "provider": pid, "model": spec["model"],
             "offline": not spec.get("needs_internet", False)}
 

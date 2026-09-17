@@ -67,12 +67,66 @@ def normalize(name):
     return n if n in POLICIES else ALWAYS
 
 
-def current():
-    """The active policy. Settings win over the environment, as elsewhere."""
+#: Per-project overrides, so a scratch project can be trusted while production
+#: stays strict. Kept apart from the global setting rather than folded into it:
+#: a project override must be visible as an override, and deleting a project
+#: must not quietly relax anything else.
+_PROJECT_KEY = "OMERTA_PROJECT_POLICIES"
+
+
+def _project_policies():
+    import json
+    try:
+        raw = config.get(_PROJECT_KEY, "") or "{}"
+        data = json.loads(raw)
+        return {str(k): normalize(v) for k, v in data.items()} \
+            if isinstance(data, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def project_policy(project):
+    """The override for a project, or None if it follows the global setting."""
+    return _project_policies().get(str(project or ""))
+
+
+def set_project_policy(project, name):
+    """Override, or clear the override by passing a falsy name."""
+    import json
+    project = str(project or "").strip()
+    if not project:
+        return {"error": "a project name is required"}
+    table = _project_policies()
+    if not name or str(name).lower() in ("inherit", "default", "none"):
+        table.pop(project, None)
+        cleared = True
+    else:
+        table[project] = normalize(name)
+        cleared = False
+    config.set_setting(_PROJECT_KEY, json.dumps(table))
+    return {"status": "ok", "project": project,
+            "policy": None if cleared else table[project],
+            "inherits": cleared, "effective": current(project)}
+
+
+def current(project=None):
+    """The active policy, for a project if one is named.
+
+    A project override wins over the global setting, which wins over the
+    environment. Nothing here can loosen past HIGH_RISK -- that tier has no
+    rank, so every policy still stops at it, and DENY is refused regardless of
+    which of these answered.
+    """
+    if project:
+        override = project_policy(project)
+        if override:
+            return override
     return normalize(config.get("OMERTA_APPROVAL_POLICY", ALWAYS))
 
 
-def set_policy(name):
+def set_policy(name, project=None):
+    if project:
+        return set_project_policy(project, name)
     p = normalize(name)
     config.set_setting("OMERTA_APPROVAL_POLICY", p)
     return p
@@ -106,8 +160,8 @@ def auto_run(tier, policy=None):
     return _TIER_RANK[t] <= _POLICY_RANK[p]
 
 
-def explain(policy=None):
-    p = normalize(policy or current())
+def explain(policy=None, project=None):
+    p = normalize(policy or current(project))
     return {"policy": p, "description": DESCRIPTIONS[p],
             "auto_runs": [t for t in ("LOW_RISK", "NORMAL") if auto_run(t, p)],
             "always_asks": ["HIGH_RISK"],

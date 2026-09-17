@@ -119,6 +119,29 @@ main{position:relative;z-index:1;flex:1;overflow:hidden;display:flex}
 .copy.copied{color:var(--ember);border-color:var(--ember)}
 .copy.code{position:absolute;top:6px;right:6px;margin:0;
   background:rgba(0,0,0,.65);backdrop-filter:blur(2px)}
+#micBtn.on{color:var(--ember);border-color:var(--ember);
+  animation:pulse 1.1s ease-in-out infinite}
+#micBtn.bad{color:#e8a33d;border-color:#e8a33d}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* Landscape and tablets. The layout was built for a phone held upright; on a
+   wide screen the message column stretched to the full width, which is
+   unreadable, and the composer sat far from the text. Cap the column and give
+   the side panel room instead of rebuilding the layout. */
+@media (min-width:820px){
+  .msg{max-width:min(78ch,86%)}
+  #log{padding-left:max(16px,calc((100% - 96ch)/2));
+       padding-right:max(16px,calc((100% - 96ch)/2))}
+  #bar{max-width:104ch;margin:0 auto;width:100%}
+  nav{justify-content:center;gap:28px}
+}
+@media (orientation:landscape) and (max-height:520px){
+  /* A phone on its side: the keyboard eats most of the screen, so give the
+     conversation every row that is left. */
+  header{padding-top:2px;padding-bottom:2px}
+  .banner,.slogan{display:none}
+  nav{font-size:.72rem}
+}
 .msg code{background:#000;padding:1px 5px;border-radius:3px;color:var(--ember);font-size:.85em}
 .msg pre{background:#000;padding:10px;border-radius:6px;overflow-x:auto;border:1px solid var(--border)}
 .msg pre code{background:none;padding:0;color:var(--text)}
@@ -295,6 +318,8 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
       <button class="mini" onclick="clearQueue()">clear</button></div>
     <div id="bar">
       <textarea id="msg" rows="1" placeholder="what do you want built?"></textarea>
+      <button class="iconbtn" id="micBtn" title="dictate"
+              onclick="toggleDictation()">🎙</button>
       <button class="iconbtn" title="queue this instead of sending now"
               onclick="queueCurrent()">+Q</button>
       <button onclick="send()">▶</button>
@@ -493,6 +518,21 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
         <button class="mini" style="width:100%;margin-top:6px" onclick="saveSecret()">save</button>
         <div class="noteline" id="secretMsg"></div>
       </div>
+
+      <h3>Usage &amp; cost</h3>
+      <div class="buildbox" id="usageBox"><div class="tiny">checking…</div></div>
+
+      <h3>Encrypted backup</h3>
+      <div class="tiny">Chats, projects, learned files, memory, themes and
+        attachments in one encrypted file. There is no recovery if you lose
+        the passphrase — that is the point.</div>
+      <label class="fld"><span>passphrase</span>
+        <input id="bkPass" type="password" placeholder="at least 8 characters"></label>
+      <div class="grid2" style="margin-bottom:6px">
+        <button class="mini" onclick="doBackup()">back up</button>
+        <button class="mini" onclick="loadBackupInfo()">what's included</button>
+      </div>
+      <div class="buildbox" id="backupBox"><div class="tiny">not run yet</div></div>
 
       <h3>Attachments</h3>
       <div class="tiny">Any file, any size, any type — nothing is rejected.
@@ -1360,6 +1400,82 @@ async function delAttach(id){
   try{ await post('/api/attach/delete',{id}); }catch(e){}
   await loadAttachments();
 }
+async function loadUsage(){
+  const box=document.getElementById('usageBox');
+  let d; try{ d=await get('/api/usage?days=30'); }
+  catch(e){ box.innerHTML='<div class="tiny">unavailable</div>'; return; }
+  const t=d.total||{};
+  const top=Object.entries(d.projects||{})
+    .sort((a,b)=>b[1].calls-a[1].calls).slice(0,4);
+  box.innerHTML=
+    '<div><b>$'+(t.usd||0).toFixed(4)+'</b> over 30 days · '+
+      (t.calls||0)+' calls</div>'+
+    '<div>'+((t.in||0)+(t.out||0)).toLocaleString()+' tokens'+
+      (t.unpriced?' · '+t.unpriced+' unpriced':'')+'</div>'+
+    (top.length?'<div class="tiny">'+top.map(([k,v])=>
+      esc(k)+': $'+v.usd.toFixed(4)).join('<br>')+'</div>':'')+
+    (d.note?'<div class="tiny warn">'+esc(d.note)+'</div>':'');
+}
+async function loadBackupInfo(){
+  const box=document.getElementById('backupBox');
+  let d; try{ d=await post('/api/backup',{action:'estimate'}); }
+  catch(e){ box.innerHTML='<div class="tiny">unavailable</div>'; return; }
+  const items=(d.items||[]).map(i=>
+    esc(i.name)+' — '+fmtBytes(i.bytes)+' ('+i.files+' file'+(i.files===1?'':'s')+')');
+  box.innerHTML='<div><b>'+fmtBytes(d.bytes||0)+'</b> would be backed up</div>'+
+    '<div class="tiny">'+items.join('<br>')+'</div>'+
+    '<div class="tiny">left out: '+
+      Object.keys(d.excluded||{}).map(esc).join(', ')+'</div>';
+}
+async function doBackup(){
+  const box=document.getElementById('backupBox');
+  const pass=document.getElementById('bkPass').value;
+  box.innerHTML='<div class="tiny">encrypting…</div>';
+  let d; try{ d=await post('/api/backup',{action:'create',passphrase:pass}); }
+  catch(e){ box.innerHTML='<div class="warn">failed: '+esc(e.message||e)+'</div>'; return; }
+  if(d.error){ box.innerHTML='<div class="warn">'+esc(d.error)+'</div>'; return; }
+  document.getElementById('bkPass').value='';
+  box.innerHTML='<div><b>backed up</b> · '+fmtBytes(d.bytes)+' · '+esc(d.algorithm||'')+'</div>'+
+    '<div class="tiny">'+esc(d.path)+'</div>'+
+    '<div class="tiny">contains: '+(d.contains||[]).map(esc).join(', ')+'</div>'+
+    '<div class="tiny warn">Copy this file somewhere else. It is only useful '+
+    'with the passphrase you just typed, and there is no way to recover it.</div>';
+}
+
+let _rec=null;
+function toggleDictation(){
+  const btn=document.getElementById('micBtn');
+  const box=document.getElementById('msg');
+  if(_rec){ try{_rec.stop();}catch(e){} _rec=null; btn.classList.remove('on'); return; }
+  // WebView speech recognition, which is Android's own engine underneath.
+  // Not every WebView exposes it, so failing here says so rather than
+  // leaving a button that does nothing.
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    btn.classList.add('bad'); btn.title='dictation is unavailable in this WebView';
+    setTimeout(()=>btn.classList.remove('bad'),2000);
+    return;
+  }
+  _rec=new SR();
+  _rec.continuous=true; _rec.interimResults=true; _rec.lang=navigator.language||'en-GB';
+  const before=box.value;
+  _rec.onresult=e=>{
+    let text='';
+    for(let i=e.resultIndex;i<e.results.length;i++) text+=e.results[i][0].transcript;
+    box.value=(before?before+' ':'')+text;
+    box.dispatchEvent(new Event('input'));
+  };
+  _rec.onerror=ev=>{
+    btn.classList.remove('on'); btn.classList.add('bad');
+    btn.title='dictation failed: '+(ev.error||'unknown');
+    setTimeout(()=>btn.classList.remove('bad'),2500);
+    _rec=null;
+  };
+  _rec.onend=()=>{ btn.classList.remove('on'); _rec=null; };
+  try{ _rec.start(); btn.classList.add('on'); }
+  catch(e){ _rec=null; btn.classList.remove('on'); }
+}
+
 let BUILD=null;
 async function loadBuild(){
   const box=document.getElementById('buildBox');
@@ -1647,6 +1763,7 @@ async function deleteTheme(){
 (async function(){
   await loadTheme(); await loadStatus(); await loadModes(); await loadSecrets();
   await loadBuild(); await loadLocalai(); await loadAttachments(); await loadModels();
+  await loadUsage();
   addMsg('agent','OMERTA online. Ask, or switch to PLAN to think it through first.');
 })();
 </script>

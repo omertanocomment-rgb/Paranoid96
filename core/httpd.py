@@ -60,7 +60,8 @@ class Handler(BaseHTTPRequestHandler):
     # here: it goes through the gate, so a token is enough for it.
     LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path",
                   "/api/localai", "/api/attach",
-                  "/api/models", "/api/adb")
+                  "/api/models", "/api/adb",
+                  "/api/backup")
 
     def _is_local_only(self, path):
         return any(path == p.rstrip("/") or path.startswith(p)
@@ -237,6 +238,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.version_payload())
         if path == "/api/localai":
             return self._json(api.localai_status())
+        if path == "/api/usage":
+            q = self._query()
+            return self._json(api.usage_summary(
+                days=int((q.get("days") or [30])[0]),
+                project=(q.get("project") or [None])[0]))
         if path == "/api/models":
             return self._json(api.models_status())
         if path == "/api/attach":
@@ -333,6 +339,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.models_control(self._body()))
         if path == "/api/adb":
             return self._json(api.adb_control(self._body()))
+        if path == "/api/backup":
+            return self._json(api.backup_control(self._body()))
+        if path == "/api/usage":
+            return self._json(api.usage_control(self._body()))
         if path == "/api/attach/delete":
             return self._json(api.attachment_delete(self._body()))
         if path == "/api/attach":

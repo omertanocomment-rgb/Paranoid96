@@ -29,5 +29,6 @@ echo "=== model catalogue ===" && python3 tests/test_models.py
 echo "=== chat copy buttons ===" && python3 tests/test_ui_copy.py
 echo "=== python runtime ===" && python3 tests/test_python_runtime.py
 echo "=== adb over TCP ===" && python3 tests/test_adb.py
+echo "=== backup / usage / policy ===" && python3 tests/test_backup_usage.py
 echo "=== doctor ==="            && python3 scripts/doctor.py > /dev/null && echo "doctor ran clean"
 echo && echo "ALL TESTS PASSED"

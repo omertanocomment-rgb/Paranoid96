@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <!-- Android 13+ needs runtime consent to show the ongoing notification -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Dictation. Requested at build level like everything else, but the
+         microphone is only opened when you press the button: a permission in
+         the manifest is permission to ask, not a licence to listen. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
 
     <application
         android:allowBackup="false"
@@ -28,6 +33,26 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- Share target: send a file, a link or a snippet to OMERTA from
+                 any other app. Accepts every MIME type on purpose -- the
+                 attachment store has no type restriction, so advertising one
+                 here would be a limit in the wrong place. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="*/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="*/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
             </intent-filter>
         </activity>
 
