@@ -110,7 +110,15 @@ main{position:relative;z-index:1;flex:1;overflow:hidden;display:flex}
   white-space:pre-wrap;word-break:break-word}
 .you{align-self:flex-end;background:#251013;border:1px solid var(--red-dim)}
 .agent{align-self:flex-start;background:var(--panel);border:1px solid var(--border)}
-.meta{font-size:.62rem;color:var(--muted);margin-bottom:4px;letter-spacing:.07em}
+.meta{font-size:.62rem;color:var(--muted);margin-bottom:4px;letter-spacing:.07em;
+  display:flex;align-items:center;gap:8px}
+.copy{margin-left:auto;font:inherit;font-size:.62rem;letter-spacing:.06em;
+  background:transparent;color:var(--muted);border:1px solid var(--border);
+  border-radius:4px;padding:1px 7px;cursor:pointer;line-height:1.6}
+.copy:hover{color:var(--ember);border-color:var(--red-dim)}
+.copy.copied{color:var(--ember);border-color:var(--ember)}
+.copy.code{position:absolute;top:6px;right:6px;margin:0;
+  background:rgba(0,0,0,.65);backdrop-filter:blur(2px)}
 .msg code{background:#000;padding:1px 5px;border-radius:3px;color:var(--ember);font-size:.85em}
 .msg pre{background:#000;padding:10px;border-radius:6px;overflow-x:auto;border:1px solid var(--border)}
 .msg pre code{background:none;padding:0;color:var(--text)}
@@ -564,6 +572,48 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
 /* ───────── helpers ───────── */
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,
   c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function copyToClipboard(text){
+  // The app is served over plain http on loopback, where navigator.clipboard
+  // is unavailable in most browsers (it needs a secure context). So there is
+  // always a path that does not depend on it, rather than a copy button that
+  // silently does nothing on the one device this is mainly used from.
+  if(navigator.clipboard && window.isSecureContext){
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve,reject)=>{
+    const ta=document.createElement('textarea');
+    ta.value=text;
+    ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='0'; ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, ta.value.length);
+    let ok=false;
+    try{ ok=document.execCommand('copy'); }catch(e){ ok=false; }
+    ta.remove();
+    ok?resolve():reject(new Error('copy blocked'));
+  });
+}
+function flashCopy(btn,label){
+  const was=btn.textContent;
+  btn.textContent=label||'copied';
+  btn.classList.add('copied');
+  setTimeout(()=>{btn.textContent=was;btn.classList.remove('copied');},1400);
+}
+function copyFrom(btn,text){
+  copyToClipboard(text).then(()=>flashCopy(btn),
+    ()=>{
+      // Nothing worked — select it so a long-press can copy by hand rather
+      // than leaving the person with a button that did nothing.
+      flashCopy(btn,'select+copy');
+      const host=btn.closest('.msg')||btn.parentElement;
+      const target=host&&(host.querySelector('pre')||host);
+      if(target&&window.getSelection){
+        const r=document.createRange(); r.selectNodeContents(target);
+        const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      }
+    });
+}
+
 function md(s){
   return esc(s)
     .replace(/```([\s\S]*?)```/g,(m,c)=>`<pre><code>${c.trim()}</code></pre>`)
@@ -596,8 +646,31 @@ const log=document.getElementById('log');
 function addMsg(role,text){
   const d=document.createElement('div');
   d.className='msg '+(role==='you'?'you':'agent');
-  d.innerHTML=`<div class="meta">${role==='you'?'you':'omerta'}</div>${md(text)}`;
+  d.innerHTML=`<div class="meta">${role==='you'?'you':'omerta'}`+
+    `<button class="copy" title="copy this message">copy</button></div>${md(text)}`;
+  // Copy the ORIGINAL text, not what is on screen: the rendered version has
+  // been HTML-escaped and had its markdown turned into tags, so copying the
+  // DOM would hand back &amp; and <b> instead of what was actually said.
+  const btn=d.querySelector('.meta .copy');
+  btn.onclick=()=>copyFrom(btn,text);
+  decorateCode(d);
   log.appendChild(d); log.scrollTop=log.scrollHeight;
+}
+
+function decorateCode(scope){
+  // A fenced block is usually the part someone actually wants, so it gets its
+  // own button. textContent gives the unescaped characters back, which is
+  // exactly the code as written.
+  scope.querySelectorAll('pre').forEach(pre=>{
+    if(pre.querySelector('.copy')) return;
+    const code=pre.querySelector('code')||pre;
+    const b=document.createElement('button');
+    b.className='copy code'; b.textContent='copy';
+    b.title='copy this block';
+    b.onclick=()=>copyFrom(b,code.textContent);
+    pre.style.position='relative';
+    pre.appendChild(b);
+  });
 }
 function thinking(){const d=document.createElement('div');
   d.className='msg agent thinking';d.textContent='…';log.appendChild(d);
@@ -1311,18 +1384,7 @@ function copyBuild(){
   const say=m=>{ const n=document.createElement('div');
     n.className='tiny'; n.textContent=m; box.appendChild(n);
     setTimeout(()=>n.remove(),2500); };
-  // clipboard is unavailable on a plain-HTTP origin in some browsers, and the
-  // app is served over loopback http -- so always keep a path that works
-  // without it rather than failing silently.
-  if(navigator.clipboard&&window.isSecureContext){
-    navigator.clipboard.writeText(t).then(()=>say('copied'),()=>say(t));
-  } else {
-    const ta=document.createElement('textarea');
-    ta.value=t; ta.style.position='fixed'; ta.style.opacity='0';
-    document.body.appendChild(ta); ta.select();
-    let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
-    ta.remove(); say(ok?'copied':t);
-  }
+  copyToClipboard(t).then(()=>say('copied'),()=>say(t));
 }
 let _modelPoll=null;
 async function loadModels(){

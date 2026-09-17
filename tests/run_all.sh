@@ -26,5 +26,6 @@ echo "=== on-device engine ===" && python3 tests/test_localai.py
 echo "=== conversation persistence ===" && python3 tests/test_persistence.py
 echo "=== attachments ===" && python3 tests/test_attach.py
 echo "=== model catalogue ===" && python3 tests/test_models.py
+echo "=== chat copy buttons ===" && python3 tests/test_ui_copy.py
 echo "=== doctor ==="            && python3 scripts/doctor.py > /dev/null && echo "doctor ran clean"
 echo && echo "ALL TESTS PASSED"
