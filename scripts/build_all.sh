@@ -21,6 +21,21 @@ say() { printf "\n\033[93m[build]\033[0m %s\n" "$1"; }
 stamp() { python3 scripts/stamp_build.py "$1" >/dev/null; }
 python3 scripts/sync_version.py
 
+# The audit gate runs BEFORE anything is packaged, and a failure stops the
+# build. A build that skipped the gate is not a release -- and an artifact is
+# the worst place to discover a finding, because by then it has your name on
+# it and may already be on a phone.
+say "0/6  audit gate"
+if ! python3 scripts/audit.py --phase "pre-build"; then
+  echo
+  echo "  BUILD REFUSED: the audit gate found problems (above)."
+  echo "  Fix every one, re-run the gate on the same phase until it is clean,"
+  echo "  then build. OMERTA_SKIP_AUDIT=1 overrides this, and should not be"
+  echo "  used for anything you intend to ship."
+  [ "${OMERTA_SKIP_AUDIT:-0}" = "1" ] || exit 1
+  echo "  OMERTA_SKIP_AUDIT=1 set — continuing with a KNOWN-BAD build."
+fi
+
 say "1/5  python wheel + sdist (universal)"
 stamp release
 if python3 -c "import build" 2>/dev/null; then

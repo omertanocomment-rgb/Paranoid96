@@ -45,13 +45,40 @@ def _deny_regex(pat):
 
 _DENY_RX = [_deny_regex(p) for p in config.DENY_PATTERNS]
 
+# Some things cannot be written as a literal because they have no canonical
+# spelling. A fork bomb is the example: the classic `:(){ :|:& };:` and the
+# spaceless `:(){:|:&};:` are the same command, the function can be called
+# anything, and the shell ignores the whitespace entirely. Matching the literal
+# caught one spelling and let the other through as NORMAL -- approvable, and it
+# takes the device down. So the shape is matched, not the text.
+_SHAPE_DENY = [
+    # <name>() { <name> | <name> & } ; <name>   -- self-piping background recursion
+    (r"([A-Za-z_:][\w:]*)\s*\(\s*\)\s*\{\s*\1\s*\|\s*\1\s*&\s*;?\s*\}\s*;\s*\1",
+     "fork bomb"),
+]
+_SHAPE_DENY_RX = [(re.compile(rx), label) for rx, label in _SHAPE_DENY]
+
+
+def _normalise(cmd: str) -> str:
+    """Collapse whitespace so spelling variants match the same pattern.
+
+    `rm  -rf  /` and `rm -rf /` are one command; only one of them matched a
+    literal pattern. Collapsing runs of whitespace to a single space keeps the
+    argument-end rule intact while removing that whole class of near-miss.
+    """
+    return re.sub(r"\s+", " ", str(cmd or "").strip())
+
 
 def denied_by(cmd: str):
     """The hard-deny pattern this command matches, or None."""
-    c = str(cmd or "").strip()
+    c = _normalise(cmd)
     for pat, rx in zip(config.DENY_PATTERNS, _DENY_RX):
         if rx.search(c):
             return pat
+    raw = str(cmd or "")
+    for rx, label in _SHAPE_DENY_RX:
+        if rx.search(raw) or rx.search(c):
+            return label
     return None
 
 

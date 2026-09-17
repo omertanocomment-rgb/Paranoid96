@@ -13,10 +13,12 @@ and returns plain dicts, so it works behind ASGI, behind `http.server`, or
 from a test harness with no server at all.
 """
 import threading
+import time
 
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
-               index as codeindex, scratch, theme, version, toolbox, localai)
+               index as codeindex, scratch, theme, version, toolbox, localai,
+               attach)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -26,11 +28,81 @@ _agent_locks: dict[str, threading.Lock] = {}
 _registry_lock = threading.Lock()
 
 
+#: The chat each project is currently writing into. An Agent holds its
+#: conversation in memory; this is what makes that conversation survive the
+#: process.
+_current_chat: dict[str, str] = {}
+
+
+def _resume_chat(project: str, agent: Agent) -> str:
+    """Find (or start) this project's live chat and refill the agent from it.
+
+    Conversations used to exist ONLY inside the Agent object. Nothing wrote
+    them anywhere, so Android reclaiming the service -- or a reboot, or a
+    crash -- silently took the whole conversation with it, mid-task, with no
+    error and nothing left on disk to recover. The chat store had existed the
+    whole time; /api/chat simply never called it.
+
+    So: the newest non-archived chat in the project is resumed, and the agent
+    starts with the history that is actually on disk rather than empty.
+    """
+    # listing() returns {"status", "chats", ...}, not a bare list. Getting this
+    # wrong raised a TypeError that a broad `except` then swallowed, leaving no
+    # current chat and persistence silently off -- the exact shape of the bug
+    # being fixed here, reintroduced by its own fix.
+    try:
+        rows = chats.listing(project=project, include_archived=False)["chats"]
+    except (KeyError, TypeError, OSError, ValueError) as e:
+        note = f"could not list chats for {project!r}: {type(e).__name__}: {e}"
+        sandbox.log_event({"kind": "persistence_warning", "detail": note})
+        rows = []
+    live = next((r for r in rows if not r.get("private")), None)
+    if live is None:
+        made = chats.create(title=None, project=project)
+        cid = made.get("id", "")
+    else:
+        cid = live.get("id", "")
+        try:
+            body = chats.load(cid)
+            if isinstance(body, dict) and body.get("status") == "locked":
+                # a passcode chat cannot be resumed without the passcode
+                msgs = None
+            else:
+                msgs = body.get("messages") if isinstance(body, dict) else None
+            if msgs:
+                # Only the plain turns: tool logs and approval records are
+                # rebuilt per turn and would confuse the model's context.
+                agent.history = [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in msgs
+                    if isinstance(m, dict) and m.get("role") in ("user", "assistant")
+                    and isinstance(m.get("content"), str)
+                ]
+                agent._trim_history()
+        except Exception:  # noqa: BLE001 — a locked or corrupt chat starts fresh
+            pass
+    _current_chat[project] = cid
+    return cid
+
+
+def current_chat(project: str) -> str:
+    return _current_chat.get(project, "")
+
+
 def get_agent(project: str) -> Agent:
     with _registry_lock:
         if project not in _agents:
-            _agents[project] = Agent(project=project)
+            agent = Agent(project=project)
+            _agents[project] = agent
             _agent_locks[project] = threading.Lock()
+            try:
+                _resume_chat(project, agent)
+            except Exception as e:  # noqa: BLE001
+                # Chatting still works without a chat record, but silence here
+                # is what let "conversations are never saved" go unnoticed.
+                sandbox.log_event({"kind": "persistence_warning",
+                                   "detail": f"resume failed for {project!r}: "
+                                             f"{type(e).__name__}: {e}"})
         return _agents[project]
 
 
@@ -90,6 +162,18 @@ def localai_control(payload) -> dict:
     return {"error": f"unknown action: {action!r} (start, stop, advice)"}
 
 
+def attachments_payload(project=None) -> dict:
+    """What has been uploaded. No filtering by type -- there is no type rule."""
+    return {"attachments": attach.listing(project), "stats": attach.stats()}
+
+
+def attachment_delete(payload) -> dict:
+    aid = (payload or {}).get("id", "")
+    if not aid:
+        return {"error": "id is required"}
+    return attach.delete(aid)
+
+
 def status_payload() -> dict:
     return {
         "build": version.info(),
@@ -105,6 +189,7 @@ def status_payload() -> dict:
         "workspace": workspace.stats(),
         "theme": theme.stats(),
         "localai": localai.stats(),
+        "attachments": attach.stats(),
         "terminal": {"shell": terminal._shell(),
                      "guard": terminal.guarded(),
                      "tools": toolbox.stats(),
@@ -239,7 +324,34 @@ def chat(payload: dict) -> dict:
     project = payload.get("project", "general")
     agent = get_agent(project)
     with _lock_for(project):
-        return dispatch(agent, payload)
+        result = dispatch(agent, payload)
+        _persist_turn(project, payload, result)
+        return result
+
+
+def _persist_turn(project: str, payload: dict, result: dict) -> None:
+    """Write this turn to disk before the reply is handed back.
+
+    Inside the per-project lock and before returning, so a turn cannot be lost
+    between being produced and being saved. Persisting must never break the
+    reply: a failed write is recorded on the result rather than raised, because
+    losing the answer as well as the record would be strictly worse.
+    """
+    cid = _current_chat.get(project)
+    if not cid:
+        return
+    try:
+        text = payload.get("text") or payload.get("cmd") or payload.get("note")
+        if payload.get("kind", "chat") == "chat" and text:
+            chats.append(cid, {"role": "user", "content": str(text),
+                               "at": time.time()})
+        reply = (result or {}).get("text")
+        if reply:
+            chats.append(cid, {"role": "assistant", "content": str(reply),
+                               "at": time.time()})
+        result["chat_id"] = cid
+    except Exception as e:  # noqa: BLE001
+        result["persist_error"] = f"{type(e).__name__}: {e}"
 
 
 # ── approval policy ─────────────────────────────────────────────────────────

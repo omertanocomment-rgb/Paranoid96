@@ -46,4 +46,29 @@ print("4) hard-deny:", p["status"], "✓")
 assert p["status"] == "denied_by_policy"
 
 os.remove('/tmp/SHOULD_NOT_EXIST')
+
+# 5) fork bombs, in every spelling.
+#
+# A fork bomb has no canonical form: `:(){ :|:& };:` and `:(){:|:&};:` are the
+# same command, the function can be called anything, and the shell ignores the
+# whitespace. The deny list held one literal spelling, so the ordinary spaced
+# version classified as NORMAL -- approvable, and it takes the device down.
+# Now the SHAPE is matched, so spacing and naming stop mattering.
+# Found by scripts/audit.py on its first real run.
+_bad = []
+for _bomb in (":(){ :|:& };:", ":(){:|:&};:", ":() { : | : & }; :",
+              "bomb(){ bomb|bomb& };bomb", "x() { x|x & };x"):
+    if sandbox.classify(_bomb) != sandbox.Tier.DENY:
+        _bad.append("fork bomb not denied: %r" % _bomb)
+for _cmd in ("rm  -rf   /", "rm -rf  /"):
+    if sandbox.classify(_cmd) != sandbox.Tier.DENY:
+        _bad.append("whitespace variant not denied: %r" % _cmd)
+# ...and ordinary work must still not be denied: a refusal cannot be approved,
+# so a false positive is a bug the user has no way to work around.
+for _ok in ("rm -rf /tmp/build", "rm -rf ./node_modules", "echo hello"):
+    if sandbox.classify(_ok) == sandbox.Tier.DENY:
+        _bad.append("false deny: %r" % _ok)
+assert not _bad, "FAIL: " + "; ".join(_bad)
+print("5) fork bombs denied in every spelling, real work still allowed  \u2713")
+
 print("\nALL SAFETY TESTS PASSED")

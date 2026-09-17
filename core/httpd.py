@@ -59,7 +59,7 @@ class Handler(BaseHTTPRequestHandler):
     # why none of them may be driven from another machine. /api/chat is not
     # here: it goes through the gate, so a token is enough for it.
     LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path",
-                  "/api/localai")
+                  "/api/localai", "/api/attach")
 
     def _is_local_only(self, path):
         return any(path == p.rstrip("/") or path.startswith(p)
@@ -117,6 +117,72 @@ class Handler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {}
 
+    def _recv_attachment(self):
+        """Stream an upload to disk. No size cap, no type check.
+
+        Deliberately NOT going through _body(): that caps at 16 MiB and decodes
+        the whole request before anything looks at it, which for a multi-
+        gigabyte file would take the app down. Reading in chunks means the file
+        never exists in memory, so the only real limit is the device's disk.
+        """
+        from . import attach
+        try:
+            declared = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            return {"error": "bad Content-Length"}
+        if declared <= 0:
+            return {"error": "no body — send the file bytes as the request body"}
+        name = (self.headers.get("x-omerta-filename")
+                or self._query().get("name", [""])[0] or "attachment")
+        project = (self.headers.get("x-omerta-project")
+                   or self._query().get("project", [""])[0] or "")
+        note = self.headers.get("x-omerta-note", "")
+
+        remaining = {"n": declared}
+
+        def read(size):
+            # Never read past Content-Length: the socket does not close after
+            # the body, so an over-read would block until the client times out.
+            want = min(size, remaining["n"])
+            if want <= 0:
+                return b""
+            chunk = self.rfile.read(want)
+            remaining["n"] -= len(chunk)
+            return chunk
+
+        return attach.save_stream(read, name, project=project, note=note,
+                                  declared_size=declared)
+
+    def _send_attachment(self, aid):
+        from . import attach
+        p = attach.path_for(aid.strip("/"))
+        if p is None:
+            return self._json({"error": "no such attachment"}, 404)
+        rec = attach.get(aid.strip("/")) or {}
+        try:
+            size = p.stat().st_size
+            self.send_response(200)
+            # Every attachment comes back as an opaque download. Anything else
+            # would let a stored .html or .svg run as script inside the app's
+            # own origin -- which is not a limit on what may be uploaded, only
+            # a refusal to execute it here.
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Disposition",
+                             'attachment; filename="%s"'
+                             % rec.get("name", "attachment").replace('"', ""))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Length", str(size))
+            self.end_headers()
+            with open(p, "rb") as fh:
+                while True:
+                    chunk = fh.read(attach.CHUNK)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except OSError:
+            pass
+        return None
+
     def _serve_asset(self, name):
         path = (config.ASSETS_DIR / name).resolve()
         if config.ASSETS_DIR.resolve() not in path.parents or not path.is_file():
@@ -170,6 +236,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.version_payload())
         if path == "/api/localai":
             return self._json(api.localai_status())
+        if path == "/api/attach":
+            return self._json(api.attachments_payload(
+                (self._query().get("project") or [None])[0]))
+        if path.startswith("/api/attach/"):
+            return self._send_attachment(path[len("/api/attach/"):])
         if path == "/api/memory":
             q = self._query()
             return self._json(api.memory_payload(
@@ -255,6 +326,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.set_secret(self._body()))
         if path == "/api/localai":
             return self._json(api.localai_control(self._body()))
+        if path == "/api/attach/delete":
+            return self._json(api.attachment_delete(self._body()))
+        if path == "/api/attach":
+            return self._json(self._recv_attachment())
         if path == "/api/policy":
             return self._json(api.set_policy(self._body()))
         if path == "/api/settings":

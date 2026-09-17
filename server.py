@@ -42,7 +42,7 @@ MAX_BODY = 16 * 1024 * 1024
 # because you drive them yourself — which is why none may be driven remotely.
 # /api/chat is deliberately absent: it DOES go through the gate.
 LOCAL_ONLY_PREFIXES = ("/api/term", "/api/ws/", "/api/scratch",
-                       "/api/learn/path", "/api/localai")
+                       "/api/learn/path", "/api/localai", "/api/attach")
 
 
 def _is_local_only(path: str) -> bool:
@@ -115,6 +115,66 @@ def status():
 @app.get("/api/version")
 def version():
     return api.version_payload()
+
+
+@app.get("/api/attach")
+def attachments(project: str = None):
+    return api.attachments_payload(project)
+
+
+@app.get("/api/attach/{aid}")
+def attachment_get(aid: str):
+    """Always an opaque download, never rendered.
+
+    There is no restriction on what may be uploaded. This is only a refusal to
+    execute a stored .html or .svg as script inside the app's own origin.
+    """
+    from fastapi.responses import FileResponse
+    from core import attach as _a
+    p = _a.path_for(aid)
+    if p is None:
+        return JSONResponse({"error": "no such attachment"}, status_code=404)
+    rec = _a.get(aid) or {}
+    return FileResponse(str(p), media_type="application/octet-stream",
+                        filename=rec.get("name", "attachment"),
+                        headers={"X-Content-Type-Options": "nosniff"})
+
+
+@app.post("/api/attach")
+async def attachment_put(request: Request):
+    """Stream the raw body to disk. No size cap, no type check.
+
+    Not using a parsed body on purpose: that would buffer the whole upload in
+    memory, which for a multi-gigabyte file takes the process down.
+    """
+    from core import attach as _a
+    name = (request.headers.get("x-omerta-filename")
+            or request.query_params.get("name") or "attachment")
+    project = (request.headers.get("x-omerta-project")
+               or request.query_params.get("project") or "")
+    note = request.headers.get("x-omerta-note", "")
+    try:
+        declared = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        declared = 0
+
+    inc = _a.Incoming(name, project=project, note=note)
+    if inc.error:
+        return {"error": inc.error}
+    try:
+        async for chunk in request.stream():
+            inc.write(chunk)
+            if inc.error:
+                break
+    except Exception as e:  # noqa: BLE001 — a dropped connection is not a crash
+        inc.abort()
+        return {"error": f"upload interrupted after {inc.written} bytes: {e}"}
+    return inc.finish(declared or None)
+
+
+@app.post("/api/attach/delete")
+def attachment_delete(payload: dict):
+    return api.attachment_delete(payload)
 
 
 @app.get("/api/localai")

@@ -486,6 +486,13 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
         <div class="noteline" id="secretMsg"></div>
       </div>
 
+      <h3>Attachments</h3>
+      <div class="tiny">Any file, any size, any type — nothing is rejected.
+        Stored on this device only.</div>
+      <input type="file" id="attachFile" multiple style="width:100%;margin:6px 0">
+      <button class="mini" style="width:100%" onclick="doAttach()">upload</button>
+      <div class="buildbox" id="attachBox"><div class="tiny">none yet</div></div>
+
       <h3>On-device model</h3>
       <div class="tiny">Runs a model on this device — no API key, no network,
         no other machine. Drop a .gguf file in the models folder below.</div>
@@ -1225,6 +1232,58 @@ async function setProvider(){
   await post('/api/model',{provider:document.getElementById('providerSel').value});
   loadStatus();
 }
+function fmtBytes(n){
+  n=Number(n)||0;
+  const u=['B','KB','MB','GB','TB']; let i=0;
+  while(n>=1024&&i<u.length-1){n/=1024;i++;}
+  return n.toFixed(i?1:0)+' '+u[i];
+}
+async function loadAttachments(){
+  const box=document.getElementById('attachBox');
+  let d; try{ d=await get('/api/attach'); }
+  catch(e){ box.innerHTML='<div class="tiny">unavailable</div>'; return; }
+  const rows=d.attachments||[];
+  if(!rows.length){
+    box.innerHTML='<div class="tiny">none yet · '+
+      fmtBytes((d.stats||{}).free)+' free</div>';
+    return;
+  }
+  box.innerHTML=rows.map(r=>
+    '<div>'+esc(r.name)+' <span class="tiny">'+fmtBytes(r.bytes)+'</span> '+
+    '<a href="/api/attach/'+esc(r.id)+'" download>get</a> '+
+    '<a href="#" onclick="delAttach(\''+esc(r.id)+'\');return false">del</a></div>'
+  ).join('')+'<div class="tiny">'+rows.length+' file'+(rows.length===1?'':'s')+
+    ' · '+fmtBytes((d.stats||{}).bytes)+' used · '+
+    fmtBytes((d.stats||{}).free)+' free</div>';
+}
+async function doAttach(){
+  const inp=document.getElementById('attachFile');
+  const box=document.getElementById('attachBox');
+  const files=Array.from(inp.files||[]);
+  if(!files.length){ box.innerHTML='<div class="tiny">pick a file first</div>'; return; }
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    box.innerHTML='<div class="tiny">uploading '+esc(f.name)+' ('+
+      fmtBytes(f.size)+') — '+(i+1)+' of '+files.length+'…</div>';
+    try{
+      // the raw File as the body: the browser streams it, so a multi-gigabyte
+      // file is never held in memory on either side
+      const r=await fetch('/api/attach',{method:'POST',body:f,
+        headers:{'X-Omerta-Filename':encodeURIComponent(f.name).replace(/%20/g,' ')}});
+      const j=await r.json();
+      if(j.error){ box.innerHTML='<div class="warn">'+esc(j.error)+'</div>'; return; }
+    }catch(e){
+      box.innerHTML='<div class="warn">upload failed: '+esc(e.message||e)+'</div>';
+      return;
+    }
+  }
+  inp.value='';
+  await loadAttachments();
+}
+async function delAttach(id){
+  try{ await post('/api/attach/delete',{id}); }catch(e){}
+  await loadAttachments();
+}
 let BUILD=null;
 async function loadBuild(){
   const box=document.getElementById('buildBox');
@@ -1482,7 +1541,7 @@ async function deleteTheme(){
 /* ───────── boot ───────── */
 (async function(){
   await loadTheme(); await loadStatus(); await loadModes(); await loadSecrets();
-  await loadBuild(); await loadLocalai();
+  await loadBuild(); await loadLocalai(); await loadAttachments();
   addMsg('agent','OMERTA online. Ask, or switch to PLAN to think it through first.');
 })();
 </script>
