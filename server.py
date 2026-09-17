@@ -37,6 +37,18 @@ PUBLIC_PATHS = {"/favicon.ico", "/icon.svg", "/theme.css"}
 MAX_BODY = 16 * 1024 * 1024
 
 
+# Direct-operation surfaces: a shell, the editor's writes, a sandbox that runs
+# commands, learning a file by absolute path. None go through the approval gate
+# because you drive them yourself — which is why none may be driven remotely.
+# /api/chat is deliberately absent: it DOES go through the gate.
+LOCAL_ONLY_PREFIXES = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path")
+
+
+def _is_local_only(path: str) -> bool:
+    return any(path == p.rstrip("/") or path.startswith(p)
+               for p in LOCAL_ONLY_PREFIXES)
+
+
 @app.middleware("http")
 async def auth_gate(request: Request, call_next):
     """Token check on every HTTP route. Accepts ?token=, X-Omerta-Token
@@ -63,6 +75,8 @@ async def auth_gate(request: Request, call_next):
             {"error": "unauthorized",
              "hint": "append ?token=... (printed in the server console)"},
             status_code=401)
+    if _is_local_only(path) and not auth.is_local_request(client, spoofable):
+        return JSONResponse({"error": f"{path} is local-only"}, status_code=403)
     resp = await call_next(request)
     if request.query_params.get("token"):
         resp.set_cookie(auth.COOKIE, request.query_params["token"],

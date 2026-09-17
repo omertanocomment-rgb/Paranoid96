@@ -20,6 +20,17 @@ def _backup(p: Path):
     return str(dest)
 
 
+def backup(path):
+    """Snapshot a file before something else changes it.
+
+    Public because other modules legitimately need it — accepting a scratch
+    sandbox's changes replaces real files, and that should be as undoable as
+    any other edit. Reaching into `_backup` from outside was working but
+    fragile: a private name is free to change.
+    """
+    return _backup(Path(path))
+
+
 def read_file(path, max_bytes=60000):
     p = Path(path)
     if not p.exists():

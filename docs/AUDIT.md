@@ -261,3 +261,62 @@ command would be checking the wrong string.
 
 Network is off by default and opened per command (`run +net`), so the case that
 genuinely needs it — installing dependencies — is the only thing that gets it.
+
+## Full-build audit — the new surfaces (editor, sandbox, themes, learning)
+
+Everything added after the last pass introduced new HTTP endpoints, and three
+of them broke the approval contract over the network. All three were proven by
+exploit against a running server, not inferred from reading the routing table.
+
+| # | Severity | Finding | Evidence |
+|---|----------|---------|----------|
+| **F13** | **Critical** | **Remote code execution with a token.** `/api/scratch/run` calls `sandbox.run` directly. `sandbox.run`'s own docstring says "only call after the user approved this exact command" — the scratch sandbox called it without any approval step, and the endpoint was reachable by any client holding the token. | A caller presenting `X-Forwarded-For: 203.0.113.9` with a valid token ran `id` and got `uid=0 gid=0 groups=0` back in `stdout`. |
+| **F14** | High | **Arbitrary file write.** `/api/ws/commit` writes a file anywhere inside the workspace roots. The UI politely calls `/api/ws/propose` first and shows a diff, but the API never required it, and the endpoint was token-only. | The same remote caller turned a file containing `ORIGINAL` into `PWNED BY REMOTE`. |
+| F15 | Medium | **Arbitrary host read.** `/api/learn/path` ingests any absolute path into memory. Token-only, so a remote caller could read and exfiltrate host files through the learning shelf. | `POST /api/learn/path {"path": "/etc/hostname"}` returned `ok` for the remote caller. |
+
+**The fix, and why this shape.** These endpoints are *direct operation of your
+own device* — an editor save, a command in your sandbox, a file you point at.
+They deliberately do not go through the approval gate, because you are the one
+driving them; the gate exists to stop the *model* acting unsupervised. That
+reasoning is exactly why they must not be drivable from another machine, and it
+is the rule the terminal already followed. The list is now one constant applied
+in one place per server:
+
+```
+LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path")
+```
+
+On the FastAPI server it lives in the auth middleware, so a route added later
+cannot forget it. `/api/chat` is deliberately absent: it routes through the
+approval gate, so a token is sufficient for it, and that is the whole
+distinction.
+
+Re-verified after the fix: all ten probed endpoints return 403 to a forwarded
+caller holding a valid token, the targeted file still reads `ORIGINAL`, and the
+app itself on loopback is unaffected (the browser test drives browse → edit →
+propose → approve → save, search, and sandbox creation with no console errors).
+Regression test: `local_only_cases` in `tests/test_httpd.py`.
+
+### Also fixed in this pass
+
+- `core/scratch.py` reached into `fileops._backup` via `__import__("pathlib")`.
+  Accepting a sandbox's changes replaces real files and should be as undoable as
+  any other edit, so `fileops.backup()` is now public and the hack is gone.
+- The `cryptography` probe in `core/chats.py` catches `BaseException` on
+  purpose (a broken install raises pyo3's `PanicException`, which is not an
+  `Exception`), but it also swallowed `KeyboardInterrupt`. It now re-raises
+  `KeyboardInterrupt` and `SystemExit` before the catch-all.
+
+### Checked clean
+
+- `compileall` over the whole tree; no `eval`/`exec`/`pickle`/`yaml.load`/
+  `os.system`; one `shell=True`, the gated one in `core/sandbox.py`; no
+  key-shaped strings anywhere.
+- 21 hostile-input probes across chats, learning, themes, scratch and the
+  workspace (missing ids, traversal paths, wrong types, oversize versions,
+  a directory where a file was expected): **zero unhandled exceptions**, every
+  one returned a structured error.
+- `scratch.accept` cannot be talked into writing outside the project: the
+  accept list is filtered against the computed change set, whose paths come
+  from `os.path.relpath` inside the work tree with symlinks skipped, so a
+  caller-supplied `../../escape` is simply not in it.

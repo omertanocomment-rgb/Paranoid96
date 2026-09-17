@@ -52,6 +52,18 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:  # noqa: BLE001
             return None
 
+    # Surfaces that are DIRECT OPERATION of this device rather than the agent
+    # acting: a shell, the editor's writes, a sandbox that executes commands,
+    # and learning a file by absolute path. None of them route through the
+    # approval gate, because you are the one driving them -- which is exactly
+    # why none of them may be driven from another machine. /api/chat is not
+    # here: it goes through the gate, so a token is enough for it.
+    LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path")
+
+    def _is_local_only(self, path):
+        return any(path == p.rstrip("/") or path.startswith(p)
+                   for p in self.LOCAL_ONLY)
+
     def _local(self):
         """Did this request genuinely come from this device? Forwarding
         headers make the source unknowable, so they forfeit "local"."""
@@ -142,6 +154,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if not self._authorized():
             return self._unauthorized()
+        if self._is_local_only(path) and not self._local():
+            return self._json({"error": f"{path} is local-only"}, 403)
 
         if path == "/":
             try:
@@ -197,11 +211,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.chat_projects())
         if path == "/api/chats/open":
             return self._json(api.chat_open((self._query().get("id") or [""])[0]))
-        # reading a terminal is reading a shell's output — same local-only
-        # rule as writing to one (see do_POST)
         if path.startswith("/api/term"):
-            if not self._local():
-                return self._json({"error": "the terminal is local-only"}, 403)
             if path == "/api/term":
                 return self._json(api.term_list())
             if path == "/api/term/read":
@@ -216,6 +226,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if not self._authorized():
             return self._unauthorized()
+        if self._is_local_only(path) and not self._local():
+            return self._json({"error": f"{path} is local-only"}, 403)
         if path == "/api/chat":
             return self._json(api.chat(self._body()))
         if path == "/api/model":
@@ -292,9 +304,6 @@ class Handler(BaseHTTPRequestHandler):
         # handing a remote client a shell is a different thing entirely from
         # letting them chat with the agent.
         if path.startswith("/api/term"):
-            if not self._local():
-                return self._json(
-                    {"error": "the terminal is local-only"}, 403)
             routes = {"/api/term/open": api.term_open,
                       "/api/term/write": api.term_write,
                       "/api/term/signal": api.term_signal,

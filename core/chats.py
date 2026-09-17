@@ -93,6 +93,8 @@ def _aesgcm():
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         AESGCM(secrets.token_bytes(32)).encrypt(secrets.token_bytes(12), b"x", None)
         _AESGCM_PROBE.append(AESGCM)
+    except (KeyboardInterrupt, SystemExit):
+        raise                                      # never swallow these
     except BaseException:                          # noqa: BLE001
         _AESGCM_PROBE.append(None)
     return _AESGCM_PROBE[0]

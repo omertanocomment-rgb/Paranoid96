@@ -354,13 +354,13 @@ def accept(args=None):
         try:
             if row["kind"] == "removed":
                 if os.path.isfile(dest):
-                    fileops._backup(__import__("pathlib").Path(dest))
+                    fileops.backup(dest)
                     os.remove(dest)
                     deleted.append(rel)
                 continue
             os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
             if os.path.isfile(dest):
-                fileops._backup(__import__("pathlib").Path(dest))
+                fileops.backup(dest)
             shutil.copy2(srcf, dest)
             written.append(rel)
         except OSError as e:

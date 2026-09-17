@@ -49,6 +49,50 @@ def chat_roundtrip(msg):
     return json.loads(body.decode())
 
 
+def local_only_cases(tok):
+    """A valid token must not buy remote file writes or code execution.
+
+    These endpoints do NOT go through the approval gate — you drive them
+    yourself from the app (an editor save, a sandbox command, a shell), which
+    is exactly why they must not be reachable from another machine. This was a
+    real hole: with a token, a forwarded caller ran `id` via /api/scratch/run
+    and overwrote a file via /api/ws/commit.
+
+    /api/chat is deliberately excluded: it routes through the gate, so a token
+    is sufficient for it.
+    """
+    import tempfile
+    proj = tempfile.mkdtemp()
+    os.environ["OMERTA_WORKSPACE_ROOTS"] = proj
+    victim = os.path.join(proj, "victim.txt")
+    with open(victim, "w") as f:
+        f.write("ORIGINAL\n")
+
+    remote = {"X-Forwarded-For": "203.0.113.9"}
+    probes = [
+        ("POST", "/api/ws/commit", {"path": victim, "content": "PWNED\n"}),
+        ("POST", "/api/ws/read", {"path": victim}),
+        ("POST", "/api/ws/tree", {"path": proj}),
+        ("GET", "/api/ws/backups", None),
+        ("GET", "/api/scratch", None),
+        ("POST", "/api/scratch/new", {"source": proj}),
+        ("POST", "/api/scratch/run", {"id": "x", "cmd": "id"}),
+        ("POST", "/api/learn/path", {"path": "/etc/hostname"}),
+        ("POST", "/api/term/open", {}),
+        ("GET", "/api/term", None),
+    ]
+    results = []
+    for method, path, body in probes:
+        code, _ = req(path, headers=remote, token=tok, method=method, body=body)
+        results.append((path, code))
+    reachable = [p for p, c in results if c not in (401, 403)]
+    untouched = open(victim).read().strip() == "ORIGINAL"
+
+    # loopback must still work, or the fix broke the app
+    code, _ = req("/api/ws/read", method="POST", body={"path": victim})
+    return results, reachable, untouched, code
+
+
 def main():
     router.complete = fake_complete
     agent_mod.router.complete = fake_complete
@@ -69,7 +113,17 @@ def main():
             ("SPOOFED Forwarded",                {"Forwarded": "for=127.0.0.1"},   None, 401),
             ("forwarded + valid token",          {"X-Forwarded-For": "127.0.0.1"}, tok,  200),
         ]
-        ok = True
+        results, reachable, untouched, loop_code = local_only_cases(tok)
+        print(f"\n  direct-operation endpoints vs a REMOTE caller with a "
+              f"valid token ({len(results)} probed):")
+        for path, code in results:
+            print(f"    {'✓' if code in (401, 403) else '✗'} {path:22} HTTP {code}")
+        local_ok = (not reachable) and untouched and loop_code == 200
+        print(f"  {'✓' if not reachable else '✗'} none are reachable remotely")
+        print(f"  {'✓' if untouched else '✗'} the targeted file was not overwritten")
+        print(f"  {'✓' if loop_code == 200 else '✗'} loopback still works (HTTP {loop_code})")
+
+        ok = local_ok
         for name, hdrs, t, expect in cases:
             got, _ = req(headers=hdrs, token=t)
             mark = "✓" if got == expect else "✗"
