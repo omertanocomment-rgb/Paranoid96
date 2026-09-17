@@ -16,7 +16,7 @@ import threading
 
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
-               index as codeindex, scratch, theme, version, toolbox)
+               index as codeindex, scratch, theme, version, toolbox, localai)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -67,6 +67,29 @@ def version_payload() -> dict:
     return version.info()
 
 
+def localai_status() -> dict:
+    """Everything the on-device engine screen needs."""
+    return localai.status()
+
+
+def localai_control(payload) -> dict:
+    """Start or stop the on-device engine.
+
+    Local-only at the transport layer, like the terminal and the sandbox:
+    starting a model server is direct operation of the device, not the agent
+    acting, so it does not go through the approval gate -- and therefore must
+    not be reachable from another machine.
+    """
+    action = (payload or {}).get("action", "")
+    if action == "start":
+        return localai.start(model=(payload or {}).get("model"))
+    if action == "stop":
+        return localai.stop()
+    if action == "advice":
+        return localai.advice()
+    return {"error": f"unknown action: {action!r} (start, stop, advice)"}
+
+
 def status_payload() -> dict:
     return {
         "build": version.info(),
@@ -81,6 +104,7 @@ def status_payload() -> dict:
         "scratch": scratch.stats(),
         "workspace": workspace.stats(),
         "theme": theme.stats(),
+        "localai": localai.stats(),
         "terminal": {"shell": terminal._shell(),
                      "guard": terminal.guarded(),
                      "tools": toolbox.stats(),

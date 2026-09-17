@@ -22,5 +22,6 @@ echo "=== mode + history ==="     && python3 tests/test_mode_history.py
 echo "=== multi-device sync ===" && python3 tests/test_sync.py
 echo "=== version + build stamp ===" && python3 tests/test_version.py
 echo "=== bundled toolset ===" && python3 tests/test_toolbox.py
+echo "=== on-device engine ===" && python3 tests/test_localai.py
 echo "=== doctor ==="            && python3 scripts/doctor.py > /dev/null && echo "doctor ran clean"
 echo && echo "ALL TESTS PASSED"

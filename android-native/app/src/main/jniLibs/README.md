@@ -39,3 +39,38 @@ a normal process boundary, so it is not itself derived from BusyBox. Replacing
 `libbusybox.so` with your own build is supported and expected: drop in any
 static aarch64 BusyBox and `toolbox.py` will read its applet list from the
 binary rather than assuming ours.
+
+## libllamaserver.so — llama.cpp server, aarch64 Android
+
+The on-device inference engine. This is what lets OMERTA answer a question
+with no API key, no network and no second machine: it serves a GGUF model over
+loopback, and `core/localai.py` starts and stops it.
+
+Packaged as `lib*.so` for the same reason as BusyBox — it is the only
+directory an Android app may execute from. Built against the Android NDK, so
+it links `/system/bin/linker64` and only `libc`/`libm`/`libdl`; the C++
+runtime is static, so there is nothing else to ship.
+
+### Provenance
+
+Built from upstream llama.cpp, unmodified:
+
+    https://github.com/ggml-org/llama.cpp
+    commit ebbb185227c31f1652f1445e2623563d2f67fe5a
+
+    NDK 26.3.11579264, ANDROID_ABI=arm64-v8a, ANDROID_PLATFORM=android-28
+    -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_OPENMP=OFF
+    -DLLAMA_CURL=OFF -DLLAMA_BUILD_SERVER=ON
+    then llvm-strip --strip-all
+
+### Licence
+
+llama.cpp is **MIT**. It permits redistribution in binary form, including
+inside a closed application, provided the copyright notice and permission
+notice are preserved — see LICENSE-llama.cpp.txt next to this file.
+
+Unlike the GPLv2 BusyBox binary, this imposes no obligation to offer source,
+though the upstream commit is recorded above regardless.
+
+Model weights are NOT bundled and are not covered by this licence. A GGUF file
+carries whatever licence its creator chose, and that is between you and them.

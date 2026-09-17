@@ -41,7 +41,8 @@ MAX_BODY = 16 * 1024 * 1024
 # commands, learning a file by absolute path. None go through the approval gate
 # because you drive them yourself — which is why none may be driven remotely.
 # /api/chat is deliberately absent: it DOES go through the gate.
-LOCAL_ONLY_PREFIXES = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path")
+LOCAL_ONLY_PREFIXES = ("/api/term", "/api/ws/", "/api/scratch",
+                       "/api/learn/path", "/api/localai")
 
 
 def _is_local_only(path: str) -> bool:
@@ -114,6 +115,16 @@ def status():
 @app.get("/api/version")
 def version():
     return api.version_payload()
+
+
+@app.get("/api/localai")
+def localai_status():
+    return api.localai_status()
+
+
+@app.post("/api/localai")
+def localai_control(payload: dict):
+    return api.localai_control(payload)
 
 
 @app.post("/api/chat")

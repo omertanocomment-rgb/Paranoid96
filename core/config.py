@@ -247,6 +247,16 @@ PROVIDERS = {
         "api_key_env": "GEMINI_API_KEY",
         "needs_internet": True,
     },
+    "omerta": {
+        "kind": "llamacpp",
+        "label": "OMERTA on-device (no key, no network)",
+        "model": get("OMERTA_LOCAL_GGUF", "on-device"),
+        "base_url": "http://127.0.0.1:" + get("OMERTA_LOCALAI_PORT", "8081"),
+        "needs_internet": False,
+        # OMERTA starts and stops this one itself; every other provider is
+        # something you run, so only this one may be launched on demand.
+        "managed": True,
+    },
     "ollama": {
         "kind": "ollama",
         "label": "Ollama (local, offline, unlimited)",

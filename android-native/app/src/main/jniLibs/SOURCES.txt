@@ -1,1 +1,2 @@
-999cb969d09093a71716cfc747bb53cdada3f332c05eb5046c56e0f66a4d6d22  android-native/app/src/main/jniLibs/arm64-v8a/libbusybox.so
+999cb969d09093a71716cfc747bb53cdada3f332c05eb5046c56e0f66a4d6d22  /home/user/Paranoid96/android-native/app/src/main/jniLibs/arm64-v8a/libbusybox.so
+45c810a20dabd23474dc9be49ae4a1d9f418eeb204cf14f486298c30389be186  /home/user/Paranoid96/android-native/app/src/main/jniLibs/arm64-v8a/libllamaserver.so

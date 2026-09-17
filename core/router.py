@@ -41,6 +41,16 @@ def provider_status() -> dict:
                 why = ""
             elif spec.get("needs_internet"):
                 why = f"no key in ${spec.get('api_key_env','?')}"
+            elif spec.get("managed"):
+                from . import localai
+                st = localai.stats()
+                if not st["available"]:
+                    why = "this build has no on-device engine"
+                elif not st["models"]:
+                    why = "no .gguf model on the device yet"
+                else:
+                    why = st["error"] or "engine idle — starts on first message"
+                    ready = not st["error"]
             else:
                 why = f"not running at {spec.get('base_url','')}"
         except Exception as e:  # noqa: BLE001
@@ -50,8 +60,26 @@ def provider_status() -> dict:
     return out
 
 
+def _ensure_managed(pid, spec):
+    """Start the on-device engine if this provider is ours and it is idle.
+
+    Every other provider is a service you run; this is the one OMERTA owns, so
+    "not running" is something to fix rather than a reason to fail over to a
+    cloud model the user may have chosen this provider specifically to avoid.
+    """
+    if not spec.get("managed"):
+        return
+    from . import localai
+    if localai.running():
+        return
+    st = localai.start()
+    if not st.get("running"):
+        raise ProviderError(st.get("error") or "the on-device engine did not start")
+
+
 def _try(pid, messages, system, max_tokens, stream_cb):
     spec = config.PROVIDERS[pid]
+    _ensure_managed(pid, spec)
     fn = KINDS[spec["kind"]]
     text = fn(spec, messages, system=system, max_tokens=max_tokens, stream_cb=stream_cb)
     return {"text": text, "provider": pid, "model": spec["model"],

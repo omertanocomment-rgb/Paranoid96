@@ -486,6 +486,15 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
         <div class="noteline" id="secretMsg"></div>
       </div>
 
+      <h3>On-device model</h3>
+      <div class="tiny">Runs a model on this device — no API key, no network,
+        no other machine. Drop a .gguf file in the models folder below.</div>
+      <div class="buildbox" id="localaiBox"><div class="tiny">checking…</div></div>
+      <div class="grid2" style="margin-bottom:10px">
+        <button class="mini" onclick="localaiStart()">start engine</button>
+        <button class="mini" onclick="localaiStop()">stop</button>
+      </div>
+
       <h3>Settings</h3>
       <div class="buildbox" id="buildBox" onclick="copyBuild()"
            title="tap to copy — paste this when you need to prove which build is running">
@@ -1253,6 +1262,43 @@ function copyBuild(){
     ta.remove(); say(ok?'copied':t);
   }
 }
+async function loadLocalai(){
+  const box=document.getElementById('localaiBox');
+  let d; try{ d=await get('/api/localai'); }
+  catch(e){ box.innerHTML='<div class="tiny">unavailable</div>'; return; }
+  if(!d.available){
+    box.innerHTML='<div class="warn">no engine in this build</div>'+
+      '<div class="tiny">This APK was built without the on-device model engine.</div>';
+    return;
+  }
+  const models=(d.models||[]);
+  let h='';
+  h+='<div><b>'+(d.running?'running':'stopped')+'</b>'+
+     (d.model?' · '+esc(d.model):'')+
+     (d.running&&d.uptime?' · up '+esc(d.uptime)+'s':'')+'</div>';
+  h+='<div>'+models.length+' model'+(models.length===1?'':'s')+
+     ' · '+esc(d.threads)+' threads</div>';
+  if(!models.length){
+    h+='<div class="warn">no .gguf file found</div>'+
+       '<div class="tiny">copy one into:<br>'+esc(d.models_dir)+'</div>';
+  } else {
+    h+='<div class="tiny">'+models.map(m=>esc(m.name)+' ('+
+        (m.bytes/1073741824).toFixed(1)+' GB)').join('<br>')+'</div>';
+  }
+  if(d.error) h+='<div class="warn">'+esc(d.error)+'</div>';
+  box.innerHTML=h;
+}
+async function localaiStart(){
+  const box=document.getElementById('localaiBox');
+  // loading a multi-gigabyte model is slow; say so rather than look frozen
+  box.innerHTML='<div class="tiny">starting — loading the model can take a minute…</div>';
+  try{ await post('/api/localai',{action:'start'}); }catch(e){}
+  await loadLocalai(); loadStatus();
+}
+async function localaiStop(){
+  try{ await post('/api/localai',{action:'stop'}); }catch(e){}
+  await loadLocalai(); loadStatus();
+}
 async function loadSettings(){
   const d=await get('/api/settings');
   const box=document.getElementById('settingsList'); box.innerHTML='';
@@ -1436,7 +1482,7 @@ async function deleteTheme(){
 /* ───────── boot ───────── */
 (async function(){
   await loadTheme(); await loadStatus(); await loadModes(); await loadSecrets();
-  await loadBuild();
+  await loadBuild(); await loadLocalai();
   addMsg('agent','OMERTA online. Ask, or switch to PLAN to think it through first.');
 })();
 </script>
