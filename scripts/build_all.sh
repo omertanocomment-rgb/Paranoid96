@@ -14,7 +14,15 @@ OUT="$(pwd)/artifacts"
 mkdir -p "$OUT"
 say() { printf "\n\033[93m[build]\033[0m %s\n" "$1"; }
 
+# Each stage stamps for itself. The stamp records a channel, and the Android
+# build writes its own ("android") from inside Gradle -- so a later desktop
+# stage that did not re-stamp would ship an artifact labelled android. Cheap
+# to redo, and the whole point of the stamp is that it is not a guess.
+stamp() { python3 scripts/stamp_build.py "$1" >/dev/null; }
+python3 scripts/sync_version.py
+
 say "1/5  python wheel + sdist (universal)"
+stamp release
 if python3 -c "import build" 2>/dev/null; then
   rm -rf build_pkg/dist
   bash scripts/_stage_package.sh
@@ -25,6 +33,7 @@ else
 fi
 
 say "2/5  standalone binary for $(uname -s)-$(uname -m)"
+stamp release
 if command -v pyinstaller >/dev/null; then
   pyinstaller --onefile --name omerta \
     --add-data "skills:skills" --add-data "plugins:plugins" \
@@ -42,6 +51,7 @@ else
 fi
 
 say "3/5  electron desktop app"
+stamp desktop
 if command -v npm >/dev/null; then
   (cd desktop && npm install --no-audit --no-fund)
   case "$(uname -s)" in
@@ -69,6 +79,7 @@ else
 fi
 
 say "5/6  packages (docker / deb / appimage)"
+stamp release
 if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
   docker build -t omerta-agent:latest -f docker/Dockerfile . && \
     echo "  built docker image omerta-agent:latest"
