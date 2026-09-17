@@ -9,6 +9,7 @@ Every proposal and every decision is recorded to memory, so the agent
 learns which actions you green-light and which you kill — without that
 learning ever being allowed to skip the asking.
 """
+import re
 import subprocess
 import time
 import json
@@ -25,11 +26,39 @@ class Tier:
     LOW_RISK = "LOW_RISK"
 
 
+# A deny pattern ending in a bare path root ("rm -rf /", "chmod -R 777 /")
+# means THAT root, not every path beneath it. Matched as a substring it also
+# denied `rm -rf /tmp/build` and `rm -rf /home/me/out` — ordinary commands that
+# cannot then be approved at all. A blocklist that blocks real work does not
+# make anyone safer; it teaches people to route around the tool.
+#
+# So a trailing "/" must be followed by something that ends the argument:
+# whitespace, a quote, a shell separator, a glob, or end of string. `rm -rf /`,
+# `rm -rf /*`, `sh -c "rm -rf /"` all still match. `rm -rf /tmp` does not.
+_ARG_END = r"""(?=$|[\s;&|'"`)\]]|\*)"""
+
+
+def _deny_regex(pat):
+    rx = re.escape(pat)
+    return re.compile(rx + _ARG_END if pat.endswith("/") else rx)
+
+
+_DENY_RX = [_deny_regex(p) for p in config.DENY_PATTERNS]
+
+
+def denied_by(cmd: str):
+    """The hard-deny pattern this command matches, or None."""
+    c = str(cmd or "").strip()
+    for pat, rx in zip(config.DENY_PATTERNS, _DENY_RX):
+        if rx.search(c):
+            return pat
+    return None
+
+
 def classify(cmd: str) -> str:
     c = cmd.strip()
-    for pat in config.DENY_PATTERNS:
-        if pat in c:
-            return Tier.DENY
+    if denied_by(c):
+        return Tier.DENY
     for p in config.HIGH_RISK_PREFIXES:
         if c.startswith(p):
             return Tier.HIGH_RISK
@@ -42,6 +71,18 @@ def classify(cmd: str) -> str:
 def _log(entry):
     with open(LOG_FILE, "a") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+def log_event(entry):
+    """Append an audit entry from outside this module (the terminal, mainly).
+
+    One audit trail, one format. Everything that touches the device lands in
+    `data/command_log.jsonl`, whether the agent proposed it or you typed it.
+    """
+    e = {"ts": time.time()}
+    e.update(entry or {})
+    _log(e)
+    return e
 
 
 def propose(cmd, cwd=".", project="general", reason="") -> dict:
@@ -70,7 +111,7 @@ def run(cmd, cwd=".", timeout=None, project="general") -> dict:
     try:
         from . import isolate
         if isolate.enabled():
-            net = str(config.get("OMERTA_ISOLATE_NET", "0")).lower() in ("1", "true", "yes")
+            net = config.flag("OMERTA_ISOLATE_NET")
             exec_cmd = isolate.wrap(cmd, workdir=cwd, net=net)
     except Exception:  # noqa: BLE001
         exec_cmd = cmd

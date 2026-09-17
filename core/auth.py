@@ -60,15 +60,36 @@ def rotate():
 
 
 def enabled():
-    return str(config.get("OMERTA_NO_AUTH", "0")).lower() not in ("1", "true", "yes")
+    return not config.flag("OMERTA_NO_AUTH")
 
 
 def allow_loopback():
-    return str(config.get("OMERTA_AUTH_LOOPBACK_FREE", "1")).lower() in ("1", "true", "yes")
+    return config.flag("OMERTA_AUTH_LOOPBACK_FREE", "1")
 
 
 def is_loopback(host):
     return host in ("127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1")
+
+
+def is_local_request(client_host, spoofable=False):
+    """True only for a request that genuinely originated on this device.
+
+    `is_loopback` alone is not enough for the gates that hand out real power
+    (a shell, a secret write): behind a reverse proxy every request arrives
+    from 127.0.0.1, so the socket address says "local" while the human is
+    anywhere. Forwarding headers mean we cannot know, and cannot-know must
+    mean no — the same rule `check()` already applies to the token exemption.
+    """
+    return is_loopback(client_host) and not spoofable
+
+
+def forwarded(headers):
+    """Whether a request carries proxy headers, so its source is unknowable.
+
+    Takes anything with `in` semantics over header names (a dict, or
+    http.client.HTTPMessage), so both servers ask the question the same way.
+    """
+    return any(h in headers for h in ("x-forwarded-for", "x-real-ip", "forwarded"))
 
 
 def check(request_token, client_host, spoofable=False):

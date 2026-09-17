@@ -94,6 +94,15 @@ def all_settings():
     return dict(_runtime)
 
 
+def truthy(value):
+    """One reading of 'on'. This test was written out in seven places."""
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def flag(key, default="0"):
+    return truthy(get(key, default))
+
+
 # ── secrets (API keys / local-model hosts) ─────────────────────────────────
 # Persisted separately from settings.json, 0600, and loaded into the process
 # environment on start so the provider modules (which read os.environ directly)
@@ -305,7 +314,7 @@ HISTORY_LIMIT = int(get("OMERTA_HISTORY_LIMIT", 60))
 # useful conversation inside a 2-4k context. COMPACT trims the prompt to the
 # essentials: short persona, only the core tools, no skill catalog, fewer
 # memories. The approval gate and hard-deny list are NEVER trimmed.
-COMPACT = str(get("OMERTA_COMPACT", "0")).lower() in ("1", "true", "yes")
+COMPACT = flag("OMERTA_COMPACT")
 COMPACT_RECALL = int(get("OMERTA_COMPACT_RECALL", 3))
 
 # ── Sync ─────────────────────────────────────────────────────────────────
@@ -313,7 +322,7 @@ COMPACT_RECALL = int(get("OMERTA_COMPACT_RECALL", 3))
 SYNC_DIR = get("OMERTA_SYNC_DIR", "")
 # Peers to sync with on startup, comma-separated host:port list.
 SYNC_PEERS = get("OMERTA_SYNC_PEERS", "")
-SYNC_ON_START = str(get("OMERTA_SYNC_ON_START", "0")).lower() in ("1", "true", "yes")
+SYNC_ON_START = flag("OMERTA_SYNC_ON_START")
 
 # ── Server ───────────────────────────────────────────────────────────────
 SERVER_HOST = get("OMERTA_HOST", "0.0.0.0")

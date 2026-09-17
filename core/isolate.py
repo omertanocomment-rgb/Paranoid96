@@ -100,7 +100,7 @@ def wrap(cmd, workdir=".", net=False):
 
 
 def enabled():
-    return str(config.get("OMERTA_ISOLATE", "0")).lower() in ("1", "true", "yes")
+    return config.flag("OMERTA_ISOLATE")
 
 
 def status():

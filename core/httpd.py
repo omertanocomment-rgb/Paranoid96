@@ -51,14 +51,18 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:  # noqa: BLE001
             return None
 
+    def _local(self):
+        """Did this request genuinely come from this device? Forwarding
+        headers make the source unknowable, so they forfeit "local"."""
+        client = self.client_address[0] if self.client_address else ""
+        return auth.is_local_request(client, auth.forwarded(self.headers))
+
     def _authorized(self):
         client = self.client_address[0] if self.client_address else ""
-        spoofable = any(h in self.headers for h in
-                        ("x-forwarded-for", "x-real-ip", "forwarded"))
         tok = (self._query_token()
                or self.headers.get("x-omerta-token")
                or self._cookie_token())
-        return auth.check(tok, client, spoofable=spoofable)
+        return auth.check(tok, client, spoofable=auth.forwarded(self.headers))
 
     def _send(self, body: bytes, ctype="application/json", status=200, headers=None):
         self.send_response(status)
@@ -147,6 +151,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.sync_status())
         if path == "/api/secret":
             return self._json(api.secret_status())
+        if path == "/api/policy":
+            return self._json(api.policy_status())
+        if path == "/api/settings":
+            return self._json(api.settings_payload())
+        # reading a terminal is reading a shell's output — same local-only
+        # rule as writing to one (see do_POST)
+        if path.startswith("/api/term"):
+            if not self._local():
+                return self._json({"error": "the terminal is local-only"}, 403)
+            if path == "/api/term":
+                return self._json(api.term_list())
+            if path == "/api/term/read":
+                q = self._query()
+                return self._json(api.term_read(
+                    {"id": (q.get("id") or [""])[0],
+                     "offset": int((q.get("offset") or [0])[0])}))
         return self._json({"error": f"no route {path}"}, 404)
 
     # -- POST -----------------------------------------------------------------
@@ -171,10 +191,29 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/secret":
             # writing a secret is only ever allowed from the local device,
             # in addition to core.api's ALLOW_SECRET_API gate.
-            client = self.client_address[0] if self.client_address else ""
-            if not auth.is_loopback(client):
+            if not self._local():
                 return self._json({"error": "secrets can only be set locally"}, 403)
             return self._json(api.set_secret(self._body()))
+        if path == "/api/policy":
+            return self._json(api.set_policy(self._body()))
+        if path == "/api/settings":
+            return self._json(api.set_settings(self._body()))
+        # A terminal is a shell on this device. It is local-only on every
+        # transport, regardless of whether a LAN client holds a valid token:
+        # handing a remote client a shell is a different thing entirely from
+        # letting them chat with the agent.
+        if path.startswith("/api/term"):
+            if not self._local():
+                return self._json(
+                    {"error": "the terminal is local-only"}, 403)
+            routes = {"/api/term/open": api.term_open,
+                      "/api/term/write": api.term_write,
+                      "/api/term/signal": api.term_signal,
+                      "/api/term/resize": api.term_resize,
+                      "/api/term/close": api.term_close}
+            fn = routes.get(path)
+            if fn:
+                return self._json(fn(self._body()))
         return self._json({"error": f"no route {path}"}, 404)
 
 

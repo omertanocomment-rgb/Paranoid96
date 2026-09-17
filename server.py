@@ -160,10 +160,78 @@ def set_secret(payload: dict, request: Request):
     # defense in depth: a secret can only be written from the local device,
     # on top of core.api's ALLOW_SECRET_API flag.
     client = request.client.host if request.client else ""
-    if not auth.is_loopback(client):
+    if not auth.is_local_request(client, auth.forwarded(request.headers)):
         return JSONResponse({"error": "secrets can only be set locally"},
                             status_code=403)
     return _json(api.set_secret(payload))
+
+
+@app.get("/api/policy")
+def policy_status():
+    return api.policy_status()
+
+
+@app.post("/api/policy")
+def set_policy(payload: dict):
+    return _json(api.set_policy(payload))
+
+
+@app.get("/api/settings")
+def settings_status():
+    return api.settings_payload()
+
+
+@app.post("/api/settings")
+def set_settings(payload: dict):
+    return _json(api.set_settings(payload))
+
+
+# ── terminal ────────────────────────────────────────────────────────────────
+# A terminal is a shell on this machine. Chatting with the agent over the LAN
+# is one thing; handing a remote client a shell is another, so every terminal
+# route is local-only on top of the token check — the same rule the embedded
+# server applies.
+def _local_only(request: Request):
+    client = request.client.host if request.client else ""
+    if not auth.is_local_request(client, auth.forwarded(request.headers)):
+        return JSONResponse({"error": "the terminal is local-only"},
+                            status_code=403)
+    return None
+
+
+@app.get("/api/term")
+def term_list(request: Request):
+    return _local_only(request) or api.term_list()
+
+
+@app.get("/api/term/read")
+def term_read(request: Request, id: str = "", offset: int = 0):
+    return _local_only(request) or _json(api.term_read({"id": id, "offset": offset}))
+
+
+@app.post("/api/term/open")
+def term_open(payload: dict, request: Request):
+    return _local_only(request) or _json(api.term_open(payload))
+
+
+@app.post("/api/term/write")
+def term_write(payload: dict, request: Request):
+    return _local_only(request) or _json(api.term_write(payload))
+
+
+@app.post("/api/term/signal")
+def term_signal(payload: dict, request: Request):
+    return _local_only(request) or _json(api.term_signal(payload))
+
+
+@app.post("/api/term/resize")
+def term_resize(payload: dict, request: Request):
+    return _local_only(request) or _json(api.term_resize(payload))
+
+
+@app.post("/api/term/close")
+def term_close(payload: dict, request: Request):
+    return _local_only(request) or _json(api.term_close(payload))
 
 
 if config.ASSETS_DIR.exists():

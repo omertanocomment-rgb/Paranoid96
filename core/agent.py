@@ -17,7 +17,8 @@ import re
 import yaml
 import time
 
-from . import config, memory, router, sandbox, skills, plugins, mcp, executor, toolparse, roles
+from . import (config, memory, router, sandbox, skills, plugins, mcp, executor,
+               toolparse, roles, policy)
 from .providers import ProviderError
 from tools import fileops, devtools, firmware, checkpoint_tools
 
@@ -263,8 +264,22 @@ class Agent:
                     return pre
                 danger, tier, hist = pre["danger"], pre["tier"], pre["history"]
             else:
-                danger, tier = name in ("delete_file", "restore_backup"), "NORMAL"
+                tier = policy.tier_for_tool(name)
+                danger = tier == "HIGH_RISK"
                 hist = memory.predict(desc, project=self.project)
+            # The approval policy can spend the interruption budget where it
+            # matters. It can never reach DENY or HIGH_RISK (see core/policy).
+            if policy.auto_run(tier):
+                out = self._execute_approved(call)
+                out = dict(out or {})
+                out["auto_run"] = True
+                out["action"] = desc
+                out["tier"] = tier
+                out["policy"] = policy.current()
+                # Not silent: turn() records {call, result} for every tool, so
+                # the auto_run flag rides the result into the UI and the log,
+                # and sandbox.run has already written the audit entry.
+                return out
             self.pending = {"call": call, "description": desc}
             return {"status": "awaiting_approval", "action": desc, "tier": tier,
                     "danger": danger, "history": hist,

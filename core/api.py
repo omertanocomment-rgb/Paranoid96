@@ -14,7 +14,8 @@ from a test harness with no server at all.
 """
 import threading
 
-from . import (config, memory, router, sandbox, skills, plugins, mcp, sync)
+from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
+               policy, terminal)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -61,6 +62,10 @@ def status_payload() -> dict:
         "active": config.get("OMERTA_PROVIDER", config.ACTIVE_PROVIDER),
         "mode": config._norm_mode(config.get("OMERTA_MODE", config.MODE)),
         "always_ask": config.ALWAYS_ASK,
+        "policy": policy.explain(),
+        "terminal": {"shell": terminal._shell(),
+                     "guard": terminal.guarded(),
+                     "sessions": len(terminal.SESSIONS)},
         "memory": memory.stats(),
         "skills": [{"name": s["name"], "description": s["description"]}
                    for s in skills.load_all()],
@@ -192,3 +197,121 @@ def chat(payload: dict) -> dict:
     agent = get_agent(project)
     with _lock_for(project):
         return dispatch(agent, payload)
+
+
+# ── approval policy ─────────────────────────────────────────────────────────
+def policy_status() -> dict:
+    return policy.explain()
+
+
+def set_policy(payload: dict) -> dict:
+    """Change how often OMERTA interrupts you.
+
+    It cannot be loosened past HIGH_RISK: `core/policy` has no rank for that
+    tier, so every policy still stops there, and DENY is refused regardless.
+    """
+    name = (payload or {}).get("policy", policy.ALWAYS)
+    before = policy.current()
+    after = policy.set_policy(name)
+    sandbox.log_event({"kind": "policy_change", "from": before, "to": after})
+    return {"ok": True, **policy.explain(after)}
+
+
+# ── settings ────────────────────────────────────────────────────────────────
+# Only these are writable over the API. Anything not on this list cannot be set
+# remotely, so a compromised UI cannot, say, repoint the data directory or turn
+# off auth.
+WRITABLE_SETTINGS = {
+    "OMERTA_APPROVAL_POLICY": ("Approval policy", "choice",
+                               list(policy.POLICIES)),
+    "OMERTA_MODE": ("Model mode", "choice", ["auto", "offline", "online"]),
+    "OMERTA_PROVIDER": ("Preferred brain", "text", None),
+    "OMERTA_THEME": ("UI theme", "choice", ["omerta", "black"]),
+    "OMERTA_COMPACT": ("Compact prompt (low-RAM devices)", "bool", None),
+    "OMERTA_HISTORY_LIMIT": ("Context window (messages kept)", "int", None),
+    "OMERTA_TERM_GUARD": ("Terminal refuses hard-deny commands", "bool", None),
+    "OMERTA_TERM_SHELL": ("Terminal shell", "text", None),
+    "OMERTA_TERM_CWD": ("Terminal start directory", "text", None),
+    "OMERTA_TERM_FONT_SIZE": ("Terminal font size", "int", None),
+    "OMERTA_AUTORUN_MCP": ("Let connectors run without asking", "bool", None),
+    "OMERTA_ISOLATE": ("Sandbox commands (bubblewrap/firejail)", "bool", None),
+    "OMERTA_ISOLATE_NET": ("Allow network inside the sandbox", "bool", None),
+    "OMERTA_SYNC_DIR": ("Sync folder", "text", None),
+    "OMERTA_SYNC_PEERS": ("Sync peers (host:port, comma separated)", "text", None),
+    "OMERTA_SYNC_ON_START": ("Sync on startup", "bool", None),
+    "OMERTA_KEEP_AWAKE": ("Keep the screen on while working", "bool", None),
+    "OMERTA_HAPTICS": ("Vibrate when approval is needed", "bool", None),
+}
+
+
+def settings_payload() -> dict:
+    out = {}
+    for key, (label, kind, choices) in WRITABLE_SETTINGS.items():
+        out[key] = {"label": label, "kind": kind, "choices": choices,
+                    "value": config.get(key, "")}
+    return {"settings": out, "policy": policy.explain(),
+            "data_dir": str(config.DATA_DIR)}
+
+
+def set_settings(payload: dict) -> dict:
+    """Write one or more settings. Unknown keys are reported, not silently
+    dropped — a typo that quietly does nothing is worse than an error."""
+    payload = (payload or {}).get("settings", payload) or {}
+    if not isinstance(payload, dict):
+        return {"error": "expected an object of setting -> value", "_status": 400}
+    written, rejected = {}, {}
+    for key, value in payload.items():
+        spec = WRITABLE_SETTINGS.get(key)
+        if not spec:
+            rejected[key] = "not a writable setting"
+            continue
+        _label, kind, choices = spec
+        if kind == "choice" and choices and str(value) not in choices:
+            rejected[key] = f"must be one of {choices}"
+            continue
+        if kind == "bool":
+            value = "1" if config.truthy(value) else "0"
+        if kind == "int":
+            try:
+                value = str(int(value))
+            except (TypeError, ValueError):
+                rejected[key] = "must be a whole number"
+                continue
+        config.set_setting(key, str(value))
+        written[key] = str(value)
+    if written:
+        sandbox.log_event({"kind": "settings_change", "keys": sorted(written)})
+    out = {"ok": not rejected, "written": written, "rejected": rejected}
+    out.update(settings_payload())
+    return out
+
+
+# ── terminal ────────────────────────────────────────────────────────────────
+# A thin pass-through: the logic, the guard and the audit trail all live in
+# core/terminal, so every transport behaves identically.
+def term_open(payload: dict) -> dict:
+    return terminal.open_session(payload)
+
+
+def term_read(payload: dict) -> dict:
+    return terminal.read(payload)
+
+
+def term_write(payload: dict) -> dict:
+    return terminal.write(payload)
+
+
+def term_signal(payload: dict) -> dict:
+    return terminal.signal_session(payload)
+
+
+def term_resize(payload: dict) -> dict:
+    return terminal.resize(payload)
+
+
+def term_close(payload: dict) -> dict:
+    return terminal.close_session(payload)
+
+
+def term_list(payload=None) -> dict:
+    return terminal.list_sessions(payload)
