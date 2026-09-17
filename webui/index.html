@@ -497,6 +497,9 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
       <div class="tiny">Runs a model on this device — no API key, no network,
         no other machine. Drop a .gguf file in the models folder below.</div>
       <div class="buildbox" id="localaiBox"><div class="tiny">checking…</div></div>
+      <div class="tiny" style="margin-top:8px">Models that need no API key.
+        Tap one to fetch it — sizes are shown; nothing downloads on its own.</div>
+      <div id="modelList"></div>
       <div class="grid2" style="margin-bottom:10px">
         <button class="mini" onclick="localaiStart()">start engine</button>
         <button class="mini" onclick="localaiStop()">stop</button>
@@ -1321,6 +1324,46 @@ function copyBuild(){
     ta.remove(); say(ok?'copied':t);
   }
 }
+let _modelPoll=null;
+async function loadModels(){
+  const box=document.getElementById('modelList');
+  let d; try{ d=await get('/api/models'); }
+  catch(e){ box.innerHTML='<div class="tiny">catalogue unavailable</div>'; return; }
+  const rows=d.models||[];
+  let busy=false;
+  box.innerHTML=rows.map(m=>{
+    const gb=(m.bytes/1073741824).toFixed(2)+' GB';
+    const j=m.job;
+    let right;
+    if(j&&(j.state==='downloading'||j.state==='verifying'||j.state==='starting')){
+      busy=true;
+      const pct=j.total?Math.floor(100*j.got/j.total):0;
+      right = j.state==='verifying'
+        ? '<span class="tiny">verifying…</span>'
+        : '<span class="tiny">'+pct+'%</span> '+
+          '<a href="#" onclick="modelAct(\'cancel\',\''+esc(m.id)+'\');return false">stop</a>';
+    } else if(m.installed){
+      right='<span class="tiny">installed</span> '+
+        '<a href="#" onclick="modelAct(\'remove\',\''+esc(m.id)+'\');return false">remove</a>';
+    } else {
+      right='<a href="#" onclick="modelAct(\'download\',\''+esc(m.id)+'\');return false">get</a>';
+    }
+    const err=(j&&j.state==='error')?'<div class="warn">'+esc(j.error)+'</div>':'';
+    return '<div class="buildbox" style="cursor:default">'+
+      '<div><b>'+esc(m.label)+'</b> <span class="tiny">'+gb+' · '+
+      esc(m.kind)+' · '+esc(m.license)+'</span></div>'+
+      '<div class="tiny">'+esc(m.blurb)+'</div>'+
+      '<div style="margin-top:4px">'+right+'</div>'+err+'</div>';
+  }).join('')+'<div class="tiny">'+fmtBytes(d.free)+' free on this device</div>';
+
+  // only poll while something is actually moving
+  if(busy&&!_modelPoll){ _modelPoll=setInterval(loadModels,1500); }
+  if(!busy&&_modelPoll){ clearInterval(_modelPoll); _modelPoll=null; loadLocalai(); }
+}
+async function modelAct(action,id){
+  try{ await post('/api/models',{action,id}); }catch(e){}
+  await loadModels();
+}
 async function loadLocalai(){
   const box=document.getElementById('localaiBox');
   let d; try{ d=await get('/api/localai'); }
@@ -1541,7 +1584,7 @@ async function deleteTheme(){
 /* ───────── boot ───────── */
 (async function(){
   await loadTheme(); await loadStatus(); await loadModes(); await loadSecrets();
-  await loadBuild(); await loadLocalai(); await loadAttachments();
+  await loadBuild(); await loadLocalai(); await loadAttachments(); await loadModels();
   addMsg('agent','OMERTA online. Ask, or switch to PLAN to think it through first.');
 })();
 </script>

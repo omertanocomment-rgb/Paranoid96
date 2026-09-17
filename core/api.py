@@ -18,7 +18,7 @@ import time
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
                index as codeindex, scratch, theme, version, toolbox, localai,
-               attach)
+               attach, models as modelstore)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -174,6 +174,28 @@ def attachment_delete(payload) -> dict:
     return attach.delete(aid)
 
 
+def models_status() -> dict:
+    """The catalogue, what is installed, and any download in flight."""
+    return modelstore.status()
+
+
+def models_control(payload) -> dict:
+    """Fetch, cancel or remove a model. Local-only at the transport layer.
+
+    Nothing downloads on its own: a multi-gigabyte transfer onto a phone is
+    the owner's decision, so it takes an explicit call with an explicit id.
+    """
+    p = payload or {}
+    action, mid = p.get("action", ""), p.get("id", "")
+    if action == "download":
+        return modelstore.download(mid) if mid else {"error": "id is required"}
+    if action == "cancel":
+        return modelstore.cancel(mid) if mid else {"error": "id is required"}
+    if action == "remove":
+        return modelstore.remove(mid) if mid else {"error": "id is required"}
+    return {"error": f"unknown action: {action!r} (download, cancel, remove)"}
+
+
 def status_payload() -> dict:
     return {
         "build": version.info(),
@@ -190,6 +212,7 @@ def status_payload() -> dict:
         "theme": theme.stats(),
         "localai": localai.stats(),
         "attachments": attach.stats(),
+        "models": modelstore.stats(),
         "terminal": {"shell": terminal._shell(),
                      "guard": terminal.guarded(),
                      "tools": toolbox.stats(),

@@ -42,7 +42,8 @@ MAX_BODY = 16 * 1024 * 1024
 # because you drive them yourself — which is why none may be driven remotely.
 # /api/chat is deliberately absent: it DOES go through the gate.
 LOCAL_ONLY_PREFIXES = ("/api/term", "/api/ws/", "/api/scratch",
-                       "/api/learn/path", "/api/localai", "/api/attach")
+                       "/api/learn/path", "/api/localai", "/api/attach",
+                       "/api/models")
 
 
 def _is_local_only(path: str) -> bool:
@@ -115,6 +116,16 @@ def status():
 @app.get("/api/version")
 def version():
     return api.version_payload()
+
+
+@app.get("/api/models")
+def models_status():
+    return api.models_status()
+
+
+@app.post("/api/models")
+def models_control(payload: dict):
+    return api.models_control(payload)
 
 
 @app.get("/api/attach")

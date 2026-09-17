@@ -59,7 +59,8 @@ class Handler(BaseHTTPRequestHandler):
     # why none of them may be driven from another machine. /api/chat is not
     # here: it goes through the gate, so a token is enough for it.
     LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path",
-                  "/api/localai", "/api/attach")
+                  "/api/localai", "/api/attach",
+                  "/api/models")
 
     def _is_local_only(self, path):
         return any(path == p.rstrip("/") or path.startswith(p)
@@ -236,6 +237,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.version_payload())
         if path == "/api/localai":
             return self._json(api.localai_status())
+        if path == "/api/models":
+            return self._json(api.models_status())
         if path == "/api/attach":
             return self._json(api.attachments_payload(
                 (self._query().get("project") or [None])[0]))
@@ -326,6 +329,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.set_secret(self._body()))
         if path == "/api/localai":
             return self._json(api.localai_control(self._body()))
+        if path == "/api/models":
+            return self._json(api.models_control(self._body()))
         if path == "/api/attach/delete":
             return self._json(api.attachment_delete(self._body()))
         if path == "/api/attach":
