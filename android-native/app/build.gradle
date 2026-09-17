@@ -26,10 +26,13 @@ android {
             }
         }
 
-        // One .so set per ABI ships a CPython, so keep the list to real
-        // targets plus x86_64 for the emulator.
+        // One .so set per ABI ships a CPython, so each ABI costs real megabytes.
+        // The default is the universal set (every real target plus x86_64 for
+        // the emulator). Override to slim the APK for one device:
+        //   gradle assembleDebug -PomertaAbi=arm64-v8a
         ndk {
-            abiFilters "arm64-v8a", "armeabi-v7a", "x86_64"
+            abiFilters(*(project.findProperty("omertaAbi")?.toString()
+                ?: "arm64-v8a,armeabi-v7a,x86_64").split(",").collect { it.trim() })
         }
     }
 
