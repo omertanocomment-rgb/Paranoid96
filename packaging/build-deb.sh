@@ -23,6 +23,10 @@ for d in core tools skills plugins webui assets scripts firmware \
   [ -e "$d" ] && cp -r "$d" "$ROOT/opt/omerta-agent/"
 done
 
+# This install has no pyproject.toml and is not pip-installed, so neither of
+# the usual version sources is available to `omerta --version`. Ship the file.
+printf '%s\n' "$VER" > "$ROOT/opt/omerta-agent/VERSION"
+
 cat > "$ROOT/usr/bin/omerta" <<'SH'
 #!/bin/sh
 exec python3 /opt/omerta-agent/omerta_entry.py "$@"

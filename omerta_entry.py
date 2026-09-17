@@ -18,10 +18,19 @@ def _version():
     except Exception:
         pass
     import re
-    for base in (getattr(sys, "_MEIPASS", None), os.environ.get("OMERTA_HOME"),
-                 os.path.dirname(os.path.abspath(__file__))):
-        if not base:
+    bases = [b for b in (getattr(sys, "_MEIPASS", None),
+                         os.environ.get("OMERTA_HOME"),
+                         os.path.dirname(os.path.abspath(__file__))) if b]
+    # a VERSION file is what a /opt-style install (the .deb) ships, since it
+    # has no pyproject.toml and is not pip-installed
+    for base in bases:
+        try:
+            v = open(os.path.join(base, "VERSION")).read().strip()
+        except OSError:
             continue
+        if v:
+            return v
+    for base in bases:
         try:
             txt = open(os.path.join(base, "pyproject.toml")).read()
         except OSError:

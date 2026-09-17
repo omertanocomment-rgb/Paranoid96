@@ -166,3 +166,40 @@ bash tests/run_all.sh        # approval, deny-list, auth spoofing (both servers)
                              # tool-parse, mode routing, unlimited-chat trim, sync
 python scripts/doctor.py     # environment / provider / safety report
 ```
+
+## Release-build audit (every artifact actually built and run)
+
+Every distributable was produced on a real host and executed, not just
+described. What that exercise found:
+
+| Artifact | Verified by | Result |
+|---|---|---|
+| Android APK (44 MB) | `aapt dump permissions`; unzip + sha256 of the payload | **No Termux permission** (`RUN_COMMAND` gone); `libpython3.11.so` present for arm64-v8a, armeabi-v7a and x86_64; `core/agent.py`, `core/sandbox.py`, `core/httpd.py`, `core/api.py` and `core/config.py` inside the APK are **byte-identical** to the repo, so the approval gate cannot drift between platforms |
+| Fat AppImage (91 MB) | ran it | reports python **3.12.11** on a host whose system python is 3.11.15; `doctor` resolves `requests`/`yaml` from inside the bundle; ran `firmware inspect`/`extract` on a real boot.img |
+| Standalone binary (26 MB) | ran it | `--version`, `rules`, `firmware inspect` all correct |
+| Wheel + sdist | built a venv, installed the wheel, ran the console script | caught a real bug (below) |
+| `.deb` | `dpkg -i`, ran `omerta`, `dpkg -r` | caught a real bug (below) |
+| Electron AppImage / deb / tar.gz | built | required adding `homepage`/`repository` metadata; desktop `package.json` was also still pinned at 1.0.0 while the project is 1.1.0 |
+
+Two defects were found only because the artifacts were run:
+
+- **`omerta --version` was dead on every front-end.** The entry point treated
+  only a *non-flag* first argument as a subcommand, so `--version` fell past its
+  own handler into argparse and exited with "unrecognized arguments". The same
+  bug was duplicated in the packaging template (`scripts/_stage_package.sh`),
+  so the pip-installed console script had it too. Both fixed.
+- **The `.deb` reported `omerta-agent unknown`.** It installs to
+  `/opt/omerta-agent` with no `pyproject.toml` and is not pip-installed, so
+  neither version source existed. It now ships a `VERSION` file, and `_version()`
+  reads it before falling back to `pyproject.toml`.
+
+Payload hygiene was checked on the staged bundles: no key-shaped strings, no
+`secrets.json`, no memory database and no auth token are staged into any
+artifact — the only matches for `sk-ant-` are the literal `sk-ant-...`
+placeholder in the docs.
+
+Not built here, and not claimed: the **Docker/OCI image** (no Docker daemon in
+this environment — `docker build -f docker/Dockerfile .` is a one-liner where
+one exists) and the **macOS/Windows Electron installers** (Apple's signing
+tools are macOS-only; Windows needs a Windows host or wine). These are platform
+limits, stated rather than papered over.

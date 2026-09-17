@@ -27,8 +27,17 @@ if _PKG not in sys.path:
     sys.path.insert(0, _PKG)
 
 
+VERSION_FLAGS = ("version", "--version", "-V")
+
+
 def main():
     argv = sys.argv[1:]
+    # a leading flag is not a subcommand -- except the version flags, which
+    # would otherwise fall through to argparse and die as "unrecognized".
+    if argv and argv[0] in VERSION_FLAGS:
+        from omerta_agent import __version__
+        print(f"omerta-agent {__version__}")
+        return 0
     cmd = argv[0] if argv and not argv[0].startswith("-") else None
     if cmd == "serve":
         sys.argv = [sys.argv[0]] + argv[1:]
@@ -53,7 +62,7 @@ def main():
         else:
             print("set OMERTA_SYNC_DIR, or: omerta sync <host:port|/path>")
         return 0
-    if cmd in ("version", "--version", "-V"):
+    if cmd in VERSION_FLAGS:
         from omerta_agent import __version__
         print(f"omerta-agent {__version__}")
         return 0
