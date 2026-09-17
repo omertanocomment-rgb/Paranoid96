@@ -49,3 +49,7 @@ include-package-data = true
 [tool.setuptools.package-data]
 omerta_agent = ["persona.yaml", "connectors.yaml", "webui/*", "assets/*",
                 "skills/*/SKILL.md", "plugins/*.py", "plugins/*/*"]
+# The build stamp is not a .py file, so setuptools drops it unless it is named
+# here -- and an installed copy that cannot say which build it is defeats the
+# point of stamping at all.
+"omerta_agent.core" = ["build_stamp.json"]

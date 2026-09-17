@@ -89,6 +89,52 @@ def main():
     for f in ("core/httpd.py", "server.py"):
         check(f"{f} serves /api/version", "/api/version" in (ROOT / f).read_text())
 
+    # 9. a malformed stamp must never take the process down. This file is
+    #    written by a build and read at import by core.api, so a truncated or
+    #    half-copied stamp would stop the server booting rather than degrade.
+    print("  -- malformed stamp handling --")
+    backup = stamp.read_text() if stamp.exists() else None
+    hostile = [
+        ("corrupt json", "{not json"), ("empty file", ""),
+        ("json array", "[1,2,3]"), ("null", "null"),
+        ("no version key", '{"commit":"abc"}'),
+        ("version is a dict", '{"version":{"x":1}}'),
+        ("version is a number", '{"version":123}'),
+        ("version is a list", '{"version":["1.0.0"]}'),
+        ("xss in version", '{"version":"<script>alert(1)</script>"}'),
+        ("huge version", json.dumps({"version": "9" * 100000})),
+        ("huge commit", json.dumps({"version": "1.0.0", "commit": "a" * 500000})),
+        ("commit is a dict", '{"version":"1.0.0","commit":{"a":1}}'),
+        ("newlines in channel", '{"version":"1.0.0","channel":"a\nb\nc"}'),
+        ("deep nesting", '{"version":"1.0.0","x":' + "[" * 200 + "]" * 200 + "}"),
+        ("negative version", '{"version":"-1.-2.-3"}'),
+    ]
+    survived = 0
+    try:
+        for label, body in hostile:
+            stamp.write_text(body)
+            for mod in [m for m in list(sys.modules) if m.startswith("core")]:
+                del sys.modules[mod]
+            try:
+                from core import version as v2
+                got = v2.info()
+                json.dumps(got)
+                ok = (isinstance(got["version_code"], int)
+                      and 0 <= got["version_code"] < 10 ** 9
+                      and len(json.dumps(got)) < 4000)
+                survived += 1 if ok else 0
+                if not ok:
+                    print(f"    ! {label}: unbounded or non-integer output")
+            except Exception as e:
+                print(f"    ! {label}: {type(e).__name__}")
+    finally:
+        if backup is not None:
+            stamp.write_text(backup)
+        for mod in [m for m in list(sys.modules) if m.startswith("core")]:
+            del sys.modules[mod]
+    check(f"all {len(hostile)} malformed stamps handled without crashing",
+          survived == len(hostile))
+
     print()
     if fails:
         print(f"VERSION TESTS FAILED: {len(fails)}")

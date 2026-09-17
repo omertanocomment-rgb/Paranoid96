@@ -28,12 +28,36 @@ STAMP = HERE / "build_stamp.json"
 FALLBACK = "0.0.0+unknown"
 
 
+#: A version has to look like a version. A stamp is a file on disk, so it can
+#: arrive truncated, half-written or corrupted by a bad copy -- and every
+#: module that imports this one would inherit the crash, including the server's
+#: startup path. Anything that fails this check is treated as no stamp at all.
+_VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")
+
+
+def _clean_version(value):
+    """The value if it is a plausible version string, else None."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value if _VERSION_RE.match(value) else None
+
+
+def _clean_text(value, limit=200):
+    """A short, single-line string -- never a dict, a number or a novel."""
+    if not isinstance(value, str):
+        return ""
+    return value.replace("\n", " ").replace("\r", " ").strip()[:limit]
+
+
 def _from_stamp():
     try:
         data = json.loads(STAMP.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    return data if isinstance(data, dict) and data.get("version") else None
+    if not isinstance(data, dict) or not _clean_version(data.get("version")):
+        return None
+    return data
 
 
 def _from_pyproject():
@@ -58,15 +82,16 @@ def _from_package():
 
 
 _stamp = _from_stamp() or {}
-VERSION = (_stamp.get("version") or _from_pyproject()
-           or _from_package() or FALLBACK)
+VERSION = (_clean_version(_stamp.get("version"))
+           or _clean_version(_from_pyproject())
+           or _clean_version(_from_package()) or FALLBACK)
 
 #: What produced this copy. Empty values mean "not stamped", never a guess.
 BUILD = {
     "version": VERSION,
-    "commit": _stamp.get("commit", ""),
-    "built_at": _stamp.get("built_at", ""),
-    "channel": _stamp.get("channel", ""),
+    "commit": _clean_text(_stamp.get("commit"), 64),
+    "built_at": _clean_text(_stamp.get("built_at"), 40),
+    "channel": _clean_text(_stamp.get("channel"), 32),
     "stamped": bool(_stamp),
 }
 
@@ -78,10 +103,13 @@ def version_code():
     lower than the installed one, so this must only ever go up; deriving it
     from the version means it moves exactly when the version does.
     """
-    parts = re.findall(r"\d+", VERSION)[:3]
+    # Bound each component before int(): Python refuses to convert an integer
+    # literal beyond ~4300 digits, and a version string is attacker-adjacent
+    # input the moment the stamp file is.
+    parts = [p[:6] for p in re.findall(r"\d+", VERSION)[:3]]
     while len(parts) < 3:
         parts.append("0")
-    major, minor, patch = (int(p) for p in parts)
+    major, minor, patch = (min(int(p), 9999) for p in parts)
     return major * 10000 + minor * 100 + patch
 
 
