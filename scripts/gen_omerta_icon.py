@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-Generate the OMERTA launcher icon: a blackletter O on black.
+Generate the OMERTA launcher icon: a blackletter O in dark red on black,
+wrapped in barbed filigree.
 
-A black glyph on a black field is invisible, so the O is filled near-black and
-given a crisp accent edge plus a soft outer glow. It reads as a black letter —
-it is darker than the background it sits on — while still being legible at
-48px on a launcher. Set --solid to fill the glyph with the accent colour
-instead, if you'd rather have a red O.
+The ornament is an ORIGINAL composition in the chicano-lettering idiom —
+tapered S-curved spines with thorns branching off them, mirrored about the
+vertical axis with deliberately uneven lengths so it does not read as a radial
+badge. It is drawn from primitives, not traced from anyone's artwork.
+
+Below 96px the thin hooks and second-order barbs are dropped: at 48px they
+collapse into mud and make the mark less legible, not more ornate. Detail that
+does not survive the size it ships at is decoration for the designer, not the
+user.
+
+Set --solid to fill the glyph with the accent colour instead of near-black.
 
 Writes:
   assets/icon_*.png, icon.png, icon.ico   (desktop / web / favicon)
@@ -18,6 +25,7 @@ masked to a circle, squircle or squircle-with-corners depending on the
 launcher, and only the middle ~66% is guaranteed to survive.
 """
 import argparse
+import math
 import os
 import sys
 from pathlib import Path
@@ -30,10 +38,12 @@ RES = ROOT / "android-native/app/src/main/res"
 WOFF2 = ASSETS / "unifraktur-maguntia.woff2"
 TTF_CACHE = ASSETS / ".unifraktur-maguntia.ttf"
 
-BG = (10, 5, 6, 255)          # --bg
-GLYPH = (8, 4, 5, 255)        # a touch darker than the field: a black O
-ACCENT = (255, 45, 60, 255)   # --accent-bright
-ACCENT_DIM = (122, 18, 25, 255)
+BG = (7, 3, 4, 255)           # near-black field
+GLYPH = (5, 2, 3, 255)        # the O itself: black
+DRED = (112, 10, 17, 255)     # dark red — the letter's edge and the filigree
+DRED_HI = (156, 19, 27, 255)
+DRED_LO = (62, 5, 9, 255)
+ACCENT = DRED_HI              # used by --solid
 
 # Android density buckets -> launcher icon size in px
 MIPMAPS = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
@@ -58,71 +68,124 @@ def ttf():
     return str(TTF_CACHE)
 
 
-def _fit_font(target_px, stroke_ratio):
-    """Largest point size whose STROKED glyph fits in target_px.
+def cub(p0,p1,p2,p3,t):
+    m=1-t
+    return (m**3*p0[0]+3*m*m*t*p1[0]+3*m*t*t*p2[0]+t**3*p3[0],
+            m**3*p0[1]+3*m*m*t*p1[1]+3*m*t*t*p2[1]+t**3*p3[1])
 
-    Measuring the unstroked bbox and then adding a stroke is how an icon ends
-    up clipped at the edges — the stroke grows the drawn area after you have
-    already decided it fits.
-    """
-    best = None
-    for pt in range(int(target_px * 2), 8, -2):
-        f = ImageFont.truetype(ttf(), pt)
-        l, t, r, b = f.getbbox("O")
-        grow = max(1, int(pt * stroke_ratio)) * 2
-        if (r - l) + grow <= target_px and (b - t) + grow <= target_px:
-            best = f
-            break
-    return best or ImageFont.truetype(ttf(), max(8, int(target_px * .5)))
+def spine(d,pts,w0,w1,fill,steps=140,power=0.7):
+    """A tapered S-curve. Returns sample points so barbs can be hung off it."""
+    p0,p1,p2,p3=pts
+    L,R,mid=[],[],[]
+    for i in range(steps+1):
+        t=i/steps
+        x,y=cub(p0,p1,p2,p3,t)
+        nx,ny=cub(p0,p1,p2,p3,min(1.0,t+0.004))
+        dx,dy=nx-x,ny-y; m=math.hypot(dx,dy) or 1
+        px,py=-dy/m,dx/m
+        w=(w0*((1-t)**power)+w1*t)/2
+        L.append((x+px*w,y+py*w)); R.append((x-px*w,y-py*w))
+        mid.append(((x,y),(px,py),(dx/m,dy/m),w))
+    d.polygon(L+R[::-1],fill=fill)
+    return mid
+
+def barb(d,at,tang,norm,length,width,side,fill):
+    """A thorn branching off a spine — what makes it read as chicano filigree
+    rather than a leaf."""
+    x,y=at
+    bx,by=x+norm[0]*side*width*0.4, y+norm[1]*side*width*0.4
+    cx=bx+tang[0]*length*0.45+norm[0]*side*length*0.35
+    cy=by+tang[1]*length*0.45+norm[1]*side*length*0.35
+    tx=bx+tang[0]*length*0.15+norm[0]*side*length*1.0
+    ty=by+tang[1]*length*0.15+norm[1]*side*length*1.0
+    L,R=[],[]
+    for i in range(41):
+        t=i/40
+        px_,py_=cub((bx,by),(cx,cy),(cx,cy),(tx,ty),t)
+        nx_,ny_=cub((bx,by),(cx,cy),(cx,cy),(tx,ty),min(1.0,t+0.01))
+        dx,dy=nx_-px_,ny_-py_; m=math.hypot(dx,dy) or 1
+        ox,oy=-dy/m,dx/m
+        w=width*((1-t)**0.8)/2
+        L.append((px_+ox*w,py_+oy*w)); R.append((px_-ox*w,py_-oy*w))
+    d.polygon(L+R[::-1],fill=fill)
+
+def P(c,u,ang,r):
+    a=math.radians(ang); return (c+math.cos(a)*r*u, c+math.sin(a)*r*u)
+
+def build(size=1024, simple=None):
+    n=size; c=n/2; u=n/100.0
+    if simple is None:
+        simple = size < 128
+    img=Image.new("RGBA",(n,n),BG)
+    orn=Image.new("RGBA",(n,n),(0,0,0,0)); od=ImageDraw.Draw(orn)
+
+    # Each spine: start on the glyph edge, S-curve outward, barbs along it.
+    # Mirrored left/right; lengths deliberately uneven so it reads hand-drawn.
+    SPINES = [
+        # Everything stays inside r=44 so no tip is clipped by the frame, and
+        # the diagonals lead so it does not sprawl along one axis.
+        (( 55,19), ( 36,28), ( 26,38), ( 18,43), 6.4, [(.38,-1,.26),(.68,1,.20)]),
+        ((125,19), (144,28), (154,38), (162,43), 6.4, [(.38, 1,.26),(.68,-1,.20)]),
+        ((235,19), (216,28), (206,38), (198,43), 6.4, [(.38,-1,.26),(.68,1,.20)]),
+        ((305,19), (324,28), (334,38), (342,43), 6.4, [(.38, 1,.26),(.68,-1,.20)]),
+        # verticals carry the composition
+        (( 84,18), ( 72,29), ( 96,38), ( 88,45), 5.4, [(.42,-1,.24),(.72,1,.18)]),
+        ((276,18), (288,29), (264,38), (272,45), 5.4, [(.42, 1,.24),(.72,-1,.18)]),
+        (( 96,18), (108,28), ( 86,36), ( 94,41), 3.8, [(.5, 1,.17)]),
+        ((264,18), (252,28), (274,36), (266,41), 3.8, [(.5,-1,.17)]),
+        # short side hooks only — the long horizontals were swamping it
+        ((  6,18), ( 14,26), (  0,33), (  8,38), 4.2, [(.55, 1,.20)]),
+        ((174,18), (166,26), (180,33), (172,38), 4.2, [(.55,-1,.20)]),
+        ((186,18), (194,26), (180,33), (188,38), 4.2, [(.55, 1,.20)]),
+        ((354,18), (346,26), (360,33), (352,38), 4.2, [(.55,-1,.20)]),
+    ]
+    spines = SPINES[:6] if simple else SPINES
+    for (a0,r0),(a1,r1),(a2,r2),(a3,r3),w,barbs in spines:
+        pts=(P(c,u,a0,r0),P(c,u,a1,r1),P(c,u,a2,r2),P(c,u,a3,r3))
+        mid=spine(od,pts,w*u,0.3*u,DRED)
+        for frac,side,blen in (barbs[:1] if simple else barbs):
+            at,norm,tang,ww=mid[int(frac*(len(mid)-1))]
+            barb(od,at,tang,norm,blen*34*u,ww*1.45,side,DRED)
+        # inner shadow along the spine for depth
+        spine(od,pts,w*0.4*u,0.25*u,DRED_LO,power=0.9)
+
+    img.alpha_composite(orn)
+
+    f=None
+    for pt in range(int(n*0.95),20,-4):
+        ft=ImageFont.truetype(ttf(),pt); l,t,r,b=ft.getbbox("O")
+        if (r-l)<=n*0.48 and (b-t)<=n*0.48: f=ft; break
+    l,t,r,b=f.getbbox("O")
+    x=(n-(r-l))/2-l; y=(n-(b-t))/2-t
+    sw=max(2,int(f.size*0.09))
+
+    # heavy slab shadow under the letter, offset — the reference's depth
+    sh=Image.new("RGBA",(n,n),(0,0,0,0))
+    ImageDraw.Draw(sh).text((x+n*0.012,y+n*0.014),"O",font=f,fill=(0,0,0,235),
+                            stroke_width=int(sw*1.3),stroke_fill=(0,0,0,235))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(n*0.006)))
+
+    ImageDraw.Draw(img).text((x,y),"O",font=f,fill=GLYPH,
+                             stroke_width=sw,stroke_fill=DRED)
+    return img
 
 
-def draw_icon(size, solid=False, inset=0.0, ring=True):
-    """Render at 4x and downsample — the glyph has fine strokes that alias
-    badly if drawn straight at 48px."""
-    ss = 4
-    n = size * ss
-    img = Image.new("RGBA", (n, n), BG)
-
-    # a faint vignette so the field is not a flat slab
-    vign = Image.new("L", (n, n), 0)
-    ImageDraw.Draw(vign).ellipse((-n * .1, -n * .35, n * 1.1, n * 1.1), fill=70)
-    img = Image.composite(
-        Image.new("RGBA", (n, n), (26, 10, 13, 255)), img,
-        vign.filter(ImageFilter.GaussianBlur(n * .12)))
-    d = ImageDraw.Draw(img)
-
-    # A thin ring turns an ornate letter into a seal. It also gives the eye an
-    # edge to read at 48px, where the blackletter O alone is a squiggle.
-    pad = n * (inset if inset else 0.10)
-    if ring and not inset:
-        w = max(1, int(n * .018))
-        d.ellipse((pad, pad, n - pad, n - pad), outline=ACCENT_DIM, width=w)
-        d.ellipse((pad + w * 2.2, pad + w * 2.2, n - pad - w * 2.2,
-                   n - pad - w * 2.2), outline=ACCENT, width=max(1, int(w * .55)))
-        glyph_box = n - (pad + w * 4) * 2
-    else:
-        glyph_box = n - pad * 2
-
-    stroke_ratio = 0.055
-    font = _fit_font(glyph_box * .82, stroke_ratio)
-    stroke = max(1, int(font.size * stroke_ratio))
-    l, t, r, b = font.getbbox("O")
-    x = (n - (r - l)) / 2 - l
-    y = (n - (b - t)) / 2 - t
-
-    # outer glow, so a dark glyph still separates from a dark field
-    glow = Image.new("RGBA", (n, n), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).text((x, y), "O", font=font,
-                              fill=(ACCENT[0], ACCENT[1], ACCENT[2], 190),
-                              stroke_width=stroke)
-    img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(n * .02)))
-
-    d.text((x, y), "O", font=font,
-           fill=ACCENT if solid else GLYPH,
-           stroke_width=stroke,
-           stroke_fill=ACCENT_DIM if solid else ACCENT)
-
-    return img.resize((size, size), Image.LANCZOS)
+def draw_icon(size, solid=False, inset=0.0, ring=False):
+    """`inset` renders the adaptive-icon foreground, which must sit inside
+    Android's safe zone; `ring` is accepted for call compatibility."""
+    # render small icons from a simplified mark at 4x, then downsample
+    img = build(size * 4 if size < 128 else size)
+    if inset:
+        # shrink the whole mark into the safe zone, on transparency
+        n = img.size[0]
+        small = img.resize((int(n * (1 - inset * 2)),) * 2, Image.LANCZOS)
+        out = Image.new("RGBA", (n, n), BG)
+        off = (n - small.size[0]) // 2
+        out.paste(small, (off, off))
+        img = out
+    if img.size[0] != size:
+        img = img.resize((size, size), Image.LANCZOS)
+    return img
 
 
 def main():
