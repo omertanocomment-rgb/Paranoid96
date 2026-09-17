@@ -180,6 +180,7 @@ def install(data_dir=None):
         except OSError:
             continue
 
+    linked += _link_extras(binary.parent, bin_dir)
     _state.update(bin_dir=str(bin_dir), count=linked,
                   version=_version(entry), reason="")
     _write_manifest(base, applets, linked)
@@ -254,6 +255,59 @@ def _write_manifest(base, applets, linked):
         pass
 
 
+def _link_extras(lib_dir, bin_dir):
+    """Put the non-BusyBox programs on PATH under the names people type."""
+    n = 0
+    for name, lib in EXTRA_BINS.items():
+        target = lib_dir / lib
+        if not target.is_file():
+            continue
+        link = bin_dir / name
+        try:
+            if link.is_symlink() or link.exists():
+                if link.is_symlink() and os.readlink(link) == str(target):
+                    n += 1
+                    continue
+                link.unlink()
+            link.symlink_to(target)
+            n += 1
+        except OSError:
+            continue
+    return n
+
+
+def extras_present(lib_dir=None):
+    """Which bundled programs this build actually has."""
+    binary = locate()
+    lib_dir = lib_dir or (binary.parent if binary else None)
+    if lib_dir is None:
+        return []
+    return sorted({name for name, lib in EXTRA_BINS.items()
+                   if (lib_dir / lib).is_file()})
+
+
+def tls_env(env=None, payload=None):
+    """Point curl and OpenSSL at the bundled CA bundle.
+
+    Without this, TLS verification has nothing to verify against: Android
+    keeps its trust store in a format OpenSSL can read but at a path it does
+    not look in by default, and a curl that cannot find a CA bundle fails
+    every https request rather than silently accepting them -- which is the
+    right failure, but still a failure.
+    """
+    env = dict(env or {})
+    base = Path(payload or os.environ.get("OMERTA_HOME")
+                or Path(__file__).resolve().parent.parent)
+    bundle = base / "assets" / "cacert.pem"
+    if bundle.is_file():
+        env.setdefault("CURL_CA_BUNDLE", str(bundle))
+        env.setdefault("SSL_CERT_FILE", str(bundle))
+    # Android's own store, as a fallback for anything that prefers a directory
+    if os.path.isdir("/system/etc/security/cacerts"):
+        env.setdefault("SSL_CERT_DIR", "/system/etc/security/cacerts")
+    return env
+
+
 def bin_dir():
     """The installed bin dir, installing it on first use."""
     return _state["bin_dir"] or install()
@@ -261,6 +315,23 @@ def bin_dir():
 
 PY_VER = "3.13"
 PY_BIN = "libpython3bin.so"
+
+#: Bundled programs that are not BusyBox applets. Each ships as lib<x>_bin.so
+#: for the same reason everything else does -- it is the only directory Android
+#: will execute from -- and is reached on PATH under its real name.
+EXTRA_BINS = {
+    "curl": "libcurl_bin.so",
+    "git": "libgit_bin.so",
+    "git-remote-http": "libgitremotehttp_bin.so",
+    # git resolves an https:// remote by exec'ing git-remote-https; it is the
+    # same program under a second name, exactly as upstream installs it.
+    "git-remote-https": "libgitremotehttp_bin.so",
+    "ssh": "libdbclient_bin.so",
+    "dbclient": "libdbclient_bin.so",
+    "scp": "libscp_bin.so",
+    "ssh-keygen": "libdropbearkey_bin.so",
+    "dropbearkey": "libdropbearkey_bin.so",
+}
 
 
 def python_home(data_dir=None):
@@ -383,6 +454,11 @@ def stats():
         "version": _state["version"],
         "reason": _state["reason"],
     }
+
+
+def extras_summary():
+    got = extras_present()
+    return ", ".join(n for n in ("git", "curl", "ssh", "scp") if n in got)
 
 
 def summary():

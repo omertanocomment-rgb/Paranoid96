@@ -124,6 +124,7 @@ class Session:
             from . import toolbox
             environ["PATH"] = toolbox.path_with_tools(environ.get("PATH"))
             environ.update(toolbox.python_env())
+            environ.update(toolbox.tls_env())
         except Exception:  # noqa: BLE001 -- no toolset is not a broken terminal
             pass
         environ.update(env or {})
@@ -368,6 +369,7 @@ def open_session(args=None):
         out["tools"] = toolbox.summary()
         py = toolbox.python_stats()
         out["python"] = f"python {py['version']}" if py["available"] else ""
+        out["programs"] = toolbox.extras_summary()
     except Exception:  # noqa: BLE001
         out["tools"] = ""
     return out

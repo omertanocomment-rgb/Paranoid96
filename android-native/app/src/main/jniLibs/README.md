@@ -118,3 +118,63 @@ redistribution in source or binary form provided the copyright notice is
 retained — see LICENSE-cpython.txt next to this file. It imposes no source
 obligation. The bundled OpenSSL is **Apache-2.0** and SQLite is **public
 domain**.
+
+## git, curl and ssh
+
+The three most obvious gaps in the toolset after BusyBox. All three are
+executables, packaged as `lib<name>_bin.so` for the usual reason, and reached
+on PATH under their real names by `core/toolbox.py`.
+
+| File | Runs as | Size | Notes |
+|---|---|---|---|
+| `libcurl_bin.so` | `curl` | 857 KB | HTTP/HTTPS/FTP with **real certificate verification** |
+| `libgit_bin.so` | `git` | 3.4 MB | needs only libc, libz, libdl |
+| `libgitremotehttp_bin.so` | `git-remote-http`, `git-remote-https` | 2.5 MB | what git exec's for an https remote |
+| `libdbclient_bin.so` | `ssh`, `dbclient` | 215 KB | Dropbear client |
+| `libscp_bin.so` | `scp` | 24 KB | |
+| `libdropbearkey_bin.so` | `ssh-keygen`, `dropbearkey` | 137 KB | |
+
+`curl` fixes the caveat BusyBox's `wget` carries: BusyBox does not validate
+TLS certificates, curl does. The CA bundle ships in the payload as
+`assets/cacert.pem` and `toolbox.tls_env()` points `CURL_CA_BUNDLE` and
+`SSL_CERT_FILE` at it, because Android keeps its trust store somewhere OpenSSL
+does not look by default.
+
+### Provenance and licences
+
+    curl 8.11.1     https://curl.se/download/curl-8.11.1.tar.gz
+                    curl licence (MIT/X-derivative)
+    git 2.47.1      https://mirrors.edge.kernel.org/pub/software/scm/git/
+                    GPL-2.0-only  -- source obligation, as with BusyBox
+    dropbear 2024.86  https://matt.ucc.asn.au/dropbear/releases/
+                    MIT-style licence
+    cacert.pem      https://curl.se/ca/cacert.pem (Mozilla's CA set, MPL-2.0)
+
+All built against NDK 26.3.11579264 for arm64-v8a, then `llvm-strip`.
+
+### Two portability shims, and why they are not hacks
+
+Android's bionic is missing functions these programs assume:
+
+* **`getpass()`** — absent, and dropbear's client needs it to prompt for a
+  password. Dropping client password authentication would have been easier and
+  would have quietly made every password-only server unreachable, so the
+  function is supplied instead: read from the controlling terminal with echo
+  off, which is what the real one does.
+* **`pthread_setcancelstate()`** — Android does not implement thread
+  cancellation at all. git calls it to avoid being cancelled at an awkward
+  moment; on a platform where nothing can be cancelled that is already true,
+  so the shim reports "cancellation disabled" rather than pretending.
+
+Both are in `android_compat.h` in their respective build trees and applied
+with `-include`, so no upstream source was modified.
+
+### What was turned off, and what that costs
+
+* `NO_EXPAT` — git cannot push over WebDAV ("dumb" HTTP). No modern host
+  serves it; GitHub and friends all speak smart HTTP, which works.
+* `NO_ICONV`, `NO_GETTEXT` — git will not re-encode commit messages between
+  character sets, and its messages are English only.
+* `BLK_SHA1` instead of OpenSSL's — one less dependency, marginally slower.
+* dropbear is client-only. There is no ssh **server**, deliberately: shipping
+  something that listens is not the same as shipping something that connects.

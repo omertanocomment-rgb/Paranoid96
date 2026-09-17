@@ -811,7 +811,7 @@ async function termNew(){
   const r=await post('/api/term/open',{cols:cols,rows:24});
   if(r.status!=='ok'){termOut.textContent='could not start a shell: '+(r.reason||r.error);return;}
   termId=r.id; termOff=0; termOut.innerHTML='';
-  termWrite(`[90m${r.shell} · ${r.mode}${r.guard?' · deny-guard on':''}${r.tools?' · '+r.tools:''}${r.python?' · '+r.python:''}[0m\r\n`);
+  termWrite(`[90m${r.shell} · ${r.mode}${r.guard?' · deny-guard on':''}${r.tools?' · '+r.tools:''}${r.python?' · '+r.python:''}${r.programs?' · '+r.programs:''}[0m\r\n`);
   termPoll=setInterval(termRead,320);
 }
 async function termRead(){

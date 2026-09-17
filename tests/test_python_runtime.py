@@ -145,6 +145,51 @@ def main():
         os.environ.pop("OMERTA_NATIVE_LIB_DIR", None)
         shutil.rmtree(tmp, ignore_errors=True)
 
+    # ── the other bundled programs ───────────────────────────────────────
+    print("  -- git / curl / ssh --")
+    for name, lib in toolbox.EXTRA_BINS.items():
+        pass
+    libs = {lib for lib in toolbox.EXTRA_BINS.values()}
+    for lib in sorted(libs):
+        f = JNI / lib
+        check(f"{lib} ships", f.is_file())
+        if f.is_file():
+            head = f.read_bytes()[:20]
+            check(f"{lib} is aarch64", head[:4] == b"\x7fELF" and head[18] == 0xB7)
+
+    got = toolbox.extras_present()
+    for name in ("git", "curl", "ssh", "scp", "ssh-keygen", "git-remote-https"):
+        check(f"{name} is available on PATH", name in got)
+
+    # git resolves https:// by exec'ing git-remote-https; both names must
+    # point at the same program, as upstream installs it
+    check("git-remote-http and -https are the same program",
+          toolbox.EXTRA_BINS["git-remote-http"]
+          == toolbox.EXTRA_BINS["git-remote-https"])
+
+    # curl is the whole point of shipping this: BusyBox wget does not verify
+    # certificates, so there must be something for curl to verify against
+    ca = ROOT / "assets" / "cacert.pem"
+    check("a CA bundle ships", ca.is_file())
+    if ca.is_file():
+        text = ca.read_text(errors="ignore")
+        check("the CA bundle holds real certificates",
+              text.count("BEGIN CERTIFICATE") > 100)
+    env = toolbox.tls_env(payload=ROOT)
+    check("curl is pointed at the CA bundle",
+          env.get("CURL_CA_BUNDLE", "").endswith("cacert.pem"))
+    check("openssl is pointed at the CA bundle",
+          env.get("SSL_CERT_FILE", "").endswith("cacert.pem"))
+
+    # every private dependency they pull in must actually ship
+    shipped = {p.name for p in JNI.glob("*.so")}
+    for lib in sorted(libs):
+        deps = needed(JNI / lib) or set()
+        private = {d for d in deps if d.endswith("_py313.so")
+                   or d.endswith("_python.so")}
+        for d in private:
+            check(f"{lib}'s dependency {d} ships", d in shipped)
+
     print()
     if fails:
         print(f"PYTHON RUNTIME TESTS FAILED: {len(fails)}")

@@ -245,6 +245,7 @@ def status_payload() -> dict:
                      "guard": terminal.guarded(),
                      "tools": toolbox.stats(),
                      "python": toolbox.python_stats(),
+                     "programs": toolbox.extras_present(),
                      "sessions": len(terminal.SESSIONS)},
         "memory": memory.stats(),
         "skills": [{"name": s["name"], "description": s["description"]}
