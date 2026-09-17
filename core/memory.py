@@ -141,14 +141,20 @@ def init():
 
 # ── facts ────────────────────────────────────────────────────────────────
 def remember(content, project="general", kind="fact", tags="", weight=1.0):
+    """Store a fact and return its id.
+
+    The id is the whole point: without it a caller that stores something has
+    no way to take it back out again later, and `forget` becomes unusable for
+    anything it did not go looking for by hand.
+    """
     init()
     with _conn() as c:
         now = time.time()
-        c.execute("INSERT INTO facts (uid,project,kind,content,tags,weight,"
-                  "created_at,updated_at,origin) VALUES (?,?,?,?,?,?,?,?,?)",
-                  (uuid.uuid4().hex, project, kind, content, tags, weight,
-                   now, now, device()))
-    return "stored"
+        cur = c.execute("INSERT INTO facts (uid,project,kind,content,tags,weight,"
+                        "created_at,updated_at,origin) VALUES (?,?,?,?,?,?,?,?,?)",
+                        (uuid.uuid4().hex, project, kind, content, tags, weight,
+                         now, now, device()))
+        return cur.lastrowid
 
 
 def forget(fact_id):

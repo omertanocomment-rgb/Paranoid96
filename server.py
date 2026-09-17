@@ -186,6 +186,71 @@ def set_settings(payload: dict):
     return _json(api.set_settings(payload))
 
 
+@app.get("/api/workmode")
+def work_mode():
+    return api.mode_status()
+
+
+@app.post("/api/workmode")
+def set_work_mode(payload: dict):
+    return _json(api.set_work_mode(payload))
+
+
+@app.get("/api/learn")
+def learn_list(project: str = None):
+    return api.learn_list(project)
+
+
+@app.get("/api/learn/doc")
+def learn_doc(id: str = ""):
+    return _json(api.learn_read(id))
+
+
+@app.get("/api/learn/behaviour")
+def learn_behaviour(project: str = None):
+    return api.learned_behaviour(project)
+
+
+@app.post("/api/learn/upload")
+def learn_upload(payload: dict):
+    return _json(api.learn_upload(payload))
+
+
+@app.post("/api/learn/path")
+def learn_path(payload: dict):
+    return _json(api.learn_add_path(payload))
+
+
+@app.post("/api/learn/forget")
+def learn_forget(payload: dict):
+    return _json(api.learn_forget(payload))
+
+
+@app.get("/api/chats")
+def chats_list(project: str = None, archived: bool = False):
+    return api.chat_list(project, archived=archived)
+
+
+@app.get("/api/chats/projects")
+def chats_projects():
+    return api.chat_projects()
+
+
+@app.get("/api/chats/open")
+def chats_open(id: str = ""):
+    return _json(api.chat_open(id))
+
+
+@app.post("/api/chats/new")
+def chats_new(payload: dict):
+    return _json(api.chat_new(payload))
+
+
+@app.post("/api/chats/action")
+def chats_action(payload: dict):
+    return _json(api.chat_action(payload))
+
+
 # ── terminal ────────────────────────────────────────────────────────────────
 # A terminal is a shell on this machine. Chatting with the agent over the LAN
 # is one thing; handing a remote client a shell is another, so every terminal

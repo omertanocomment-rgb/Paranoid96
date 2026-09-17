@@ -18,7 +18,7 @@ import yaml
 import time
 
 from . import (config, memory, router, sandbox, skills, plugins, mcp, executor,
-               toolparse, roles, policy)
+               toolparse, roles, policy, modes)
 from .providers import ProviderError
 from tools import fileops, devtools, firmware, checkpoint_tools
 
@@ -35,8 +35,11 @@ READ_ONLY_TOOLS = {
     "diff_file": lambda a: fileops.diff_files(a["path"], a["content"]),
     "recall": lambda a: memory.recall(a.get("query", ""), project=a.get("project"),
                                       top_k=a.get("top_k", 8)),
-    "remember": lambda a: memory.remember(a["content"], project=a.get("project", "general"),
-                                          kind=a.get("kind", "fact"), tags=a.get("tags", "")),
+    "remember": lambda a: {
+        "stored": True,
+        "id": memory.remember(a["content"], project=a.get("project", "general"),
+                              kind=a.get("kind", "fact"), tags=a.get("tags", "")),
+    },
     "load_skill": lambda a: skills.load_body(a["name"]),
     "list_skills": lambda a: [s["name"] for s in skills.load_all()],
     "command_history": lambda a: sandbox.history(a.get("n", 20)),
@@ -112,11 +115,13 @@ Finished? Reply in plain text with no tool block."""]
         rb = roles.block()
         if rb:
             blocks.insert(1, rb)
+        blocks.insert(1, modes.prompt_block())
         if mem:
             blocks.append(mem)
         return "\n\n".join(blocks)
 
     parts = [p.get("voice", "")]
+    parts.append(modes.prompt_block())
     rb = roles.block()
     if rb:
         parts.append(rb)
@@ -251,6 +256,17 @@ class Agent:
 
     def _run_tool(self, call):
         name = call.get("tool")
+        # A work mode is enforced here, not in the prompt. A model told to
+        # "just plan" will start editing halfway through, because planning and
+        # doing feel adjacent from the inside; the tool layer is what actually
+        # stops it.
+        if not modes.allows_tools():
+            return {"status": "refused_by_mode", "mode": modes.current(),
+                    "reason": modes.refusal(name)}
+        if name not in READ_ONLY_TOOLS and not modes.allows_side_effects():
+            if self._needs_approval(name):
+                return {"status": "refused_by_mode", "mode": modes.current(),
+                        "reason": modes.refusal(name)}
         if name in READ_ONLY_TOOLS:
             try:
                 return {"status": "ok", "result": READ_ONLY_TOOLS[name](call.get("args", {}))}

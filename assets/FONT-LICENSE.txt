@@ -1,0 +1,8 @@
+UnifrakturMaguntia
+Copyright (c) Peter Wiegel, with Reserved Font Name "UnifrakturMaguntia".
+Licensed under the SIL Open Font License, Version 1.1.
+https://scripts.sil.org/OFL
+
+Bundled with OMERTA AI so the gothic banner renders with no network access.
+The OFL permits bundling and redistribution with software; the font is not
+sold on its own and retains its Reserved Font Name.

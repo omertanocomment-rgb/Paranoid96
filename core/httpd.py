@@ -155,6 +155,25 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.policy_status())
         if path == "/api/settings":
             return self._json(api.settings_payload())
+        if path == "/api/workmode":
+            return self._json(api.mode_status())
+        if path == "/api/learn":
+            q = self._query()
+            return self._json(api.learn_list((q.get("project") or [None])[0]))
+        if path == "/api/learn/doc":
+            return self._json(api.learn_read((self._query().get("id") or [""])[0]))
+        if path == "/api/learn/behaviour":
+            q = self._query()
+            return self._json(api.learned_behaviour((q.get("project") or [None])[0]))
+        if path == "/api/chats":
+            q = self._query()
+            return self._json(api.chat_list(
+                (q.get("project") or [None])[0],
+                archived=(q.get("archived") or ["0"])[0] in ("1", "true")))
+        if path == "/api/chats/projects":
+            return self._json(api.chat_projects())
+        if path == "/api/chats/open":
+            return self._json(api.chat_open((self._query().get("id") or [""])[0]))
         # reading a terminal is reading a shell's output — same local-only
         # rule as writing to one (see do_POST)
         if path.startswith("/api/term"):
@@ -198,6 +217,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(api.set_policy(self._body()))
         if path == "/api/settings":
             return self._json(api.set_settings(self._body()))
+        if path == "/api/workmode":
+            return self._json(api.set_work_mode(self._body()))
+        if path == "/api/learn/upload":
+            return self._json(api.learn_upload(self._body()))
+        if path == "/api/learn/path":
+            return self._json(api.learn_add_path(self._body()))
+        if path == "/api/learn/forget":
+            return self._json(api.learn_forget(self._body()))
+        if path == "/api/chats/new":
+            return self._json(api.chat_new(self._body()))
+        if path == "/api/chats/action":
+            return self._json(api.chat_action(self._body()))
         # A terminal is a shell on this device. It is local-only on every
         # transport, regardless of whether a LAN client holds a valid token:
         # handing a remote client a shell is a different thing entirely from

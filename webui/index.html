@@ -3,140 +3,319 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b0a08">
+<meta name="theme-color" content="#0a0506">
 <link rel="icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/assets/icon_256.png">
-<title>OMERTA AGENT</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<title>OMERTA AI</title>
 <style>
-:root{--bg:#0b0a08;--panel:#141210;--panel2:#1b1813;--border:#2a2620;
-  --amber:#ffb020;--amber-dim:#8a5a12;--text:#e8ddc8;--muted:#8a8272;
-  --danger:#ff4d4d;--ok:#4dff88}
+/* The blackletter face is bundled, not fetched. The whole point of this app
+   is that it works with the radio off. */
+@font-face{font-family:'Unifraktur';src:url('/assets/unifraktur-maguntia.woff2') format('woff2');
+  font-display:swap;font-weight:400}
+
+:root{
+  --bg:#0a0506; --panel:#140b0d; --panel2:#1c1013; --border:#3a1c21;
+  --red:#c81e28; --red-bright:#ff2d3c; --red-dim:#7a1219; --ember:#ff5a4a;
+  --text:#e8dcd8; --muted:#8a7470; --ok:#4dff88; --warn:#ffb020;
+  --shadow:0 0 22px rgba(200,30,40,.22);
+}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',ui-monospace,monospace;
-  height:100dvh;display:flex;flex-direction:column;overflow:hidden}
-header{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel);
-  border-bottom:1px solid var(--border);padding-top:max(10px,env(safe-area-inset-top))}
-header img{width:26px;height:26px}
-.brand{color:var(--amber);font-weight:700;letter-spacing:.09em;font-size:.95rem}
+html,body{margin:0;height:100dvh;overflow:hidden}
+body{background:var(--bg);color:var(--text);
+  font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  display:flex;flex-direction:column}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at 50% -10%,rgba(200,30,40,.16),transparent 62%)}
+
+/* ── banner ─────────────────────────────────────────────────────────── */
+/* Two rows: the wordmark never competes with the pills for width, and the
+   slogan gets the full line so it is never truncated. It is the motto; a
+   motto with an ellipsis in it is worse than no motto. */
+header{position:relative;z-index:1;padding:7px 12px 6px;
+  background:linear-gradient(180deg,#180c0f,#0e0709);
+  border-bottom:1px solid var(--border);padding-top:max(7px,env(safe-area-inset-top))}
+.hrow{display:flex;align-items:center;gap:10px}
+.crest{width:28px;height:28px;flex:none}
+/* The wordmark owns the first row outright. Sharing it with the status pills
+   meant a long provider name ("mock · offline") pushed the name into an
+   ellipsis — a truncated logo looks broken, so the pills move down instead. */
+.wordmark{font-family:'Unifraktur',ui-serif,Georgia,serif;
+  font-size:clamp(1.3rem,7vw,1.8rem);color:var(--red-bright);letter-spacing:.02em;
+  text-shadow:0 0 12px rgba(255,45,60,.5),0 1px 0 #000;white-space:nowrap;
+  line-height:1.15;flex:none}
+.srow{display:flex;align-items:center;gap:8px;margin-top:4px}
+.slogan{font-size:clamp(.47rem,2.2vw,.58rem);color:var(--muted);
+  letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
 .spacer{flex:1}
-.pill{font-size:.68rem;padding:3px 8px;border:1px solid var(--border);border-radius:99px;
-  color:var(--muted);white-space:nowrap}
-.pill.on{border-color:var(--amber-dim);color:var(--amber)}
+.pill{font-size:.63rem;padding:3px 7px;border:1px solid var(--border);border-radius:99px;
+  color:var(--muted);white-space:nowrap;cursor:pointer;background:none;font-family:inherit}
+.pill.on{border-color:var(--red);color:var(--red-bright);box-shadow:var(--shadow)}
+.pill.warn{border-color:var(--warn);color:var(--warn)}
 .iconbtn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;
   padding:5px 9px;font-family:inherit;cursor:pointer;font-size:.8rem}
-.iconbtn:active{background:var(--panel2)}
-#log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;
+.iconbtn:active{background:var(--panel2);color:var(--red-bright)}
+
+/* ── tab bar ────────────────────────────────────────────────────────── */
+nav{position:relative;z-index:1;display:flex;background:var(--panel);
+  border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:1;min-width:76px;padding:9px 6px;background:none;border:none;
+  border-bottom:2px solid transparent;color:var(--muted);font-family:inherit;
+  font-size:.68rem;letter-spacing:.09em;cursor:pointer;text-transform:uppercase}
+nav button.on{color:var(--red-bright);border-bottom-color:var(--red)}
+
+main{position:relative;z-index:1;flex:1;overflow:hidden;display:flex}
+.view{display:none;flex:1;flex-direction:column;overflow:hidden}
+.view.on{display:flex}
+
+/* ── chat ───────────────────────────────────────────────────────────── */
+#log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:11px;
   -webkit-overflow-scrolling:touch}
-.msg{max-width:92%;padding:10px 12px;border-radius:8px;line-height:1.5;font-size:.88rem;
+.msg{max-width:93%;padding:9px 12px;border-radius:7px;line-height:1.52;font-size:.86rem;
   white-space:pre-wrap;word-break:break-word}
-.you{align-self:flex-end;background:#1f1810;border:1px solid var(--amber-dim)}
+.you{align-self:flex-end;background:#251013;border:1px solid var(--red-dim)}
 .agent{align-self:flex-start;background:var(--panel);border:1px solid var(--border)}
-.meta{font-size:.65rem;color:var(--muted);margin-bottom:5px;letter-spacing:.05em}
-.msg code{background:#000;padding:1px 5px;border-radius:3px;color:var(--amber);font-size:.85em}
+.meta{font-size:.62rem;color:var(--muted);margin-bottom:4px;letter-spacing:.07em}
+.msg code{background:#000;padding:1px 5px;border-radius:3px;color:var(--ember);font-size:.85em}
 .msg pre{background:#000;padding:10px;border-radius:6px;overflow-x:auto;border:1px solid var(--border)}
 .msg pre code{background:none;padding:0;color:var(--text)}
-.approve{align-self:stretch;background:var(--panel2);border:1px solid var(--amber);
-  border-radius:8px;padding:12px}
-.approve.danger{border-color:var(--danger);background:#1c0e0e}
-.approve .hdr{font-size:.7rem;letter-spacing:.09em;color:var(--amber);margin-bottom:8px;font-weight:700}
-.approve.danger .hdr{color:var(--danger)}
-.approve .cmd{background:#000;padding:10px;border-radius:6px;font-size:.84rem;
+.approve{align-self:stretch;background:var(--panel2);border:1px solid var(--red);
+  border-radius:8px;padding:12px;box-shadow:var(--shadow)}
+.approve.danger{border-color:var(--red-bright);background:#2a0a0c}
+.approve .hdr{font-size:.68rem;letter-spacing:.1em;color:var(--red-bright);
+  margin-bottom:8px;font-weight:700}
+.approve .cmd{background:#000;padding:10px;border-radius:6px;font-size:.82rem;
   overflow-x:auto;white-space:pre;border:1px solid var(--border)}
-.approve .hint{font-size:.7rem;color:var(--muted);margin-top:7px}
-.approve .hint.warn{color:var(--danger)}
+.approve .hint{font-size:.68rem;color:var(--muted);margin-top:7px}
 .btns{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
-.btns button{flex:1;min-width:76px;padding:11px;border:none;border-radius:6px;font-weight:700;
-  font-family:inherit;font-size:.82rem;cursor:pointer}
-.b-yes{background:var(--amber);color:#000}
+.btns button{flex:1;min-width:74px;padding:11px;border:none;border-radius:6px;font-weight:700;
+  font-family:inherit;font-size:.8rem;cursor:pointer}
+.b-yes{background:var(--red);color:#fff}
 .b-no{background:transparent;color:var(--muted);border:1px solid var(--border)!important}
-.b-edit{background:var(--panel);color:var(--amber);border:1px solid var(--amber-dim)!important}
-#bar{display:flex;gap:8px;padding:10px;background:var(--panel);border-top:1px solid var(--border);
-  padding-bottom:max(10px,env(safe-area-inset-bottom))}
-#bar textarea{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
-  padding:11px;border-radius:8px;font-family:inherit;font-size:.9rem;resize:none;max-height:120px}
-#bar button{background:var(--amber);color:#000;border:none;padding:0 17px;border-radius:8px;
-  font-weight:700;font-family:inherit;cursor:pointer}
-#panel{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;z-index:50}
-#panel.open{display:block}
-#panelInner{position:absolute;right:0;top:0;bottom:0;width:min(360px,88vw);background:var(--panel);
-  border-left:1px solid var(--border);padding:16px;overflow-y:auto}
-#panelInner h3{color:var(--amber);font-size:.78rem;letter-spacing:.09em;margin:18px 0 8px}
-#panelInner h3:first-child{margin-top:0}
-.row{font-size:.75rem;padding:6px 0;border-bottom:1px solid var(--border);
-  display:flex;justify-content:space-between;gap:10px}
-.dot{color:var(--ok)}.dot.off{color:var(--muted)}
-select{background:var(--bg);color:var(--text);border:1px solid var(--border);padding:7px;
-  border-radius:6px;font-family:inherit;width:100%;font-size:.8rem}
+.b-edit{background:var(--panel);color:var(--ember);border:1px solid var(--red-dim)!important}
+.tool{font-size:.68rem;color:var(--muted);align-self:flex-start;padding:4px 9px;
+  border-left:2px solid var(--red-dim);background:var(--panel)}
+.tool.auto{border-left-color:var(--warn);color:var(--warn)}
 .thinking{color:var(--muted);font-style:italic}
-.tool{font-size:.7rem;color:var(--muted);align-self:flex-start;padding:4px 9px;
-  border-left:2px solid var(--amber-dim);background:var(--panel)}
-.modebtn{flex:1;padding:8px;border:1px solid var(--border);background:var(--bg);
-  color:var(--muted);border-radius:6px;font-family:inherit;font-size:.72rem;cursor:pointer}
-.modebtn.on{border-color:var(--amber);color:var(--amber);background:var(--panel2)}
+#bar{display:flex;gap:8px;padding:9px;background:var(--panel);border-top:1px solid var(--border);
+  padding-bottom:max(9px,env(safe-area-inset-bottom))}
+#bar textarea{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:10px;border-radius:8px;font-family:inherit;font-size:.88rem;resize:none;max-height:120px}
+#bar textarea:focus{outline:none;border-color:var(--red-dim)}
+#bar button{background:var(--red);color:#fff;border:none;padding:0 16px;border-radius:8px;
+  font-weight:700;font-family:inherit;cursor:pointer}
+#queueStrip{display:none;padding:5px 12px;background:#1a0e10;border-top:1px solid var(--border);
+  font-size:.66rem;color:var(--warn);gap:8px;align-items:center}
+#queueStrip.on{display:flex}
+
+/* ── terminal ───────────────────────────────────────────────────────── */
+#termOut{flex:1;overflow-y:auto;background:#000;color:#ddd;padding:10px;margin:0;
+  font-size:var(--termsize,12px);line-height:1.38;white-space:pre-wrap;word-break:break-all}
+#termBar{display:flex;gap:6px;padding:8px;background:var(--panel);
+  border-top:1px solid var(--border);padding-bottom:max(8px,env(safe-area-inset-bottom))}
+#termBar input{flex:1;background:#000;border:1px solid var(--border);color:var(--text);
+  padding:9px;border-radius:6px;font-family:inherit;font-size:.84rem}
+#termBar input:focus{outline:none;border-color:var(--red-dim)}
+.keyrow{display:flex;gap:5px;padding:5px 8px;background:var(--panel);overflow-x:auto;
+  border-top:1px solid var(--border);scrollbar-width:none}
+.keyrow::-webkit-scrollbar{display:none}
+.keyrow button{background:var(--panel2);border:1px solid var(--border);color:var(--muted);
+  border-radius:5px;padding:5px 9px;font-family:inherit;font-size:.68rem;cursor:pointer;flex:none}
+.keyrow button:active{border-color:var(--red);color:var(--red-bright)}
+
+/* ── lists / panels ─────────────────────────────────────────────────── */
+.scroll{flex:1;overflow-y:auto;padding:12px}
+h3{color:var(--red-bright);font-size:.72rem;letter-spacing:.11em;margin:16px 0 7px;
+  text-transform:uppercase}
+h3:first-child{margin-top:0}
+.row{font-size:.75rem;padding:8px 0;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;gap:9px;align-items:center}
+.row .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.row small{color:var(--muted);font-size:.66rem;display:block;margin-top:2px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:7px;
+  padding:10px;margin-bottom:9px}
+.card.sel{border-color:var(--red);box-shadow:var(--shadow)}
+.tiny{font-size:.66rem;color:var(--muted);line-height:1.45}
+.danger{color:var(--red-bright)}
+button.mini{background:var(--panel2);border:1px solid var(--border);color:var(--muted);
+  border-radius:5px;padding:4px 8px;font-family:inherit;font-size:.65rem;cursor:pointer;flex:none}
+button.mini:active,button.mini.on{border-color:var(--red);color:var(--red-bright)}
+input,select,textarea{background:var(--bg);color:var(--text);border:1px solid var(--border);
+  padding:8px;border-radius:6px;font-family:inherit;width:100%;font-size:.78rem}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--red-dim)}
+label.fld{display:block;margin:8px 0}
+label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4px}
+.grid2{display:flex;gap:6px}
+.grid2>*{flex:1}
+.modebtn{flex:1;padding:8px 4px;border:1px solid var(--border);background:var(--bg);
+  color:var(--muted);border-radius:6px;font-family:inherit;font-size:.66rem;cursor:pointer}
+.modebtn.on{border-color:var(--red);color:var(--red-bright);background:var(--panel2);
+  box-shadow:var(--shadow)}
+.noteline{font-size:.66rem;color:var(--muted);margin-top:5px;line-height:1.5}
+.empty{color:var(--muted);font-size:.74rem;padding:18px 4px;text-align:center}
 </style>
 </head>
 <body>
+
 <header>
-  <img src="/icon.svg" alt="O">
-  <span class="brand">OMERTA</span>
-  <span class="pill on" id="askPill">ASKS FIRST</span>
-  <span class="spacer"></span>
-  <span class="pill" id="brainPill">—</span>
-  <button class="iconbtn" onclick="openPanel()">☰</button>
+  <div class="hrow">
+  <svg class="crest" viewBox="0 0 64 64" aria-hidden="true">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff2d3c"/><stop offset="1" stop-color="#7a1219"/>
+    </linearGradient></defs>
+    <path d="M32 3 58 13v22c0 14-11 23-26 26C17 58 6 49 6 35V13z"
+          fill="#120809" stroke="url(#g)" stroke-width="2.5"/>
+    <path d="M32 15c-7 0-12 5-12 11 0 9 12 19 12 19s12-10 12-19c0-6-5-11-12-11z"
+          fill="none" stroke="url(#g)" stroke-width="2"/>
+    <circle cx="32" cy="26" r="3.4" fill="#ff2d3c"/>
+  </svg>
+  <span class="wordmark">OMERTA AI</span>
+  </div>
+  <div class="srow">
+    <span class="slogan">Silence Is The Only Unbreakable Code</span>
+    <button class="pill" id="policyPill" onclick="go('settings')">ASKS FIRST</button>
+    <button class="pill" id="brainPill" onclick="go('settings')">—</button>
+  </div>
 </header>
 
-<div id="log"></div>
+<nav>
+  <button class="on" data-view="chat"    onclick="go('chat')">Chat</button>
+  <button           data-view="term"     onclick="go('term')">Terminal</button>
+  <button           data-view="chats"    onclick="go('chats')">Chats</button>
+  <button           data-view="learn"    onclick="go('learn')">Learn</button>
+  <button           data-view="settings" onclick="go('settings')">Settings</button>
+</nav>
 
-<div id="bar">
-  <textarea id="msg" rows="1" placeholder="what do you want built?"></textarea>
-  <button onclick="send()">▶</button>
-</div>
+<main>
+  <!-- CHAT -->
+  <section class="view on" id="v-chat">
+    <div style="display:flex;gap:5px;padding:6px 9px;background:var(--panel);
+                border-bottom:1px solid var(--border);overflow-x:auto" id="modeRow"></div>
+    <div id="log"></div>
+    <div id="queueStrip"><span id="queueText"></span>
+      <button class="mini" onclick="runQueue()">run next</button>
+      <button class="mini" onclick="clearQueue()">clear</button></div>
+    <div id="bar">
+      <textarea id="msg" rows="1" placeholder="what do you want built?"></textarea>
+      <button onclick="send()">▶</button>
+    </div>
+  </section>
 
-<div id="panel" onclick="if(event.target.id==='panel')closePanel()">
-  <div id="panelInner">
-    <h3>MODE</h3>
-    <div id="modeSel" style="display:flex;gap:6px">
-      <button class="modebtn" data-mode="auto" onclick="setMode('auto')">AUTO</button>
-      <button class="modebtn" data-mode="offline" onclick="setMode('offline')">OFFLINE</button>
-      <button class="modebtn" data-mode="online" onclick="setMode('online')">ONLINE</button>
+  <!-- TERMINAL -->
+  <section class="view" id="v-term">
+    <pre id="termOut">terminal not started
+</pre>
+    <div class="keyrow">
+      <button onclick="termSig('INT')">^C</button>
+      <button onclick="termKey('\t')">TAB</button>
+      <button onclick="termKey('[A')">↑</button>
+      <button onclick="termKey('[B')">↓</button>
+      <button onclick="termSend('ls -la')">ls</button>
+      <button onclick="termSend('pwd')">pwd</button>
+      <button onclick="termSend('clear')">clear</button>
+      <button onclick="termNew()">restart</button>
     </div>
-    <div style="font-size:.66rem;color:var(--muted);margin-top:5px">
-      Offline = local models only, unlimited. Online = cloud APIs. Auto switches.</div>
-    <h3>BRAIN</h3>
-    <select id="providerSel" onchange="setProvider()"></select>
-    <div id="providers"></div>
-    <div id="secretBox" style="display:none;margin-top:10px">
-      <h3>MODEL ACCESS</h3>
-      <div style="font-size:.68rem;color:var(--muted);margin-bottom:6px">
-        Stored on this device only (0600). A key, or a local model host.</div>
-      <select id="secretKey"></select>
-      <input id="secretVal" type="password" placeholder="paste key / host, blank to clear"
-        style="width:100%;margin-top:7px;background:var(--bg);color:var(--text);
-        border:1px solid var(--border);padding:7px;border-radius:6px;font-family:inherit;font-size:.8rem">
-      <button class="iconbtn" style="width:100%;margin-top:7px" onclick="saveSecret()">save key</button>
-      <div id="secretMsg" style="font-size:.68rem;color:var(--muted);margin-top:6px"></div>
+    <div id="termBar">
+      <input id="termIn" placeholder="type a command…" autocomplete="off"
+             autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button class="iconbtn" onclick="termEnter()">↵</button>
     </div>
-    <h3>PROJECT</h3>
-    <select id="projectSel" onchange="switchProject()">
-      <option value="general">general</option>
-    </select>
-    <input id="newProject" placeholder="new project name…"
-      style="width:100%;margin-top:7px;background:var(--bg);color:var(--text);
-      border:1px solid var(--border);padding:7px;border-radius:6px;font-family:inherit;font-size:.8rem">
-    <button class="iconbtn" style="width:100%;margin-top:7px" onclick="addProject()">add project</button>
-    <h3>SKILLS</h3><div id="skills"></div>
-    <h3>PLUGINS</h3><div id="plugins"></div>
-    <h3>CONNECTORS</h3><div id="connectors"></div>
-    <h3>MEMORY</h3><div id="memstats"></div>
-    <button class="iconbtn" style="width:100%;margin-top:12px" onclick="resetChat()">clear conversation</button>
-  </div>
-</div>
+  </section>
+
+  <!-- CHATS / PROJECTS -->
+  <section class="view" id="v-chats">
+    <div class="scroll">
+      <h3>Projects</h3>
+      <div id="projectList"></div>
+      <div class="grid2" style="margin-top:7px">
+        <input id="newProjName" placeholder="new project…">
+        <button class="mini" onclick="newProject()">add</button>
+      </div>
+
+      <h3>Recent chats</h3>
+      <div class="grid2" style="margin-bottom:9px">
+        <button class="mini" onclick="newChat(false)">+ new chat</button>
+        <button class="mini" onclick="newChat(true)">+ private chat</button>
+        <button class="mini" id="archToggle" onclick="toggleArchived()">show archived</button>
+      </div>
+      <div id="chatList"></div>
+    </div>
+  </section>
+
+  <!-- LEARN -->
+  <section class="view" id="v-learn">
+    <div class="scroll">
+      <h3>Teach it something</h3>
+      <div class="tiny">Drop in notes, source, datasheets, logs. It is chunked
+        into memory and recalled like anything else it knows. Everything stays
+        on this device.</div>
+      <label class="fld"><span>upload files</span>
+        <input type="file" id="learnFile" multiple onchange="uploadLearn()"></label>
+      <label class="fld"><span>or a path on this device (file or folder)</span>
+        <div class="grid2"><input id="learnPath" placeholder="/sdcard/docs">
+          <button class="mini" onclick="learnPath()">learn</button></div></label>
+      <div class="noteline" id="learnMsg"></div>
+
+      <h3>Learned documents</h3>
+      <div id="docList"></div>
+
+      <h3>Learned behaviour</h3>
+      <div class="tiny">What it has picked up — taught facts, document chunks,
+        and the preferences it inferred from what you approved and denied.
+        Anything here can be removed.</div>
+      <div id="behaviourList"></div>
+      <label class="fld"><span>forget anything matching…</span>
+        <div class="grid2"><input id="forgetMatch" placeholder="text to match">
+          <button class="mini danger" onclick="forgetMatch()">forget</button></div></label>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="v-settings">
+    <div class="scroll">
+      <h3>Approvals</h3>
+      <div class="tiny" id="policyBlurb"></div>
+      <div class="grid2" style="margin-top:7px" id="policyRow"></div>
+      <div class="noteline">Destructive and irreversible actions always ask, on
+        every setting. The hard-deny list is refused outright and cannot be
+        approved at all.</div>
+
+      <h3>Model</h3>
+      <select id="providerSel" onchange="setProvider()"></select>
+      <div class="grid2" style="margin-top:7px" id="netRow">
+        <button class="modebtn" data-net="auto" onclick="setNet('auto')">AUTO</button>
+        <button class="modebtn" data-net="offline" onclick="setNet('offline')">OFFLINE</button>
+        <button class="modebtn" data-net="online" onclick="setNet('online')">ONLINE</button>
+      </div>
+      <div id="providers" style="margin-top:7px"></div>
+
+      <div id="secretBox" style="display:none">
+        <h3>Model access</h3>
+        <div class="tiny">Stored on this device only (0600). A key, or a local
+          model host.</div>
+        <select id="secretKey" style="margin-top:6px"></select>
+        <input id="secretVal" type="password" style="margin-top:6px"
+               placeholder="paste key / host, blank to clear">
+        <button class="mini" style="width:100%;margin-top:6px" onclick="saveSecret()">save</button>
+        <div class="noteline" id="secretMsg"></div>
+      </div>
+
+      <h3>Settings</h3>
+      <div id="settingsList"></div>
+
+      <h3>System</h3>
+      <div id="sysInfo"></div>
+      <div class="grid2" style="margin-top:8px">
+        <button class="mini" onclick="lockAll()">lock private chats</button>
+        <button class="mini" onclick="resetChat()">clear conversation</button>
+      </div>
+    </div>
+  </section>
+</main>
 
 <script>
-let project = 'general';
-const log = document.getElementById('log');
-
+/* ───────── helpers ───────── */
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,
   c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function md(s){
@@ -145,157 +324,414 @@ function md(s){
     .replace(/`([^`\n]+)`/g,'<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
 }
-function tokenParam(){
-  const t = new URLSearchParams(location.search).get('token');
-  return t ? ('?token=' + encodeURIComponent(t)) : '';
+const qs = new URLSearchParams(location.search);
+function tok(){const t=qs.get('token');return t?('?token='+encodeURIComponent(t)):'';}
+function tokAmp(){const t=qs.get('token');return t?('&token='+encodeURIComponent(t)):'';}
+async function get(p){const r=await fetch(p+(p.includes('?')?tokAmp():tok()));return r.json();}
+async function post(p,b){const r=await fetch(p+tok(),{method:'POST',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
+
+let project='general', chatId=null, showArchived=false, S={};
+
+function go(v){
+  document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
+  document.getElementById('v-'+v).classList.add('on');
+  document.querySelectorAll('nav button').forEach(b=>
+    b.classList.toggle('on', b.dataset.view===v));
+  if(v==='term') termInit();
+  if(v==='chats') loadChats();
+  if(v==='learn'){loadDocs();loadBehaviour();}
+  if(v==='settings'){loadStatus();loadSettings();loadSecrets();}
 }
-async function chat(payload){
-  payload.project = project;
-  try{
-    const r = await fetch('/api/chat'+tokenParam(),{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(!r.ok){ throw new Error('HTTP '+r.status); }
-    render(await r.json());
-  }catch(e){
-    document.querySelectorAll('.thinking').forEach(x=>x.remove());
-    addMsg('agent','⚠ backend unreachable — '+e.message);
-  }
-}
+
+/* ───────── chat ───────── */
+const log=document.getElementById('log');
 function addMsg(role,text){
   const d=document.createElement('div');
   d.className='msg '+(role==='you'?'you':'agent');
   d.innerHTML=`<div class="meta">${role==='you'?'you':'omerta'}</div>${md(text)}`;
   log.appendChild(d); log.scrollTop=log.scrollHeight;
 }
+function thinking(){const d=document.createElement('div');
+  d.className='msg agent thinking';d.textContent='…';log.appendChild(d);
+  log.scrollTop=log.scrollHeight;}
+
 function render(data){
   document.querySelectorAll('.thinking').forEach(e=>e.remove());
-  if(data.provider){
-    document.getElementById('brainPill').textContent =
-      data.provider + (data.offline?' · offline':' · online');
-  }
+  if(data.provider) document.getElementById('brainPill').textContent =
+    data.provider + (data.offline?' · offline':' · online');
   (data.tool_log||[]).forEach(t=>{
-    const d=document.createElement('div'); d.className='tool';
-    d.textContent='⚙ '+(t.call?.tool||'tool');
+    const d=document.createElement('div');
+    const auto = t.result && t.result.auto_run;
+    d.className='tool'+(auto?' auto':'');
+    d.textContent=(auto?'⚡ auto-ran  ':'⚙ ')+
+      (t.result&&t.result.action ? t.result.action : (t.call&&t.call.tool)||'tool');
     log.appendChild(d);
   });
   if(data.text) addMsg('agent',data.text);
   if(data.pending) addApproval(data.pending);
+  if(data.status==='refused_by_mode') addMsg('agent',data.reason||'mode does not allow that');
   log.scrollTop=log.scrollHeight;
+  if(chatId && data.text) post('/api/chats/action',
+    {id:chatId,action:'append',message:{role:'assistant',content:data.text}});
 }
+
 function addApproval(p){
   const d=document.createElement('div');
   d.className='approve'+(p.danger?' danger':'');
   const hint=p.history&&p.history.detail?
-    `<div class="hint ${p.history.hint==='likely_deny'?'warn':''}">${esc(p.history.detail)}</div>`:'';
+    `<div class="hint">${esc(p.history.detail)}</div>`:'';
   d.innerHTML=`<div class="hdr">${p.danger?'⚠ DESTRUCTIVE — APPROVE?':'APPROVAL NEEDED'}</div>
     <div class="cmd">${esc(p.action)}</div>${hint}`;
   const btns=document.createElement('div'); btns.className='btns';
   const yes=document.createElement('button'); yes.className='b-yes'; yes.textContent='RUN';
   yes.onclick=()=>{d.remove(); thinking(); chat({kind:'approve'});};
-  const edit=document.createElement('button'); edit.className='b-edit'; edit.textContent='EDIT';
-  edit.onclick=()=>{const c=prompt('rewrite command:',p.action);
+  const ed=document.createElement('button'); ed.className='b-edit'; ed.textContent='EDIT';
+  ed.onclick=()=>{const c=prompt('rewrite command:',p.action);
     if(c){d.remove(); thinking(); chat({kind:'edit',cmd:c});}};
   const no=document.createElement('button'); no.className='b-no'; no.textContent='REFUSE';
   no.onclick=()=>{const r=prompt('reason (optional):','');
     d.remove(); thinking(); chat({kind:'deny',note:r||''});};
-  btns.append(yes,edit,no); d.appendChild(btns);
+  btns.append(yes,ed,no); d.appendChild(btns);
   log.appendChild(d); log.scrollTop=log.scrollHeight;
 }
-function thinking(){
-  const t=document.createElement('div'); t.className='msg agent thinking';
-  t.textContent='working…'; log.appendChild(t); log.scrollTop=log.scrollHeight;
-}
-function send(){
-  const i=document.getElementById('msg'); const t=i.value.trim(); if(!t)return;
-  addMsg('you',t); thinking(); chat({kind:'message',text:t});
-  i.value=''; i.style.height='auto';
-}
-const ta=document.getElementById('msg');
-ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,120)+'px';});
-ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
 
+async function chat(payload){
+  payload.project=project;
+  try{ render(await post('/api/chat',payload)); }
+  catch(e){ document.querySelectorAll('.thinking').forEach(x=>x.remove());
+            addMsg('agent','⚠ backend unreachable — '+e.message); }
+}
+const box=document.getElementById('msg');
+box.addEventListener('input',()=>{box.style.height='auto';
+  box.style.height=Math.min(box.scrollHeight,120)+'px';});
+box.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+function send(){
+  const t=box.value.trim(); if(!t) return;
+  box.value=''; box.style.height='auto';
+  addMsg('you',t); thinking(); chat({kind:'message',text:t});
+  if(chatId) post('/api/chats/action',
+    {id:chatId,action:'append',message:{role:'user',content:t}});
+}
+function resetChat(){log.innerHTML='';chat({kind:'reset'});go('chat');}
+
+/* work modes */
+async function loadModes(){
+  const m=await get('/api/workmode');
+  const row=document.getElementById('modeRow'); row.innerHTML='';
+  Object.entries(m.modes).forEach(([k,v])=>{
+    const b=document.createElement('button');
+    b.className='modebtn'+(k===m.mode?' on':'');
+    b.textContent=v.label; b.title=v.blurb;
+    b.onclick=()=>setWorkMode(k);
+    row.appendChild(b);
+  });
+}
+async function setWorkMode(k){
+  const m=await post('/api/workmode',{mode:k});
+  await loadModes();
+  addMsg('agent',`${m.label} — ${m.blurb}`);
+}
+
+/* ───────── terminal ───────── */
+let termId=null, termOff=0, termPoll=null;
+const termOut=document.getElementById('termOut');
+
+/* Strip the sequences a scrollback pane cannot honour (cursor moves, screen
+   clears, OSC titles, bracketed paste) and turn SGR colours into spans. A
+   full VT emulator is a different project; this renders ordinary command
+   output faithfully, which is what a phone terminal is actually used for. */
+const SGR={30:'#555',31:'#ff5a5a',32:'#5aff8f',33:'#ffcc55',34:'#6aa9ff',
+           35:'#e07aff',36:'#5ae0ff',37:'#ddd',90:'#888',91:'#ff6b6b',
+           92:'#7dffa8',93:'#ffd97a',94:'#8fbcff',95:'#eb9bff',96:'#8ff0ff',97:'#fff'};
+function ansi(text){
+  text=text.replace(/\][^]*(|\\)/g,'')  // OSC title
+           .replace(/\[\?[0-9;]*[hl]/g,'')                       // modes
+           .replace(/\[[0-9;]*[ABCDEFGJKSTfnsu]/g,'')            // cursor
+           .replace(/\r(?!\n)/g,'');
+  let out='',open=false;
+  const parts=text.split(/\[([0-9;]*)m/);
+  for(let i=0;i<parts.length;i++){
+    if(i%2===0){ out+=esc(parts[i]); continue; }
+    const codes=parts[i].split(';').filter(Boolean).map(Number);
+    if(open){out+='</span>';open=false;}
+    const col=codes.find(c=>SGR[c]);
+    const bold=codes.includes(1);
+    if(col||bold){out+=`<span style="${col?`color:${SGR[col]};`:''}${bold?'font-weight:700':''}">`;open=true;}
+  }
+  if(open) out+='</span>';
+  return out;
+}
+function termWrite(s){
+  if(s.includes('[2J')||s.includes('[H[J')){termOut.innerHTML='';
+    s=s.split(/\[2J|\[H\[J/).pop();}
+  termOut.insertAdjacentHTML('beforeend',ansi(s));
+  const lines=termOut.childNodes.length;
+  if(lines>4000) termOut.innerHTML=termOut.innerHTML.slice(-200000);
+  termOut.scrollTop=termOut.scrollHeight;
+}
+async function termInit(){ if(!termId) await termNew(); }
+async function termNew(){
+  if(termPoll){clearInterval(termPoll);termPoll=null;}
+  const cols=Math.max(20,Math.floor(termOut.clientWidth/7.2))||80;
+  const r=await post('/api/term/open',{cols:cols,rows:24});
+  if(r.status!=='ok'){termOut.textContent='could not start a shell: '+(r.reason||r.error);return;}
+  termId=r.id; termOff=0; termOut.innerHTML='';
+  termWrite(`[90m${r.shell} · ${r.mode}${r.guard?' · deny-guard on':''}[0m\r\n`);
+  termPoll=setInterval(termRead,320);
+}
+async function termRead(){
+  if(!termId) return;
+  const r=await get(`/api/term/read?id=${encodeURIComponent(termId)}&offset=${termOff}`);
+  if(r.status!=='ok') return;
+  termOff=r.offset;
+  if(r.data) termWrite(r.data);
+  if(!r.alive){clearInterval(termPoll);termPoll=null;}
+}
+async function termKey(k){ if(termId) await post('/api/term/write',{id:termId,data:k}); }
+async function termSig(s){ if(termId) await post('/api/term/signal',{id:termId,signal:s}); }
+async function termSend(cmd){
+  if(!termId) await termNew();
+  const r=await post('/api/term/write',{id:termId,data:cmd,enter:true});
+  if(r.status==='denied_by_policy') termWrite('');   // the shell shows the refusal
+}
+const termIn=document.getElementById('termIn');
+termIn.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();termEnter();}});
+function termEnter(){const v=termIn.value;termIn.value='';termSend(v);}
+
+/* ───────── chats & projects ───────── */
+function toggleArchived(){showArchived=!showArchived;
+  document.getElementById('archToggle').classList.toggle('on',showArchived);
+  document.getElementById('archToggle').textContent=showArchived?'hide archived':'show archived';
+  loadChats();}
+async function loadChats(){
+  const d=await get('/api/chats?archived='+(showArchived?1:0));
+  const p=await get('/api/chats/projects');
+  const pl=document.getElementById('projectList');
+  pl.innerHTML=p.projects.map(pr=>
+    `<div class="row"><span class="grow">${esc(pr.name)}<small>${pr.chats} chat(s)</small></span>
+     <button class="mini${pr.name===project?' on':''}" onclick="pickProject('${esc(pr.name)}')">use</button></div>`
+  ).join('')||'<div class="empty">no projects yet</div>';
+
+  const cl=document.getElementById('chatList');
+  cl.innerHTML=d.chats.map(c=>`
+    <div class="card${c.id===chatId?' sel':''}">
+      <div class="row" style="border:none;padding:0">
+        <span class="grow">${c.locked?'🔒 ':''}${esc(c.title)}
+          <small>${esc(c.project)} · ${c.messages} msg${c.parent?' · branched':''}${c.archived?' · archived':''}</small></span>
+      </div>
+      <div class="btns" style="margin-top:7px;gap:5px">
+        <button class="mini" onclick="openChat('${c.id}',${c.locked})">open</button>
+        <button class="mini" onclick="chatAct('${c.id}','branch')">branch</button>
+        <button class="mini" onclick="renameChat('${c.id}')">rename</button>
+        <button class="mini" onclick="chatAct('${c.id}','archive',{archived:${!c.archived}})">${c.archived?'unarchive':'archive'}</button>
+        <button class="mini danger" onclick="delChat('${c.id}')">delete</button>
+      </div>
+    </div>`).join('')||'<div class="empty">no chats yet</div>';
+}
+function pickProject(p){project=p;loadChats();}
+async function newProject(){
+  const n=document.getElementById('newProjName').value.trim(); if(!n)return;
+  await post('/api/chats/action',{action:'new_project',project:n});
+  document.getElementById('newProjName').value=''; loadChats();
+}
+async function newChat(priv){
+  let pass=null;
+  if(priv){pass=prompt('passcode for this private chat:\n\n(it encrypts the chat on disk — there is no recovery if you forget it)');
+    if(!pass) return;}
+  const c=await post('/api/chats/new',{project:project,passcode:pass});
+  chatId=c.id; log.innerHTML=''; await loadChats(); go('chat');
+}
+async function openChat(id,locked){
+  if(locked){
+    const p=prompt('passcode:'); if(!p) return;
+    const r=await post('/api/chats/action',{id:id,action:'unlock',passcode:p});
+    if(r.status!=='ok'){alert(r.reason||'could not unlock');return;}
+  }
+  const c=await get('/api/chats/open?id='+encodeURIComponent(id));
+  if(c.status!=='ok'){alert(c.reason||c.status);return;}
+  chatId=id; project=c.project||'general'; log.innerHTML='';
+  (c.messages||[]).forEach(m=>addMsg(m.role==='user'?'you':'agent',m.content||''));
+  await loadQueue(); go('chat');
+}
+async function chatAct(id,action,extra){
+  const r=await post('/api/chats/action',Object.assign({id:id,action:action},extra||{}));
+  loadChats(); return r;
+}
+async function renameChat(id){const t=prompt('new title:');if(t)chatAct(id,'rename',{title:t});}
+async function delChat(id){
+  if(!confirm('Delete this chat permanently? This cannot be undone.')) return;
+  await chatAct(id,'delete'); if(chatId===id){chatId=null;log.innerHTML='';}
+}
+async function lockAll(){await post('/api/chats/action',{action:'lock_all'});
+  alert('private chats locked');loadChats();}
+
+/* queued messages */
+async function loadQueue(){
+  if(!chatId){document.getElementById('queueStrip').classList.remove('on');return;}
+  const r=await post('/api/chats/action',{id:chatId,action:'queue'});
+  const n=(r.queue||[]).length;
+  document.getElementById('queueStrip').classList.toggle('on',n>0);
+  document.getElementById('queueText').textContent=
+    n?`${n} queued: ${r.queue.map(q=>q.text).join(' · ').slice(0,60)}`:'';
+}
+async function runQueue(){
+  const r=await post('/api/chats/action',{id:chatId,action:'dequeue'});
+  await loadQueue();
+  if(r.next){addMsg('you',r.next.text);thinking();chat({kind:'message',text:r.next.text});}
+}
+async function clearQueue(){await post('/api/chats/action',{id:chatId,action:'queue_clear'});loadQueue();}
+
+/* ───────── learning ───────── */
+async function uploadLearn(){
+  const inp=document.getElementById('learnFile');
+  const msg=document.getElementById('learnMsg');
+  let done=0;
+  for(const f of inp.files){
+    msg.textContent=`reading ${f.name}…`;
+    const b64=await new Promise(res=>{const r=new FileReader();
+      r.onload=()=>res(r.result.split(',')[1]);r.readAsDataURL(f);});
+    const out=await post('/api/learn/upload',{name:f.name,content_b64:b64,project:project});
+    if(out.status==='ok') done++;
+    else msg.textContent=`${f.name}: ${out.reason||out.error}`;
+  }
+  if(done) msg.textContent=`learned ${done} file(s)`;
+  inp.value=''; loadDocs(); loadBehaviour();
+}
+async function learnPath(){
+  const p=document.getElementById('learnPath').value.trim(); if(!p)return;
+  const msg=document.getElementById('learnMsg'); msg.textContent='reading…';
+  const r=await post('/api/learn/path',{path:p,project:project});
+  msg.textContent=r.status==='ok'
+    ? (r.count!==undefined?`learned ${r.count} file(s)`:`learned ${r.name}`)
+    : (r.reason||r.error);
+  loadDocs(); loadBehaviour();
+}
+async function loadDocs(){
+  const d=await get('/api/learn');
+  document.getElementById('docList').innerHTML=(d.documents||[]).map(x=>`
+    <div class="row"><span class="grow">${esc(x.name)}
+      <small>${x.chunks} chunk(s) · ${(x.bytes/1024).toFixed(1)} KB · ${esc(x.project)}${x.text?'':' · binary'}</small></span>
+      <button class="mini danger" onclick="forgetDoc('${x.id}','${esc(x.name)}')">forget</button></div>`
+  ).join('')||'<div class="empty">nothing learned yet</div>';
+}
+async function forgetDoc(id,name){
+  if(!confirm(`Forget "${name}"? Its stored copy and everything it taught are removed.`)) return;
+  await post('/api/learn/forget',{doc:id}); loadDocs(); loadBehaviour();
+}
+async function loadBehaviour(){
+  const b=await get('/api/learn/behaviour');
+  const counts=b.counts||{};
+  const rows=Object.entries(counts).map(([k,n])=>`
+    <div class="row"><span class="grow">${esc(k)}<small>${n} item(s)</small></span>
+      <button class="mini danger" onclick="forgetKind('${esc(k)}')">forget all</button></div>`).join('');
+  document.getElementById('behaviourList').innerHTML=
+    rows+(b.preferences?`<div class="tiny" style="margin-top:8px">${esc(b.preferences)}</div>`:'')
+    ||'<div class="empty">nothing learned yet</div>';
+}
+async function forgetKind(k){
+  if(!confirm(`Forget everything of kind "${k}"? This cannot be undone.`)) return;
+  const r=await post('/api/learn/forget',{kind:k}); alert(`removed ${r.removed} item(s)`);
+  loadBehaviour();
+}
+async function forgetMatch(){
+  const m=document.getElementById('forgetMatch').value.trim(); if(!m)return;
+  if(!confirm(`Forget everything matching "${m}"?`)) return;
+  const r=await post('/api/learn/forget',{match:m});
+  document.getElementById('forgetMatch').value='';
+  alert(`removed ${r.removed} item(s)`); loadBehaviour();
+}
+
+/* ───────── settings ───────── */
 async function loadStatus(){
-  const s=await (await fetch('/api/status')).json();
-  document.getElementById('askPill').textContent = s.always_ask?'ASKS FIRST':'AUTO-RUN';
-  document.getElementById('askPill').className = 'pill'+(s.always_ask?' on':'');
-  if(s.mode) paintMode(s.mode);
+  const s=await get('/api/status'); S=s;
+  document.getElementById('brainPill').textContent=s.active||'auto';
+  const pol=s.policy||{};
+  const pill=document.getElementById('policyPill');
+  pill.textContent={always:'ASKS FIRST',low_risk:'ASKS ON CHANGES',
+                    high_risk:'ASKS ON DANGER'}[pol.policy]||'ASKS FIRST';
+  pill.classList.toggle('warn',pol.policy==='high_risk');
+  document.getElementById('policyBlurb').textContent=pol.description||'';
+  const row=document.getElementById('policyRow'); row.innerHTML='';
+  Object.entries(pol.policies||{}).forEach(([k,desc])=>{
+    const b=document.createElement('button');
+    b.className='modebtn'+(k===pol.policy?' on':'');
+    b.textContent={always:'ALWAYS',low_risk:'CHANGES',high_risk:'DANGER'}[k]||k;
+    b.title=desc; b.onclick=()=>setPolicy(k); row.appendChild(b);
+  });
   const sel=document.getElementById('providerSel');
   sel.innerHTML='<option value="auto">auto (best available)</option>'+
     Object.entries(s.providers).map(([k,v])=>
       `<option value="${esc(k)}" ${s.active===k?'selected':''}>${esc(k)} — ${v.ready?'ready':'unavailable'}</option>`).join('');
   document.getElementById('providers').innerHTML=Object.entries(s.providers).map(([k,v])=>
-    `<div class="row"><span>${esc(k)}</span><span class="dot ${v.ready?'':'off'}">${v.ready?'●':'○'}</span></div>`).join('');
-  document.getElementById('skills').innerHTML=s.skills.map(x=>
-    `<div class="row"><span>${esc(x.name)}</span></div>`).join('')||'<div class="row">none</div>';
-  document.getElementById('plugins').innerHTML=Object.entries(s.plugins).map(([k,v])=>
-    `<div class="row"><span>${esc(k)}</span><span class="dot ${v.failed?'off':''}">${v.tools.length} tools</span></div>`).join('')||'<div class="row">none</div>';
-  document.getElementById('connectors').innerHTML=s.connectors.map(x=>
-    `<div class="row"><span>${esc(x.name)}</span><span class="dot ${x.connected?'':'off'}">${x.connected?'●':'○'}</span></div>`).join('')||'<div class="row">none</div>';
-  document.getElementById('memstats').innerHTML=
-    `<div class="row"><span>facts</span><span>${esc(s.memory.facts)}</span></div>
-     <div class="row"><span>learned choices</span><span>${esc(s.memory.choices)}</span></div>`;
-  const ps=document.getElementById('projectSel');
-  const have=[...ps.options].map(o=>o.value);
-  (s.memory.projects||[]).forEach(p=>{if(!have.includes(p)){
-    const o=document.createElement('option');o.value=o.textContent=p;ps.appendChild(o);}});
-  ps.value=project;
+    `<div class="row"><span class="grow">${esc(k)}</span><span style="color:${v.ready?'var(--ok)':'var(--muted)'}">${v.ready?'●':'○'}</span></div>`).join('');
+  document.querySelectorAll('#netRow .modebtn').forEach(b=>
+    b.classList.toggle('on', b.dataset.net===s.mode));
+  const t=s.terminal||{}, l=s.learned||{}, c=s.chats||{};
+  document.getElementById('sysInfo').innerHTML=`
+    <div class="row"><span class="grow">shell</span><span>${esc(t.shell||'—')}</span></div>
+    <div class="row"><span class="grow">deny guard</span><span>${t.guard?'on':'off'}</span></div>
+    <div class="row"><span class="grow">memory</span><span>${s.memory.facts} facts</span></div>
+    <div class="row"><span class="grow">learned</span><span>${l.documents||0} docs · ${l.chunks||0} chunks</span></div>
+    <div class="row"><span class="grow">chats</span><span>${c.chats||0} (${c.private||0} private)</span></div>
+    <div class="row"><span class="grow">skills</span><span>${s.skills.length}</span></div>`;
 }
-function paintMode(m){
-  document.querySelectorAll('.modebtn').forEach(b=>
-    b.classList.toggle('on', b.dataset.mode===m));
-}
-async function setMode(m){
-  paintMode(m);
-  await fetch('/api/mode'+tokenParam(),{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({mode:m})});
-  loadStatus();
-}
+async function setPolicy(k){await post('/api/policy',{policy:k});loadStatus();}
+async function setNet(m){await post('/api/mode',{mode:m});loadStatus();}
 async function setProvider(){
-  const v=document.getElementById('providerSel').value;
-  await fetch('/api/model',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({provider:v})});
+  await post('/api/model',{provider:document.getElementById('providerSel').value});
   loadStatus();
+}
+async function loadSettings(){
+  const d=await get('/api/settings');
+  const box=document.getElementById('settingsList'); box.innerHTML='';
+  Object.entries(d.settings).forEach(([key,spec])=>{
+    if(key==='OMERTA_APPROVAL_POLICY'||key==='OMERTA_MODE'||key==='OMERTA_PROVIDER') return;
+    const wrap=document.createElement('label'); wrap.className='fld';
+    const lab=document.createElement('span'); lab.textContent=spec.label; wrap.appendChild(lab);
+    let el;
+    if(spec.kind==='bool'){
+      el=document.createElement('button'); el.className='mini';
+      const on=['1','true','yes','on'].includes(String(spec.value).toLowerCase());
+      el.classList.toggle('on',on); el.textContent=on?'on':'off';
+      el.onclick=async()=>{await post('/api/settings',{settings:{[key]:on?'0':'1'}});loadSettings();};
+    } else if(spec.kind==='choice'){
+      el=document.createElement('select');
+      el.innerHTML=spec.choices.map(c=>`<option ${c===spec.value?'selected':''}>${esc(c)}</option>`).join('');
+      el.onchange=async()=>{await post('/api/settings',{settings:{[key]:el.value}});loadSettings();};
+    } else {
+      el=document.createElement('input'); el.value=spec.value||'';
+      el.onchange=async()=>{await post('/api/settings',{settings:{[key]:el.value}});loadSettings();};
+    }
+    wrap.appendChild(el); box.appendChild(wrap);
+  });
 }
 async function loadSecrets(){
   try{
-    const s = await (await fetch('/api/secret'+ (new URLSearchParams(location.search).get('token')?('?token='+encodeURIComponent(new URLSearchParams(location.search).get('token'))):''))).json();
+    const s=await get('/api/secret');
     const box=document.getElementById('secretBox');
     if(!s.enabled){box.style.display='none';return;}
     box.style.display='block';
-    const sel=document.getElementById('secretKey');
-    const cur=sel.value;
+    const sel=document.getElementById('secretKey'); const cur=sel.value;
     sel.innerHTML=s.allowed.map(k=>`<option value="${esc(k)}">${esc(k)}${s.set[k]?' ✓':''}</option>`).join('');
     if(cur) sel.value=cur;
-  }catch(e){/* server without secret API */}
+  }catch(e){}
 }
 async function saveSecret(){
-  const key=document.getElementById('secretKey').value;
-  const value=document.getElementById('secretVal').value;
-  const msg=document.getElementById('secretMsg');
-  try{
-    const r=await fetch('/api/secret',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({key,value})});
-    const j=await r.json();
-    msg.textContent = j.ok ? (value?('saved '+key):('cleared '+key)) : ('error: '+(j.error||r.status));
-    document.getElementById('secretVal').value='';
-    loadSecrets(); loadStatus();
-  }catch(e){ msg.textContent='error: '+e; }
+  const k=document.getElementById('secretKey').value;
+  const v=document.getElementById('secretVal').value;
+  const r=await post('/api/secret',{key:k,value:v});
+  document.getElementById('secretVal').value='';
+  document.getElementById('secretMsg').textContent=r.ok?`saved ${k}`:(r.error||'failed');
+  loadSecrets();
 }
-function switchProject(){
-  project=document.getElementById('projectSel').value;
-  log.innerHTML=''; closePanel();
-}
-function addProject(){
-  const n=document.getElementById('newProject').value.trim(); if(!n)return;
-  const o=document.createElement('option'); o.value=o.textContent=n;
-  document.getElementById('projectSel').appendChild(o);
-  document.getElementById('projectSel').value=n;
-  document.getElementById('newProject').value=''; switchProject();
-}
-function resetChat(){log.innerHTML='';closePanel();chat({kind:'reset'});}
-function openPanel(){document.getElementById('panel').classList.add('open');loadStatus();loadSecrets();}
-function closePanel(){document.getElementById('panel').classList.remove('open');}
-loadStatus(); setInterval(loadStatus,30000);
+
+/* ───────── boot ───────── */
+(async function(){
+  await loadStatus(); await loadModes(); await loadSecrets();
+  addMsg('agent','OMERTA online. Ask, or switch to PLAN to think it through first.');
+})();
 </script>
 </body>
 </html>
