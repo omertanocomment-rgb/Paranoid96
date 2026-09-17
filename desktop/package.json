@@ -46,7 +46,16 @@
           "!**/*.AppImage",
           "!**/*.tar.gz",
           "!omerta_entry.py",
-          "!*.spec"
+          "!*.spec",
+          "!artifacts/**",
+          "!android-native/**",
+          "!**/*.apk",
+          "!**/*.whl",
+          "!**/*.deb",
+          "!**/*.ico",
+          "!**/.gradle/**",
+          "!scratch/**",
+          "!**/*.log"
         ]
       }
     ],
