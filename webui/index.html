@@ -541,7 +541,7 @@ label.fld span{display:block;font-size:.68rem;color:var(--muted);margin-bottom:4
       <button class="mini" style="width:100%" onclick="doAttach()">upload</button>
       <div class="buildbox" id="attachBox"><div class="tiny">none yet</div></div>
 
-      <h3>On-device model</h3>
+      <h3 id="ondevice">On-device model</h3>
       <div class="tiny">Runs a model on this device — no API key, no network,
         no other machine. Drop a .gguf file in the models folder below.</div>
       <div class="buildbox" id="localaiBox"><div class="tiny">checking…</div></div>
@@ -1326,11 +1326,21 @@ async function loadStatus(){
     b.title=desc; b.onclick=()=>setPolicy(k); row.appendChild(b);
   });
   const sel=document.getElementById('providerSel');
+  // The backend already works out WHY each provider is unavailable; showing
+  // only "unavailable" throws that away and leaves the user guessing which of
+  // "no API key", "no model downloaded" and "not built in" they are looking
+  // at. Every one of those has a different fix.
   sel.innerHTML='<option value="auto">auto (best available)</option>'+
     Object.entries(s.providers).map(([k,v])=>
-      `<option value="${esc(k)}" ${s.active===k?'selected':''}>${esc(k)} — ${v.ready?'ready':'unavailable'}</option>`).join('');
-  document.getElementById('providers').innerHTML=Object.entries(s.providers).map(([k,v])=>
-    `<div class="row"><span class="grow">${esc(k)}</span><span style="color:${v.ready?'var(--ok)':'var(--muted)'}">${v.ready?'●':'○'}</span></div>`).join('');
+      `<option value="${esc(k)}" ${s.active===k?'selected':''}>${esc(k)} — ${esc(v.ready?'ready':(v.why||'unavailable'))}</option>`).join('');
+  PROVIDERS=s.providers;
+  document.getElementById('providers').innerHTML=Object.entries(s.providers).map(([k,v])=>{
+    const fix=providerFix(v);
+    return `<div class="row"><span class="grow">${esc(k)}`+
+      (v.ready?'':`<span class="tiny"> — ${esc(v.why||'unavailable')}</span>`)+
+      (fix?` <a href="#" onclick="providerAct('${esc(k)}');return false">${esc(fix.label)}</a>`:'')+
+      `</span><span style="color:${v.ready?'var(--ok)':'var(--muted)'}">${v.ready?'●':'○'}</span></div>`;
+  }).join('');
   document.querySelectorAll('#netRow .modebtn').forEach(b=>
     b.classList.toggle('on', b.dataset.net===s.mode));
   const t=s.terminal||{}, l=s.learned||{}, c=s.chats||{};
@@ -1502,6 +1512,57 @@ function copyBuild(){
     setTimeout(()=>n.remove(),2500); };
   copyToClipboard(t).then(()=>say('copied'),()=>say(t));
 }
+// What to DO about an unavailable provider. A reason with no action next to it
+// is still homework; the on-device engine in particular is one download away
+// from working and nothing on this screen used to say so.
+let PROVIDERS={};
+function providerFix(v){
+  if(!v||v.ready) return null;
+  const why=(v.why||'').toLowerCase();
+  if(why.indexOf('.gguf')>=0||why.indexOf('no model')>=0)
+    return {label:'get a model', act:'models'};
+  if(why.indexOf('no key')>=0) return {label:'add a key', act:'keys'};
+  if(why.indexOf('not running at')>=0) return {label:'set address', act:'keys'};
+  if(why.indexOf('engine idle')>=0) return {label:'start engine', act:'start'};
+  return null;
+}
+// The reason is looked up at click time rather than baked into the onclick
+// attribute: a why coming from an exception can contain a quote, which would
+// break out of the attribute and take the handler with it.
+function providerAct(id){
+  const v=PROVIDERS[id]; const fix=providerFix(v);
+  if(!fix) return;
+  if(fix.act==='models') gotoModels();
+  else if(fix.act==='keys') gotoKeys(v.why||'');
+  else if(fix.act==='start') localaiStart();
+}
+function gotoModels(){
+  go('settings');
+  // go() kicks off the loads; scroll once the section has been rendered.
+  setTimeout(()=>{
+    const el=document.getElementById('ondevice');
+    if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  },120);
+}
+function gotoKeys(why){
+  go('settings');
+  setTimeout(()=>{
+    const box=document.getElementById('secretBox');
+    const el=box&&box.style.display!=='none'?box:document.getElementById('providers');
+    if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+    // "no key in $ANTHROPIC_API_KEY" names the exact field to fill in, so
+    // preselect it rather than leaving the user to match it up by eye.
+    const m=/\$([A-Z0-9_]+)/.exec(why||'');
+    const sel=document.getElementById('secretKey');
+    if(m&&sel){
+      for(const o of sel.options){
+        if(o.value===m[1]||o.textContent.indexOf(m[1])>=0){ sel.value=o.value; break; }
+      }
+    }
+    const inp=document.getElementById('secretVal');
+    if(inp) inp.focus();
+  },120);
+}
 let _modelPoll=null;
 async function loadModels(){
   const box=document.getElementById('modelList');
@@ -1527,11 +1588,18 @@ async function loadModels(){
       right='<a href="#" onclick="modelAct(\'download\',\''+esc(m.id)+'\');return false">get</a>';
     }
     const err=(j&&j.state==='error')?'<div class="warn">'+esc(j.error)+'</div>':'';
-    return '<div class="buildbox" style="cursor:default">'+
-      '<div><b>'+esc(m.label)+'</b> <span class="tiny">'+gb+' · '+
+    // Four sizes and no guidance is a decision the owner has no way to make.
+    const tag = m.suggested ? ' <span class="tiny" style="color:var(--ok)">'+
+                              '— start here</span>' : '';
+    const unfit = (m.fits===false)
+      ? '<div class="warn">too large for this device — it is 32-bit, so a '+
+        'process cannot address these weights plus their cache</div>' : '';
+    return '<div class="buildbox" style="cursor:default'+
+      (m.fits===false?';opacity:.6':'')+'">'+
+      '<div><b>'+esc(m.label)+'</b>'+tag+' <span class="tiny">'+gb+' · '+
       esc(m.kind)+' · '+esc(m.license)+'</span></div>'+
       '<div class="tiny">'+esc(m.blurb)+'</div>'+
-      '<div style="margin-top:4px">'+right+'</div>'+err+'</div>';
+      '<div style="margin-top:4px">'+right+'</div>'+unfit+err+'</div>';
   }).join('')+'<div class="tiny">'+fmtBytes(d.free)+' free on this device</div>';
 
   // only poll while something is actually moving

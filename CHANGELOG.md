@@ -4,6 +4,38 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.2] — 2026-09-24
+
+Every provider read "unavailable", including the one that needs no API key.
+
+### Fixed
+- **The provider list hid its own diagnosis.** `router.provider_status()` has
+  always computed a reason per provider — "no key in $ANTHROPIC_API_KEY", "not
+  running at http://127.0.0.1:11434", "no .gguf model on the device yet" — and
+  the UI rendered all of them as the word "unavailable". Three unrelated
+  problems with three different fixes looked identical. The reason is now shown
+  in both the picker and the provider list. Same failure pattern as the 1.9.1
+  backend bug: the information existed and was thrown away at the last step.
+
+### Added
+- **A fix next to each reason.** An unavailable provider that can be repaired
+  offers the action: "get a model" jumps to the on-device catalogue, "add a
+  key" opens the secret field with the right variable preselected, "set
+  address" the same, "start engine" starts it. A reason with no action beside
+  it is still homework.
+- **Device fit in the catalogue** (`models._fits`). A 32-bit process cannot
+  address the larger weights, so those entries are greyed out and say so rather
+  than accepting a multi-gigabyte download that ends in an out-of-memory kill.
+  Where fit is not knowable the answer is yes — refusing on a guess is worse.
+- **A starting point.** With no model installed, the smallest that fits is
+  marked "start here". Four sizes and no guidance is a decision a first-time
+  owner has no basis to make.
+- **`tests/test_ui_providers.py`** — 13 checks in a real browser: each reason
+  reaches the screen, each offers the right action, a ready provider offers
+  none, and a reason containing a quote cannot break the click handler. The
+  reason is looked up at click time rather than written into an `onclick`
+  attribute, and that is what the hostile case pins.
+
 ## [1.9.1] — 2026-09-24
 
 The embedded backend starts again. It had not started on any device since

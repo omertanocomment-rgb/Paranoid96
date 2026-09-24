@@ -19,6 +19,7 @@ licence click-through and no key.
 """
 import json
 import hashlib
+import sys
 import os
 import shutil
 import threading
@@ -62,8 +63,36 @@ def catalogue():
         row["partial"] = (here / (m["file"] + ".part")).exists()
         job = _jobs.get(m.get("id"))
         row["job"] = dict(job) if job else None
+        row["fits"] = _fits(m)
         out.append(row)
+    if out and not any(r["installed"] for r in out):
+        # Nothing on the device yet, so name the one to start with rather than
+        # leaving a first-time owner to guess from four sizes. Smallest that
+        # fits, which on a 32-bit phone is the only one that will be pleasant.
+        best = min((r for r in out if r["fits"]),
+                   key=lambda r: r.get("bytes", 0), default=None)
+        if best is not None:
+            best["suggested"] = True
     return out
+
+
+def _fits(entry):
+    """Whether this device can be expected to run the model at all.
+
+    A 32-bit process cannot address enough memory for the larger weights, and
+    saying so up front is better than a download that ends in an out-of-memory
+    kill after several gigabytes. Where the answer is not knowable, the answer
+    is yes -- refusing on a guess is worse than letting the owner try.
+    """
+    try:
+        size = int(entry.get("bytes") or 0)
+    except (TypeError, ValueError):
+        return True
+    if sys.maxsize <= 2 ** 32:
+        # ~3 GB of usable address space per process, and llama.cpp needs the
+        # weights plus its KV cache inside it.
+        return size < 1_500_000_000
+    return True
 
 
 def _entry(model_id):
