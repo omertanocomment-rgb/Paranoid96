@@ -36,7 +36,7 @@
             </intent-filter>
 
             <!-- Share target: send a file, a link or a snippet to OMERTA from
-                 any other app. Accepts every MIME type on purpose -- the
+                 any other app. Accepts every MIME type on purpose — the
                  attachment store has no type restriction, so advertising one
                  here would be a limit in the wrong place. -->
             <intent-filter>

@@ -369,6 +369,33 @@ def check_packaging():
         note("packaging: desktop bundle excludes other build outputs")
 
 
+# ── xml resources ───────────────────────────────────────────────────────────
+def check_xml():
+    """Every Android XML must parse.
+
+    This exists because a manifest comment containing "--" is illegal XML and
+    the merger rejects the whole document with "Error parsing
+    AndroidManifest.xml" -- a message that names the file and nothing else.
+    The build fails late, after the slow parts, on something a parser catches
+    in milliseconds.
+    """
+    import xml.dom.minidom
+    root = ROOT / "android-native/app/src/main"
+    if not root.is_dir():
+        return
+    n = 0
+    for f in list(root.rglob("*.xml")):
+        if "build" in f.parts:
+            continue
+        try:
+            xml.dom.minidom.parse(str(f))
+            n += 1
+        except Exception as e:  # noqa: BLE001
+            finding("xml", f"{f.relative_to(ROOT)}: {e}")
+    if n:
+        note(f"android xml: {n} files parse")
+
+
 # ── 10. the tests ───────────────────────────────────────────────────────────
 def check_tests():
     r = run([ "bash", "tests/run_all.sh"], timeout=3600)
@@ -394,6 +421,7 @@ CHECKS = [
     ("native payloads", check_native),
     ("hostile input", check_hostile),
     ("packaging", check_packaging),
+    ("android xml", check_xml),
 ]
 
 
