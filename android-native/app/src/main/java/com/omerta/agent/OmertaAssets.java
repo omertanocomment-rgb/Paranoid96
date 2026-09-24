@@ -28,6 +28,19 @@ final class OmertaAssets {
     private static final String DIR_NAME = "omerta";
     private static final String MARKER = ".payload_version";
 
+    /** Files written by the current extraction, for the launch screen.
+     *
+     *  The payload now carries a full Python stdlib -- thousands of small
+     *  files -- and on a slow 32-bit phone that is minutes of work behind a
+     *  splash screen that says only "starting". A counter costs nothing and
+     *  turns "it has hung" into "it is on file 2,400". */
+    private static volatile int written = 0;
+    private static volatile boolean extracting = false;
+
+    static int written() { return written; }
+
+    static boolean extracting() { return extracting; }
+
     private OmertaAssets() {}
 
     /** Returns the absolute path of the ready-to-use payload directory. */
@@ -45,7 +58,17 @@ final class OmertaAssets {
         if (!home.mkdirs() && !home.isDirectory()) {
             throw new IOException("could not create " + home);
         }
-        copyAssetDir(ctx.getAssets(), ASSET_ROOT, home);
+        written = 0;
+        extracting = true;
+        try {
+            copyAssetDir(ctx.getAssets(), ASSET_ROOT, home);
+        } finally {
+            extracting = false;
+        }
+        // The marker is written LAST and only on success. A half-extracted
+        // payload that claimed to be complete would fail every later launch
+        // in a way that looks like a code bug; without the marker the next
+        // launch simply redoes the work.
         write(marker, version);
         Log.i(TAG, "extracted agent payload for version " + version);
         return home.getAbsolutePath();
@@ -82,10 +105,11 @@ final class OmertaAssets {
         if (parent != null && !parent.exists()) parent.mkdirs();
         try (InputStream in = am.open(assetPath);
              OutputStream out = new FileOutputStream(dest)) {
-            byte[] buf = new byte[8192];
+            byte[] buf = new byte[65536];
             int n;
             while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
         }
+        written++;
     }
 
     private static void deleteRecursive(File f) {

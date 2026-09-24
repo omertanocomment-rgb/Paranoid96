@@ -3,6 +3,7 @@ package com.omerta.agent;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -24,6 +25,7 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -52,6 +54,7 @@ public class MainActivity extends Activity {
     private View statusScreen;
     private View remoteScreen;
     private TextView status;
+    private Button diagnose;
     private SharedPreferences prefs;
 
     @Override
@@ -102,22 +105,40 @@ public class MainActivity extends Activity {
     private void startEmbedded() {
         showStatus();
         status.setText("starting agent…");
+        if (diagnose != null) diagnose.setVisibility(View.GONE);
+        OmertaPython.clearError();
         BackendLauncher.start(this);
         new Thread(() -> {
             // first launch extracts Python + payload and compiles bytecode,
             // so give it a generous window.
-            for (int i = 0; i < 120; i++) {
+            // The payload carries a full Python stdlib, so a first launch on
+            // a slow 32-bit device is minutes of file writes, not seconds.
+            // Give it room, and report what it is actually doing -- a silent
+            // splash is indistinguishable from a hang.
+            for (int i = 0; i < 300; i++) {
                 if (BackendLauncher.isUp(LOCAL, 1200)) {
                     ui(() -> connect(OmertaPython.baseUrl()));
                     return;
                 }
+                if (OmertaPython.lastError() != null) break;   // no point waiting
                 final int sec = i;
-                ui(() -> status.setText("starting agent… " + sec + "s\n"
-                        + "(first launch unpacks Python — this is a one-time step)"));
+                final int files = OmertaAssets.written();
+                final boolean unpacking = OmertaAssets.extracting();
+                ui(() -> status.setText(unpacking
+                        ? "unpacking Python… " + files + " files\n"
+                          + "(one-time step, it does not repeat)"
+                        : "starting agent… " + sec + "s"));
                 try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
             }
-            ui(() -> status.setText("Backend didn't come up.\n"
-                    + "Reopen the app, or use Advanced to connect to a LAN backend."));
+            final String why = OmertaPython.lastError();
+            ui(() -> {
+                status.setText("Backend didn't come up.\n"
+                        + (why == null ? "No error was reported — it may still be unpacking."
+                                       : why)
+                        + "\n\nTap below for the full report, or use Advanced to"
+                        + " connect to a LAN backend.");
+                diagnose.setVisibility(View.VISIBLE);
+            });
         }, "omerta-wait").start();
     }
 
@@ -208,7 +229,77 @@ public class MainActivity extends Activity {
         advanced.setOnClickListener(v -> showRemote());
         root.addView(advanced);
 
+        // Only shown once the backend has actually failed: a failure the user
+        // can read and send beats one that only exists in logcat.
+        diagnose = new Button(this);
+        diagnose.setText("RETRY & SHOW DIAGNOSTICS");
+        diagnose.setAllCaps(true);
+        diagnose.setTextColor(AMBER);
+        diagnose.setBackgroundColor(PANEL);
+        diagnose.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(10);
+        diagnose.setLayoutParams(dlp);
+        diagnose.setVisibility(View.GONE);
+        diagnose.setOnClickListener(v -> runDiagnostics());
+        root.addView(diagnose);
+
         return root;
+    }
+
+    /** Gather on-device evidence for a failed launch and offer to share it. */
+    private void runDiagnostics() {
+        diagnose.setEnabled(false);
+        status.setText("collecting diagnostics…");
+        new Thread(() -> {
+            final String report = OmertaPython.diagnostics(MainActivity.this);
+            ui(() -> {
+                diagnose.setEnabled(true);
+                // The retry inside diagnose() may well have fixed it.
+                if (BackendLauncher.isUp(LOCAL, 1500)) {
+                    connect(OmertaPython.baseUrl());
+                    return;
+                }
+                showReport(report);
+            });
+        }, "omerta-diagnose").start();
+    }
+
+    private void showReport(final String report) {
+        TextView tv = new TextView(this);
+        tv.setText(report);
+        tv.setTextColor(MUTED);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        tv.setTypeface(android.graphics.Typeface.MONOSPACE);
+        tv.setTextIsSelectable(true);
+        int p = dp(14);
+        tv.setPadding(p, p, p, p);
+        ScrollView sv = new ScrollView(this);
+        sv.addView(tv);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Backend diagnostics")
+                .setView(sv)
+                .setPositiveButton("COPY", (d, w) -> {
+                    android.content.ClipboardManager cm =
+                            (android.content.ClipboardManager)
+                                    getSystemService(CLIPBOARD_SERVICE);
+                    if (cm != null) {
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText(
+                                "omerta-diagnostics", report));
+                        Toast.makeText(this, "Diagnostics copied",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNeutralButton("SHARE", (d, w) -> {
+                    Intent send = new Intent(Intent.ACTION_SEND);
+                    send.setType("text/plain");
+                    send.putExtra(Intent.EXTRA_SUBJECT, "OMERTA AI diagnostics");
+                    send.putExtra(Intent.EXTRA_TEXT, report);
+                    startActivity(Intent.createChooser(send, "Send diagnostics"));
+                })
+                .setNegativeButton("CLOSE", null)
+                .show();
     }
 
     // ── remote (LAN) connect screen ──────────────────────────────────────

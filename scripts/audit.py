@@ -17,6 +17,7 @@ first and refuses to package on a failure, so a build cannot skip it.
 Every check here exists because something actually went wrong. The comments
 say which, so nobody later removes a check for looking paranoid.
 """
+import ast
 import argparse
 import json
 import re
@@ -460,6 +461,136 @@ def check_tests():
         note(f"tests: {n} suites green")
 
 
+def _balanced(src, start):
+    """Text between `start` and the paren that closes the call opened before it.
+
+    A naive [^)]* stops at the first ')', so a nested call -- start(a, b,
+    int(port), c) -- is truncated and miscounted. This check exists to catch an
+    arity mismatch; getting the arity wrong here would be the same bug wearing
+    the auditor's badge.
+    """
+    depth, out = 1, []
+    for ch in src[start:]:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+            if depth == 0:
+                break
+        out.append(ch)
+    return "".join(out)
+
+
+def _top_level_args(rest):
+    """Argument count for an argument list, ignoring commas inside nested calls."""
+    if not rest.strip():
+        return 0
+    depth, args = 0, 1
+    for ch in rest:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            args += 1
+    return args
+
+
+# ── the Java <-> Python bridge ──────────────────────────────────────────────
+def check_bridge():
+    """Java's callAttr() sites must match omerta_boot, and omerta_boot must
+    match omerta_android.
+
+    Chaquopy binds callAttr() arguments positionally at runtime. A parameter
+    added to omerta_android but not mirrored in the omerta_boot shim raises
+    TypeError inside the launch path, where Java catches Throwable and the user
+    is told only that the backend "didn't come up". That is exactly what
+    happened to native_lib_dir: the app shipped with a dead backend on every
+    architecture for four releases, because nothing in the build ever compared
+    the two ends of the bridge.
+
+    Both hops are checked, so the shim cannot silently drop an argument in
+    either direction.
+    """
+    boot = ROOT / "android-native/app/src/main/python/omerta_boot.py"
+    backend = ROOT / "omerta_android.py"
+    java_dir = ROOT / "android-native/app/src/main/java"
+    if not boot.is_file() or not java_dir.is_dir():
+        return
+
+    def signatures(path):
+        out = {}
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef):
+                a = node.args
+                required = len(a.args) - len(a.defaults)
+                out[node.name] = (required, len(a.args),
+                                  [x.arg for x in a.args])
+        return out
+
+    boot_sigs = signatures(boot)
+
+    # hop 1: Java -> omerta_boot
+    call = re.compile(r'callAttr\(\s*"([A-Za-z_]\w*)"((?:[^;]|\n)*?)\)\s*(?:\.|;|,)')
+    sites = 0
+    for f in java_dir.rglob("*.java"):
+        src = f.read_text(encoding="utf-8", errors="replace")
+        for m in call.finditer(src):
+            name, rest = m.group(1), m.group(2)
+            if name not in boot_sigs:
+                finding("bridge",
+                        f"{f.name}: calls omerta_boot.{name}(), which does not exist")
+                continue
+            # `rest` is the tail after the name literal, so it opens with the
+            # separating comma: one top-level comma per argument, none when
+            # the call passes nothing.
+            depth, args = 0, 0
+            for ch in rest:
+                if ch in "([":
+                    depth += 1
+                elif ch in ")]":
+                    depth -= 1
+                elif ch == "," and depth == 0:
+                    args += 1
+            lo, hi, names = boot_sigs[name]
+            if not (lo <= args <= hi):
+                finding("bridge",
+                        f"{f.name}: callAttr(\"{name}\", ...) passes {args} arg(s); "
+                        f"omerta_boot.{name}{tuple(names)} accepts {lo}-{hi}")
+            sites += 1
+
+    # hop 2: omerta_boot -> omerta_android
+    if backend.is_file():
+        back_sigs = signatures(backend)
+        boot_src = boot.read_text(encoding="utf-8", errors="replace")
+        opener = re.compile(r"omerta_android\.([A-Za-z_]\w*)\(")
+        for m in opener.finditer(boot_src):
+            name, rest = m.group(1), _balanced(boot_src, m.end())
+            if name not in back_sigs:
+                finding("bridge",
+                        f"omerta_boot forwards to omerta_android.{name}(), "
+                        "which does not exist")
+                continue
+            args = _top_level_args(rest)
+            lo, hi, names = back_sigs[name]
+            if not (lo <= args <= hi):
+                finding("bridge",
+                        f"omerta_boot forwards {args} arg(s) to omerta_android."
+                        f"{name}{tuple(names)}, which accepts {lo}-{hi}")
+            # a shim that accepts fewer than the backend offers is a dropped
+            # feature, not just a crash risk
+            b_lo, b_hi, b_names = boot_sigs.get(name, (0, 0, []))
+            if name in boot_sigs and b_hi < hi and "home_dir" not in b_names[b_hi:]:
+                missing = [n for n in names[b_hi:] if n not in b_names]
+                if missing:
+                    finding("bridge",
+                            f"omerta_boot.{name} cannot forward "
+                            f"{', '.join(missing)} — the shim drops it")
+    if sites:
+        note(f"bridge: {sites} Java->Python call site(s) match omerta_boot")
+
+
 CHECKS = [
     ("syntax", check_syntax),
     ("dangerous constructs", check_dangerous),
@@ -472,6 +603,7 @@ CHECKS = [
     ("hostile input", check_hostile),
     ("packaging", check_packaging),
     ("android xml", check_xml),
+    ("java/python bridge", check_bridge),
 ]
 
 

@@ -13,10 +13,16 @@ checkout, so without a stamp there is no way to tell which build is running
 short of diffing it. `/api/version` serves this, and the UI shows it.
 
 Resolution order, most to least trustworthy:
-  1. core/build_stamp.json   -- written by the build that produced this copy
-  2. pyproject.toml          -- a source checkout
+  1. pyproject.toml          -- a source checkout, if one is present at all
+  2. core/build_stamp.json   -- written by the build that produced this copy
   3. omerta_agent.__version__ -- an installed wheel
   4. "0.0.0+unknown"         -- say so rather than invent a number
+
+A shipped copy has no pyproject, so there the stamp is the only evidence and
+rules. Where a checkout DOES exist it outranks the stamp, because a stamp left
+behind at the previous number after a version bump is the same stale-artifact
+trap in miniature. The stamp is still reported -- flagged stale -- so the
+disagreement is visible rather than silently resolved.
 """
 import json
 import os
@@ -82,9 +88,22 @@ def _from_package():
 
 
 _stamp = _from_stamp() or {}
-VERSION = (_clean_version(_stamp.get("version"))
-           or _clean_version(_from_pyproject())
-           or _clean_version(_from_package()) or FALLBACK)
+_pyproject = _clean_version(_from_pyproject())
+
+#: A stamp outranks everything in a shipped copy -- an APK has no pyproject and
+#: no checkout, so the stamp is the only evidence of what is running. But in a
+#: SOURCE TREE the stamp is just residue from the last build, and a stamp left
+#: at the old number after a version bump is precisely the stale-artifact trap
+#: this module exists to close: the tree says 1.9.1, the running code says
+#: 1.9.0, and nothing contradicts either. Where both exist and disagree, the
+#: checkout is the newer fact, so it wins and the stamp is marked stale.
+_stale_stamp = bool(_pyproject and _stamp.get("version")
+                    and _clean_version(_stamp.get("version")) != _pyproject)
+
+VERSION = (_pyproject
+           or _clean_version(_stamp.get("version"))
+           or _clean_version(_from_package())
+           or FALLBACK)
 
 #: What produced this copy. Empty values mean "not stamped", never a guess.
 BUILD = {
@@ -92,7 +111,8 @@ BUILD = {
     "commit": _clean_text(_stamp.get("commit"), 64),
     "built_at": _clean_text(_stamp.get("built_at"), 40),
     "channel": _clean_text(_stamp.get("channel"), 32),
-    "stamped": bool(_stamp),
+    "stamped": bool(_stamp) and not _stale_stamp,
+    "stale_stamp": _stale_stamp,
 }
 
 
@@ -120,7 +140,9 @@ def describe():
         out += f" ({BUILD['commit'][:8]})"
     if BUILD["built_at"]:
         out += f" built {BUILD['built_at']}"
-    if not BUILD["stamped"]:
+    if BUILD["stale_stamp"]:
+        out += " [source tree ahead of its last build stamp]"
+    elif not BUILD["stamped"]:
         out += " [unstamped source tree]"
     return out
 

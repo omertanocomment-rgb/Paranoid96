@@ -701,6 +701,16 @@ def _part_two():
         ["An update lost my chats",
          "The app was uninstalled rather than updated, or the new build was "
          "signed with a different key. Install over the top; never uninstall."],
+        ["\"Backend didn't come up\"",
+         "The launch screen now names the reason underneath. Tap RETRY &amp; "
+         "SHOW DIAGNOSTICS: it re-runs the launch (which often succeeds on "
+         "its own) and, if it fails again, prints the device, ABI, payload "
+         "state and full Python traceback, with COPY and SHARE buttons. Send "
+         "that text — it is the whole diagnosis, no cable or logcat needed."],
+        ["First launch sits on \"unpacking Python\" for minutes",
+         "Expected once, on slower or 32-bit devices: the app is writing a "
+         "full Python standard library to private storage. The file counter "
+         "moves the whole time. It never repeats until you update the app."],
         ["Sandbox says containment is limited",
          "Your kernel lacks the namespaces. The report is accurate — it is "
          "telling you the truth rather than overstating protection."],
