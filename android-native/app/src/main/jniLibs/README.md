@@ -88,7 +88,8 @@ individually:
 |---|---|
 | `libpython3bin.so` | the `python3` executable |
 | `libpython3.13.so` | the interpreter itself |
-| `*.cpython-313-aarch64-linux-android.so` | 68 standard-library extension modules |
+| `*.cpython-313-aarch64-linux-android.so` | 68 standard-library extension modules (arm64) |
+| `*.cpython-313-arm-linux-androideabi.so` | the same 68 modules, built for armeabi-v7a |
 | `libssl_py313.so`, `libcrypto_py313.so`, `libsqlite3_py313.so` | OpenSSL and SQLite for the above |
 
 The pure-Python standard library is NOT here — it is ordinary text and ships in
@@ -178,3 +179,29 @@ with `-include`, so no upstream source was modified.
 * `BLK_SHA1` instead of OpenSSL's — one less dependency, marginally slower.
 * dropbear is client-only. There is no ssh **server**, deliberately: shipping
   something that listens is not the same as shipping something that connects.
+
+
+## Two architectures
+
+The APK is universal: `arm64-v8a` and `armeabi-v7a`. Android installs only the
+directory matching the device, so the two sets carry the SAME filenames and
+`core/toolbox.py` needs no knowledge of which one it got -- it is handed the
+native library directory and everything resolves.
+
+The one deliberate exception is CPython's extension modules, which embed the
+platform triple in their own filenames (`-aarch64-linux-android` against
+`-arm-linux-androideabi`). That is not drift: CPython looks them up by exactly
+that name, so they must differ. The audit gate normalises the triple before
+comparing the two sets, and still fails if either ABI is genuinely missing a
+program.
+
+### What differs in the 32-bit build
+
+`GGML_LLAMAFILE=OFF` for llama.cpp on armeabi-v7a. Its sgemm kernel uses ARM
+fp16 vector instructions (`vld1q_f16`) that armv7 does not have, so the build
+fails outright with it on. Turning it off costs some matrix-multiply speed on a
+device that was never going to be fast at this anyway; nothing else changes.
+
+BusyBox for 32-bit is 1.31.0 rather than 1.37.0 -- that is the newest build
+published for `armv7l` in the multiarch set. 396 applets rather than 305, and
+verified to run.

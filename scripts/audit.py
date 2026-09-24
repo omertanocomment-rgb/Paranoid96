@@ -244,19 +244,67 @@ def check_version():
 
 
 # ── 7. native payloads ──────────────────────────────────────────────────────
+#: e_machine values, per ABI directory. A binary in the wrong directory is the
+#: failure that shipped an arm64-only APK to a 32-bit phone: it installs
+#: nothing and the installer says only "incompatible CPU architecture".
+ABI_MACHINE = {"arm64-v8a": (0xB7, "aarch64"),
+               "armeabi-v7a": (0x28, "arm"),
+               "x86_64": (0x3E, "x86-64"),
+               "x86": (0x03, "x86")}
+
+
 def check_native():
-    d = ROOT / "android-native/app/src/main/jniLibs/arm64-v8a"
-    if not d.is_dir():
+    root = ROOT / "android-native/app/src/main/jniLibs"
+    if not root.is_dir():
         return
-    libs = sorted(d.glob("*.so"))
+    abis = [d for d in sorted(root.iterdir())
+            if d.is_dir() and d.name in ABI_MACHINE]
+    if not abis:
+        return
+    libs = []
+    per_abi = {}
+    for d in abis:
+        want, label = ABI_MACHINE[d.name]
+        found = sorted(d.glob("*.so"))
+        per_abi[d.name] = {f.name for f in found}
+        libs.extend(found)
+        for lib in found:
+            head = lib.read_bytes()[:20]
+            if head[:4] != b"\x7fELF":
+                finding("native", f"{d.name}/{lib.name} is not an ELF file")
+            elif head[18] != want:
+                finding("native", f"{d.name}/{lib.name} is not {label} "
+                                  f"(e_machine=0x{head[18]:02x})")
+    # Every ABI must carry the same programs, or the app silently loses half
+    # its toolset on whichever architecture was forgotten.
+    def canon(name):
+        """Strip CPython's platform triple so the two ABIs can be compared.
+
+        An extension module is REQUIRED to carry its triple:
+        _ssl.cpython-313-aarch64-linux-android.so on arm64 and
+        _ssl.cpython-313-arm-linux-androideabi.so on armv7 are the same module,
+        and CPython finds it by that exact name. Comparing the raw names says
+        every module is missing from both sides, which is the opposite of true.
+        """
+        return re.sub(r"\.cpython-\d+-[a-z0-9_]+-linux-[a-z0-9]+\.so$",
+                      ".cpython.so", name)
+
+    if len(per_abi) > 1:
+        names = list(per_abi)
+        base = {canon(n) for n in per_abi[names[0]]}
+        for other in names[1:]:
+            theirs = {canon(n) for n in per_abi[other]}
+            missing = base - theirs
+            extra = theirs - base
+            if missing:
+                finding("native", f"{other} is missing {len(missing)} libs that "
+                                  f"{names[0]} has, e.g. {sorted(missing)[:3]}")
+            if extra:
+                finding("native", f"{other} has {len(extra)} libs that "
+                                  f"{names[0]} does not, e.g. {sorted(extra)[:3]}")
     if not libs:
         return
-    for lib in libs:
-        head = lib.read_bytes()[:20]
-        if head[:4] != b"\x7fELF":
-            finding("native", f"{lib.name} is not an ELF file")
-        elif head[18] != 0xB7:
-            finding("native", f"{lib.name} is not aarch64 (e_machine={head[18]})")
+    d = abis[0]
     readme = d.parent / "README.md"
     if not readme.exists():
         finding("native", "jniLibs/README.md is missing — provenance and "
@@ -309,7 +357,9 @@ def check_native():
                 clashes.append(f"{lib.name} needs {d}, which is not in jniLibs")
     for c in clashes:
         finding("native", c)
-    note(f"native payloads: {len(libs)} aarch64 binaries, provenance recorded"
+    note(f"native payloads: {len(libs)} binaries across "
+         f"{len(per_abi)} ABI(s) ({', '.join(sorted(per_abi))}), "
+         "provenance recorded"
          + (", no unresolved private deps" if not clashes else ""))
 
 
