@@ -31,10 +31,8 @@ class ChatRepository(
         return when (s.provider) {
             Provider.ANTHROPIC -> anthropic.health(s.anthropicApiKey)
                 .map { HealthStatus(status = "ok", model = s.model) }
-            Provider.OPENAI ->
-                if (s.openAiKey.isNotBlank()) Result.success(HealthStatus("ok", s.model))
-                else Result.failure(IllegalStateException("No OpenAI API key set"))
-            Provider.OLLAMA -> Result.success(HealthStatus("ok", s.model)) // verified on first call
+            Provider.OPENAI -> openai.health(s.openAiKey).map { HealthStatus("ok", s.model) }
+            Provider.OLLAMA -> ollama.health(s.ollamaUrl).map { HealthStatus("ok", s.model) }
             else -> Result.failure(IllegalStateException("Unknown provider"))
         }
     }

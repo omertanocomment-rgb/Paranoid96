@@ -26,6 +26,16 @@ import java.util.concurrent.TimeUnit
 class OpenAiClient {
     private companion object {
         const val URL = "https://api.openai.com/v1/chat/completions"
+        const val MODELS_URL = "https://api.openai.com/v1/models"
+    }
+
+    /** Cheap reachability/key check (no tokens spent). */
+    suspend fun health(key: String): Result<Unit> = runCatching {
+        if (key.isBlank()) error("No OpenAI API key set")
+        val req = Request.Builder().url(MODELS_URL).header("Authorization", "Bearer $key").get().build()
+        client.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) error("HTTP ${r.code}")
+        }
     }
     private val json = Json { ignoreUnknownKeys = true }
     private val media = "application/json; charset=utf-8".toMediaType()

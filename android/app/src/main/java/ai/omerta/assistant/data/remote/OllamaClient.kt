@@ -32,6 +32,14 @@ class OllamaClient {
 
     private fun base(url: String) = url.trimEnd('/')
 
+    /** Reachability check against the local/LAN Ollama server. */
+    suspend fun health(url: String): Result<Unit> = runCatching {
+        val req = Request.Builder().url("${base(url)}/api/tags").get().build()
+        client.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) error("HTTP ${r.code}")
+        }
+    }
+
     private fun body(req: ChatRequest, stream: Boolean): String {
         val obj = buildJsonObject {
             put("model", req.model ?: "llama3.1")
