@@ -1,0 +1,25 @@
+# topic :: fact    (one per line)
+teaching :: To teach me a fact, say "remember that" followed by the fact — for example "remember that my locker code is 4471".
+trained replies :: To train a reply, say "when I say X, say Y" — for example "when I say good morning, say rise and grind".
+q and a :: To store a question and answer, type "Q: the question | A: the answer".
+corrections :: If I get something wrong, say "wrong, it's …" with the right answer and I will use it next time.
+rules :: To give me a standing rule, start with "always" or "never" — for example "always answer in one paragraph".
+personality :: To change my personality, say "be more sarcastic", "be less formal", "your name is Nova", or edit everything on the Brain screen.
+forgetting :: To make me forget something, say "forget" followed by the topic, like "forget the locker code".
+offline :: I run fully offline on this phone. No internet, no API key, no server — everything you teach me stays on the device.
+brain file :: A brain file (.brain) is a portable JSON file holding my personality, knowledge, trained replies and rules. Export it from the Brain screen and import it on any phone running Omerta AI.
+upload :: To upload a brain onto the app, open the .brain file from any file manager, share it to Omerta AI, or use Brain → IMPORT / UPLOAD. From a PC run: python3 brain/omerta_brain.py push my.brain
+documents :: You can teach me whole documents: Brain → IMPORT / UPLOAD and pick .txt, .md, .csv, .html or .zip files, or paste text under TEACH → PASTE TEXT. I split them into chunks and search them offline.
+on-device model :: For free conversation you can add an on-device LLM: download a MediaPipe model such as Gemma 3 1B IT int4 (.task, about 550 MB) and add it under Brain → ON-DEVICE LLM. It runs on the phone and speaks as me.
+assist mode :: In ASSIST mode I answer from my own memory and the on-device model only speaks when I don't know. In ALWAYS mode the model voices every reply using my knowledge.
+offline fallback :: With offline fallback on, if Claude or another online provider can't be reached I answer instead of showing an error.
+personality everywhere :: With "personality everywhere" on, Claude, OpenAI and Ollama speak as me and use what you taught me.
+brain studio :: Brain Studio is the PC tool brain/omerta_brain.py. It builds brains from folders of notes, edits personality, chats offline in the terminal and pushes brains to the phone over adb.
+multiple brains :: You can keep several brains on the phone — for work, study, a character — and switch between them on the Brain screen.
+privacy :: Everything stays in the app's private storage. Nothing is uploaded anywhere unless you export it yourself.
+omerta :: OMERTA is the toolkit this app belongs to: an operator-grade assistant for building, packaging and shipping apps from a phone or PC.
+termux :: Termux is a Linux terminal for Android. Install packages with "pkg install", and get storage access with "termux-setup-storage".
+adb :: adb (Android Debug Bridge) talks to a phone over USB or Wi-Fi. Common commands: "adb devices", "adb install app.apk", "adb push file /sdcard/Download/", "adb logcat".
+adb wireless :: For wireless adb on Android 11+, enable Wireless debugging in Developer options, then run "adb pair IP:PORT" with the pairing code and "adb connect IP:PORT".
+gradle :: Build an Android debug APK with "./gradlew assembleDebug"; the APK lands in app/build/outputs/apk/debug/.
+git basics :: Common git flow: "git status", "git add -A", "git commit -m message", "git push -u origin branch".

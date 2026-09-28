@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import ai.omerta.assistant.data.agent.DeviceTools
+import ai.omerta.assistant.data.brain.BrainRuntime
+import ai.omerta.assistant.data.local.EngineMode
 import ai.omerta.assistant.data.local.MemoryStore
 import ai.omerta.assistant.data.local.OmertaSettings
 import ai.omerta.assistant.data.local.Provider
@@ -40,7 +42,9 @@ data class ChatUiState(
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settingsStore = SettingsStore(app)
-    private val repo = ChatRepository()
+    /** The offline brain (shared with the Brain screen). */
+    val brain = BrainRuntime.get(app)
+    private val repo = ChatRepository(brain)
     private val deviceTools = DeviceTools(app)
     private val memory = MemoryStore(app)
 
@@ -71,6 +75,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         checkConnection()
+        scanBrainInbox()
+    }
+
+    /** Picks up brains pushed from a PC (`omerta_brain.py push`). */
+    fun scanBrainInbox() {
+        viewModelScope.launch {
+            brain.scanInbox().forEach { appendAssistant("🧠 $it") }
+        }
     }
 
     fun updateInput(text: String) = _ui.update { it.copy(input = text) }
@@ -91,6 +103,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearChat() {
         streamJob?.cancel()
+        viewModelScope.launch { brain.newConversation() }
         _ui.update { it.copy(messages = emptyList(), isSending = false, lastUsage = null) }
     }
 
@@ -126,6 +139,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     else "note" to rest
                 if (value.isBlank()) { note("usage: /teach <key>: <value>"); return true }
                 val id = memory.teach(key, value, if (cmd == "learn") "RULE" else "LESSON")
+                viewModelScope.launch {
+                    brain.edit { e ->
+                        if (cmd == "learn") e.addLesson(if (key == "note") value else "$key: $value")
+                        else e.addFact(if (key == "note") value else "$key: $value", topic = if (key == "note") "" else key)
+                    }
+                }
                 note("✓ learned #$id [${if (cmd == "learn") "RULE" else "LESSON"}] $key: $value")
             }
             "forget" -> {
@@ -137,7 +156,16 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 note(if (items.isEmpty()) "no lessons yet — teach me with /teach key: value"
                     else items.joinToString("\n") { "#${it.id} [${it.type}] ${it.key}: ${it.value}" })
             }
-            "help" -> note("commands: /teach key: value · /learn <rule> · /memory · /forget <id>")
+            "brain" -> {
+                val b = brain.brain.value
+                note("🧠 ${b.name} (persona ${b.persona.name}, tone ${b.persona.tone}) — " +
+                    "${b.knowledge.size} facts · ${b.reflexes.size} trained replies · ${b.lessons.size} rules · " +
+                    "${b.stats.messages} messages seen. Open the Brain screen to edit, import or export.")
+            }
+            "offline" -> { useBrain(); note("🧠 switched to the offline brain — no network needed.") }
+            "help" -> note("commands: /teach key: value · /learn <rule> · /memory · /forget <id> · " +
+                "/brain · /offline\nIn offline brain mode just talk: \"remember that …\", " +
+                "\"when I say X, say Y\", \"wrong, it's …\", \"what do you know\".")
             else -> return false
         }
         return true
@@ -325,6 +353,52 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 maxTokens, webSearch, codeExecution, mcpName, mcpUrl,
                 agentMode, autoApprove, provider, openAiKey, ollamaUrl,
             )
+            checkConnection()
+        }
+    }
+
+    /** Files opened with / shared to the app: install brains, learn documents. */
+    fun importIncoming(uris: List<android.net.Uri>) {
+        viewModelScope.launch {
+            for (u in uris) {
+                runCatching { brain.import(u) }.fold(
+                    onSuccess = { r ->
+                        val msg = buildString {
+                            append("🧠 ")
+                            if (r.brains > 0) append("Installed brain \"${r.activated}\" and made it active. ")
+                            if (r.documents > 0) append("Learned ${r.documents} document(s) → ${r.chunks} knowledge chunk(s). ")
+                            if (r.brains == 0 && r.documents == 0) append("Nothing usable in that file.")
+                        }
+                        appendAssistant(msg.trim())
+                    },
+                    onFailure = { appendAssistant("🧠 import failed: ${it.message}", isError = true) },
+                )
+            }
+        }
+    }
+
+    fun teachShared(subject: String, text: String) {
+        viewModelScope.launch {
+            val n = brain.edit { it.learnDocument(text, subject.ifBlank { "shared" }, topic = subject) }
+            appendAssistant("🧠 Learned shared text${if (subject.isNotBlank()) " \"$subject\"" else ""} → $n chunk(s).")
+        }
+    }
+
+    /** One tap to fully offline: embedded engine + the on-device brain. */
+    fun useBrain() {
+        viewModelScope.launch {
+            settingsStore.update(engineMode = EngineMode.EMBEDDED, provider = Provider.BRAIN)
+            checkConnection()
+        }
+    }
+
+    fun saveBrainSettings(
+        llmMode: String? = null, model: String? = null, promptFormat: String? = null,
+        gpu: Boolean? = null, temperature: Float? = null,
+        personaEverywhere: Boolean? = null, offlineFallback: Boolean? = null,
+    ) {
+        viewModelScope.launch {
+            settingsStore.updateBrain(llmMode, model, promptFormat, gpu, temperature, personaEverywhere, offlineFallback)
             checkConnection()
         }
     }

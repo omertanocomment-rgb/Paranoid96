@@ -1,0 +1,31 @@
+name: Omerta Brain
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["brain/**", "android/app/src/main/assets/brains/**", ".github/workflows/brain.yml"]
+  pull_request:
+    paths: ["brain/**", "android/app/src/main/assets/brains/**", ".github/workflows/brain.yml"]
+  workflow_dispatch:
+
+jobs:
+  studio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Brain Studio tests
+        run: python3 -m unittest brain/test_omerta_brain.py -v
+      - name: Build + validate bundled brains
+        run: |
+          mkdir -p out
+          for b in brain/sources/*/; do
+            python3 brain/omerta_brain.py build "$b" -o "out/$(basename "$b").brain"
+          done
+          python3 brain/omerta_brain.py validate out/*.brain brain/brains/*.brain android/app/src/main/assets/brains/*.brain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omerta-brains
+          path: out/*.brain

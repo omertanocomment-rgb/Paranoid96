@@ -146,8 +146,14 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
                     ProviderChip("OLLAMA", provider == Provider.OLLAMA, Modifier.weight(1f)) {
                         provider = Provider.OLLAMA; if (model.startsWith("claude") || model.startsWith("gpt")) model = "llama3.1"
                     }
+                    ProviderChip("BRAIN", provider == Provider.BRAIN, Modifier.weight(1f)) {
+                        provider = Provider.BRAIN
+                    }
                 }
                 when (provider) {
+                    Provider.BRAIN -> Hint("Fully offline: your own teachable brain with a personality, running on " +
+                        "this phone. No key, no network. Open the 🧠 Brain screen to teach it, give it a personality, " +
+                        "import/export .brain files and (optionally) add an on-device LLM model file.")
                     Provider.OPENAI -> {
                         OutlinedTextField(
                             value = openAiKey, onValueChange = { openAiKey = it },
@@ -196,7 +202,9 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
             }
 
             SectionLabel("MODEL")
-            if (embedded && provider != Provider.ANTHROPIC) {
+            if (embedded && provider == Provider.BRAIN) {
+                Hint("Model is chosen on the Brain screen (on-device LLM, optional).")
+            } else if (embedded && provider != Provider.ANTHROPIC) {
                 OutlinedTextField(
                     value = model, onValueChange = { model = it },
                     label = { Text(if (provider == Provider.OPENAI) "OpenAI model (e.g. gpt-4o)"

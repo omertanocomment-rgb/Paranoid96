@@ -35,11 +35,13 @@ android {
         applicationId = "ai.omerta.assistant"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+        // Phones (64/32-bit ARM) + x86_64 emulators. 32-bit x86 is dropped to save ~15 MB.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
 
         buildConfigField("String", "OMERTA_BACKEND_URL", "\"$backendUrl\"")
         buildConfigField("boolean", "EMBEDDED_MODE", embeddedMode)
@@ -89,9 +91,17 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { it.jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED") }
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            // Compress MediaPipe's native libs so the APK stays small to download/share.
+            useLegacyPackaging = true
         }
     }
 }
@@ -123,11 +133,16 @@ dependencies {
     // Persistence for settings/history
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // Offline brain: on-device LLM inference (Gemma / Phi / Qwen .task models).
+    implementation("com.google.mediapipe:tasks-genai:0.10.24")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

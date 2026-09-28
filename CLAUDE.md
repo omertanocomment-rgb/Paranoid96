@@ -22,8 +22,23 @@ The app has a compiled-in engine and picks one at runtime (`EngineMode` in
 - **REMOTE:** the app calls the `backend/` Node service
   (`data/remote/OmertaApiClient.kt`); the key stays server-side. Use this when the key
   must not be on the device.
+- **BRAIN (provider `brain`, fully offline):** `data/brain/` — `BrainEngine` (pure Kotlin
+  teach/recall/personality engine, unit-tested on the JVM), `BrainStore` (on-device
+  `.brain` library + model files), `OnDeviceLlm` (optional MediaPipe LLM), and
+  `BrainRuntime` (process singleton shared by chat and the Brain screen). With
+  `offlineFallback` on, any online provider that fails before emitting text is answered
+  by the brain instead.
 Both engines emit the same `StreamEvent`s; `ChatRepository` selects between them.
 The two implementations MUST stay behavior-compatible (thinking/effort/streaming).
+
+## Brain format
+- `.brain` = JSON, `format: "omerta-brain/1"` (`data/brain/Brain.kt`). Keep
+  `brain/omerta_brain.py` (Brain Studio) in sync with it — both read/write the same file.
+- Bundled default brain: `android/app/src/main/assets/brains/omerta.brain`, generated with
+  `python3 brain/omerta_brain.py build brain/sources/omerta -o brain/brains/omerta.brain`
+  and then copied into assets. Rebuild it when you change `brain/sources/omerta/`.
+- Teaching intents, reflexes and corrections are always handled by `BrainEngine`, never by
+  the on-device LLM, so what the user teaches is always applied the same way.
 
 ## Build commands
 
@@ -48,6 +63,13 @@ Push to GitHub; `.github/workflows/android.yml` builds debug+release and uploads
 `omerta-ai-apk` artifact. This is the standard escape hatch when a local Android SDK
 isn't available. Optional signing secrets: `RELEASE_KEYSTORE_BASE64`,
 `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`.
+
+### Brain Studio (PC, stdlib only)
+```bash
+python3 brain/omerta_brain.py build brain/sources/omerta -o brain/brains/omerta.brain
+python3 brain/omerta_brain.py chat brain/brains/omerta.brain
+python3 -m unittest brain/test_omerta_brain.py
+```
 
 ### Backend
 ```bash

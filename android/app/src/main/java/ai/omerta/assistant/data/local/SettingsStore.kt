@@ -22,7 +22,16 @@ object Provider {
     const val ANTHROPIC = "anthropic"
     const val OPENAI = "openai"
     const val OLLAMA = "ollama"      // your own local models, no external limits
-    val ALL = listOf(ANTHROPIC, OPENAI, OLLAMA)
+    const val BRAIN = "brain"        // fully offline on-device brain (+ optional on-device LLM)
+    val ALL = listOf(ANTHROPIC, OPENAI, OLLAMA, BRAIN)
+}
+
+/** How the offline brain uses an on-device LLM (when a model file is loaded). */
+object BrainLlmMode {
+    const val OFF = "off"        // pure brain engine only (instant, deterministic)
+    const val ASSIST = "assist"  // brain answers what it knows; the LLM handles the rest
+    const val ALWAYS = "always"  // LLM speaks every reply, grounded in the brain's knowledge
+    val ALL = listOf(OFF, ASSIST, ALWAYS)
 }
 
 /** Persisted user/operator settings. */
@@ -45,6 +54,16 @@ data class OmertaSettings(
     val provider: String,
     val openAiKey: String,
     val ollamaUrl: String,
+    // --- offline brain ---
+    val brainLlmMode: String = BrainLlmMode.ASSIST,
+    val brainModel: String = "",
+    val brainPromptFormat: String = "auto",
+    val brainGpu: Boolean = false,
+    val brainTemperature: Float = 0.7f,
+    /** Apply the active brain's personality + knowledge to online providers too. */
+    val personaEverywhere: Boolean = false,
+    /** If an online provider fails (no signal), answer from the offline brain instead. */
+    val offlineFallback: Boolean = true,
 ) {
     val embedded: Boolean get() = engineMode == EngineMode.EMBEDDED
 }
@@ -70,6 +89,13 @@ class SettingsStore(private val context: Context) {
         val PROVIDER = stringPreferencesKey("provider")
         val OPENAI_KEY = stringPreferencesKey("openai_key")
         val OLLAMA_URL = stringPreferencesKey("ollama_url")
+        val BRAIN_LLM = stringPreferencesKey("brain_llm_mode")
+        val BRAIN_MODEL = stringPreferencesKey("brain_model")
+        val BRAIN_FORMAT = stringPreferencesKey("brain_prompt_format")
+        val BRAIN_GPU = booleanPreferencesKey("brain_gpu")
+        val BRAIN_TEMP = androidx.datastore.preferences.core.floatPreferencesKey("brain_temperature")
+        val PERSONA_EVERYWHERE = booleanPreferencesKey("persona_everywhere")
+        val OFFLINE_FALLBACK = booleanPreferencesKey("offline_fallback")
     }
 
     companion object {
@@ -105,6 +131,13 @@ class SettingsStore(private val context: Context) {
             provider = p[Keys.PROVIDER] ?: Provider.ANTHROPIC,
             openAiKey = p[Keys.OPENAI_KEY] ?: "",
             ollamaUrl = p[Keys.OLLAMA_URL]?.takeIf { it.isNotBlank() } ?: "http://localhost:11434",
+            brainLlmMode = p[Keys.BRAIN_LLM] ?: BrainLlmMode.ASSIST,
+            brainModel = p[Keys.BRAIN_MODEL] ?: "",
+            brainPromptFormat = p[Keys.BRAIN_FORMAT] ?: "auto",
+            brainGpu = p[Keys.BRAIN_GPU] ?: false,
+            brainTemperature = p[Keys.BRAIN_TEMP] ?: 0.7f,
+            personaEverywhere = p[Keys.PERSONA_EVERYWHERE] ?: false,
+            offlineFallback = p[Keys.OFFLINE_FALLBACK] ?: true,
         )
     }
 
@@ -147,6 +180,26 @@ class SettingsStore(private val context: Context) {
             provider?.let { p[Keys.PROVIDER] = it }
             openAiKey?.let { p[Keys.OPENAI_KEY] = it.trim() }
             ollamaUrl?.let { p[Keys.OLLAMA_URL] = it.trim() }
+        }
+    }
+
+    suspend fun updateBrain(
+        llmMode: String? = null,
+        model: String? = null,
+        promptFormat: String? = null,
+        gpu: Boolean? = null,
+        temperature: Float? = null,
+        personaEverywhere: Boolean? = null,
+        offlineFallback: Boolean? = null,
+    ) {
+        context.dataStore.edit { p ->
+            llmMode?.let { p[Keys.BRAIN_LLM] = it }
+            model?.let { p[Keys.BRAIN_MODEL] = it }
+            promptFormat?.let { p[Keys.BRAIN_FORMAT] = it }
+            gpu?.let { p[Keys.BRAIN_GPU] = it }
+            temperature?.let { p[Keys.BRAIN_TEMP] = it }
+            personaEverywhere?.let { p[Keys.PERSONA_EVERYWHERE] = it }
+            offlineFallback?.let { p[Keys.OFFLINE_FALLBACK] = it }
         }
     }
 }

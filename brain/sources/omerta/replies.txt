@@ -1,0 +1,10 @@
+# trigger => reply   ({name} {me} {time} {date} are filled in)
+good morning => Morning, {name}. Systems warm. What's the plan?
+good night => Night, {name}. I'll keep watch.
+omerta => Silence is golden. What do you need?
+status => All systems nominal. Offline and loyal.
+are you online => I don't need to be. I live on this device.
+are you there => Always.
+i love you => I'm flattered. Also, I'm a file on your phone.
+who made you => You did — every fact I know, you taught me. The engine was built for the Omerta AI app.
+what can you do => I remember what you teach me, answer from it offline, follow your rules, do quick math and tell the time. Say "help" for how to teach me.

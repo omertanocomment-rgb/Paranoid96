@@ -23,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +49,7 @@ private val suggestions = listOf(
 )
 
 @Composable
-fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
+fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit, onBrain: () -> Unit) {
     val state by vm.ui.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
@@ -93,6 +94,7 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
                 connection = state.connection,
                 serverModel = state.serverModel,
                 onSettings = onSettings,
+                onBrain = onBrain,
                 onClear = vm::clearChat,
             )
         },
@@ -108,8 +110,22 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (state.messages.isEmpty()) {
-                EmptyState(needsKey = needsKey, onSettings = onSettings,
-                    onPick = { vm.updateInput(it); vm.send() })
+                val brainMode = settings?.let { it.embedded && it.provider == ai.omerta.assistant.data.local.Provider.BRAIN } ?: false
+                val brainFile by vm.brain.brain.collectAsStateWithLifecycle()
+                if (brainMode) {
+                    BrainEmptyState(
+                        name = brainFile.persona.name,
+                        tagline = brainFile.persona.tagline,
+                        greeting = remember(brainFile.id, brainFile.persona) { vm.brain.greeting() },
+                        facts = brainFile.knowledge.size,
+                        onBrain = onBrain,
+                        onPick = { vm.updateInput(it); vm.send() },
+                    )
+                } else {
+                    EmptyState(needsKey = needsKey, onSettings = onSettings,
+                        onOffline = vm::useBrain,
+                        onPick = { vm.updateInput(it); vm.send() })
+                }
             } else {
                 LazyColumn(
                     state = listState,
@@ -132,7 +148,7 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun EmptyState(needsKey: Boolean, onSettings: () -> Unit, onPick: (String) -> Unit) {
+private fun EmptyState(needsKey: Boolean, onSettings: () -> Unit, onOffline: () -> Unit, onPick: (String) -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -160,6 +176,19 @@ private fun EmptyState(needsKey: Boolean, onSettings: () -> Unit, onPick: (Strin
                     .clickable { onSettings() }
                     .padding(14.dp),
             )
+            Text(
+                "› …or go fully OFFLINE with your own brain 🧠",
+                style = MaterialTheme.typography.bodyMedium,
+                color = OmertaAmber,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(OmertaSurface)
+                    .border(1.dp, OmertaAmber, RoundedCornerShape(8.dp))
+                    .clickable { onOffline() }
+                    .padding(14.dp),
+            )
         }
         suggestions.forEach { s ->
             Text(
@@ -176,5 +205,65 @@ private fun EmptyState(needsKey: Boolean, onSettings: () -> Unit, onPick: (Strin
                     .padding(14.dp),
             )
         }
+    }
+}
+
+private val brainSuggestions = listOf(
+    "who are you?",
+    "remember that my favorite color is amber",
+    "when I say good morning, say rise and grind",
+    "what do you know?",
+    "help",
+)
+
+@Composable
+private fun BrainEmptyState(
+    name: String, tagline: String, greeting: String, facts: Int,
+    onBrain: () -> Unit, onPick: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("🧠 ${name.uppercase()}", style = MaterialTheme.typography.displaySmall, color = OmertaAmber,
+            textAlign = TextAlign.Center)
+        Text(
+            "$tagline · offline · $facts thing${if (facts == 1) "" else "s"} learned",
+            style = MaterialTheme.typography.bodySmall,
+            color = OmertaTextSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
+        )
+        Text(greeting, style = MaterialTheme.typography.bodyMedium, color = OmertaTextPrimary,
+            textAlign = TextAlign.Center, modifier = Modifier.padding(bottom = 20.dp))
+        brainSuggestions.forEach { s ->
+            Text(
+                text = "› $s",
+                style = MaterialTheme.typography.bodyMedium,
+                color = OmertaTextPrimary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(OmertaSurface)
+                    .border(1.dp, OmertaBorder, RoundedCornerShape(8.dp))
+                    .clickable { onPick(s) }
+                    .padding(12.dp),
+            )
+        }
+        Text(
+            "› open Brain — personality · knowledge · import/export",
+            style = MaterialTheme.typography.bodyMedium,
+            color = OmertaAmber,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(OmertaSurface)
+                .border(1.dp, OmertaAmber, RoundedCornerShape(8.dp))
+                .clickable { onBrain() }
+                .padding(12.dp),
+        )
     }
 }

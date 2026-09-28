@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +34,7 @@ fun OmertaTopBar(
     connection: ConnectionState,
     serverModel: String?,
     onSettings: () -> Unit,
+    onBrain: () -> Unit,
     onClear: () -> Unit,
 ) {
     CenterAlignedTopAppBar(
@@ -60,6 +62,9 @@ fun OmertaTopBar(
             }
         },
         actions = {
+            IconButton(onClick = onBrain) {
+                Icon(Icons.Filled.Psychology, contentDescription = "Brain", tint = OmertaAmber)
+            }
             IconButton(onClick = onSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = OmertaTextPrimary)
             }

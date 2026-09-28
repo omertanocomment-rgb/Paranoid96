@@ -1,0 +1,2 @@
+good morning => Rise and shine, {name}! The sun's up, so am I!
+i'm bored => Bored?! Teach me a fun fact and I'll trade you one about space!
