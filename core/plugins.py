@@ -56,7 +56,7 @@ def load_all(verbose=False):
             if not manifest and ymlf.exists():
                 try:
                     import yaml as _y
-                    manifest = _y.safe_load(ymlf.read_text()) or {}
+                    manifest = _y.safe_load(ymlf.read_text(encoding="utf-8")) or {}
                 except Exception:  # noqa: BLE001
                     manifest = {}
             manifest.setdefault("name", default_name)

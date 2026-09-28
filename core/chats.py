@@ -52,7 +52,7 @@ def _index():
     _ensure()
     if INDEX_FILE.exists():
         try:
-            return json.loads(INDEX_FILE.read_text())
+            return json.loads(INDEX_FILE.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
     return {"chats": {}, "projects": {"general": {"name": "general",
@@ -62,7 +62,7 @@ def _index():
 def _save(idx):
     _ensure()
     tmp = INDEX_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(idx, indent=2))
+    tmp.write_text(json.dumps(idx, indent=2), encoding="utf-8")
     os.replace(tmp, INDEX_FILE)
 
 
@@ -155,13 +155,13 @@ def _write_body(chat_id, body, key=None):
     else:
         payload = {"private": False, "body": body}
     tmp = _path(chat_id).with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload))
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
     os.replace(tmp, _path(chat_id))
 
 
 def _read_body(chat_id, key=None):
     try:
-        payload = json.loads(_path(chat_id).read_text())
+        payload = json.loads(_path(chat_id).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     if not payload.get("private"):
@@ -439,7 +439,7 @@ def export_chat(chat_id, include_branches=True):
     out = []
     for r in wanted:
         try:
-            payload = json.loads(_path(r["id"]).read_text())
+            payload = json.loads(_path(r["id"]).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         out.append({"meta": {k: v for k, v in r.items()}, "payload": payload})
@@ -476,7 +476,7 @@ def import_chats(bundle, project=None):
             continue
         if cid in idx["chats"]:
             try:
-                same = json.loads(_path(cid).read_text()) == payload
+                same = json.loads(_path(cid).read_text(encoding="utf-8")) == payload
             except (OSError, ValueError):
                 same = False
             if same:
@@ -497,7 +497,7 @@ def import_chats(bundle, project=None):
         meta.setdefault("queue", [])
         meta["imported"] = time.time()
         tmp = _path(cid).with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload))
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
         os.replace(tmp, _path(cid))
         idx["chats"][cid] = meta
         idx["projects"].setdefault(meta["project"],

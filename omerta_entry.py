@@ -37,14 +37,16 @@ def _version(full=False):
     # has no pyproject.toml and is not pip-installed
     for base in bases:
         try:
-            v = open(os.path.join(base, "VERSION")).read().strip()
+            v = open(os.path.join(base, "VERSION"),
+                     encoding="utf-8").read().strip()
         except OSError:
             continue
         if v:
             return v
     for base in bases:
         try:
-            txt = open(os.path.join(base, "pyproject.toml")).read()
+            txt = open(os.path.join(base, "pyproject.toml"),
+                       encoding="utf-8").read()
         except OSError:
             continue
         m = re.search(r'version\s*=\s*"([^"]+)"', txt)

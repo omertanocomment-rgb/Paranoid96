@@ -171,7 +171,7 @@ def build(root=".", save=True) -> dict:
                       "call_edges": sum(len(c["callees"]) for c in calls)}}
     if save:
         INDEX_DIR.mkdir(parents=True, exist_ok=True)
-        _index_path(root).write_text(json.dumps(idx))
+        _index_path(root).write_text(json.dumps(idx), encoding="utf-8")
     return idx
 
 
@@ -179,7 +179,7 @@ def load(root="."):
     p = _index_path(Path(root).resolve())
     if p.exists():
         try:
-            return json.loads(p.read_text())
+            return json.loads(p.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return None
     return None

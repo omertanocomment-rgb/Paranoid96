@@ -73,7 +73,7 @@ WEBUI_DIR = Path(os.environ.get("OMERTA_WEBUI_DIR", RES_DIR / "webui"))
 _runtime = {}
 if SETTINGS_FILE.exists():
     try:
-        _runtime = json.loads(SETTINGS_FILE.read_text())
+        _runtime = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         _runtime = {}
 
@@ -87,7 +87,7 @@ def get(key, default=None):
 
 def set_setting(key, value):
     _runtime[key] = value
-    SETTINGS_FILE.write_text(json.dumps(_runtime, indent=2))
+    SETTINGS_FILE.write_text(json.dumps(_runtime, indent=2), encoding="utf-8")
 
 
 def all_settings():
@@ -122,7 +122,7 @@ def _load_secrets():
     if not SECRETS_FILE.exists():
         return
     try:
-        data = json.loads(SECRETS_FILE.read_text())
+        data = json.loads(SECRETS_FILE.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return
     for k, v in data.items():
@@ -138,7 +138,7 @@ def put_secret(key, value):
     data = {}
     if SECRETS_FILE.exists():
         try:
-            data = json.loads(SECRETS_FILE.read_text())
+            data = json.loads(SECRETS_FILE.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             data = {}
     if value:
@@ -147,7 +147,7 @@ def put_secret(key, value):
     else:
         data.pop(key, None)
         os.environ.pop(key, None)
-    SECRETS_FILE.write_text(json.dumps(data, indent=2))
+    SECRETS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
     try:
         import stat as _stat
         os.chmod(SECRETS_FILE, _stat.S_IRUSR | _stat.S_IWUSR)  # 0600

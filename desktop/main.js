@@ -8,6 +8,7 @@ const { app, BrowserWindow, shell, dialog, Menu } = require('electron');
 const { spawn, execSync } = require('child_process');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 
 const PORT = process.env.OMERTA_PORT || 8787;
 let backend = null;
@@ -20,7 +21,31 @@ function appRoot() {
     : path.join(__dirname, '..');
 }
 
+/**
+ * The interpreter that runs the backend.
+ *
+ * A bundled runtime is preferred over anything on PATH: it is the one this
+ * build was tested against, and on Windows it is usually the only one there
+ * is. Shipping it is what makes this an application rather than a
+ * prerequisite -- the previous version put up a dialog telling the owner to
+ * go and install Python from python.org, which is the same "install this
+ * other thing first" problem the APK removed by embedding CPython.
+ */
+function bundledPython() {
+  const dir = app.isPackaged
+    ? path.join(process.resourcesPath, 'pyruntime')
+    : path.join(__dirname, 'runtime', process.platform === 'win32'
+        ? 'win-x64' : 'none');
+  const exe = path.join(dir, process.platform === 'win32' ? 'python.exe' : 'bin/python3');
+  try {
+    if (fs.existsSync(exe)) return exe;
+  } catch (e) { /* fall through to PATH */ }
+  return null;
+}
+
 function findPython() {
+  const bundled = bundledPython();
+  if (bundled) return bundled;
   const candidates = process.platform === 'win32'
     ? ['python', 'py -3', 'python3']
     : ['python3', 'python'];
@@ -38,6 +63,8 @@ function startBackend() {
   if (!py) {
     dialog.showErrorBox('Python not found',
       'OMERTA AGENT needs Python 3.9+ on PATH.\n\n' +
+      'This build was expected to carry its own interpreter; if you are\n' +
+      'seeing this, it was packaged without one.\n\n' +
       'Windows: install from python.org and tick "Add to PATH".\n' +
       'macOS:   brew install python\n' +
       'Linux:   sudo apt install python3 python3-pip');
@@ -46,7 +73,11 @@ function startBackend() {
   }
   const root = appRoot();
   const [cmd, ...pre] = py.split(' ');
-  backend = spawn(cmd, [...pre, path.join(root, 'server.py')], {
+  // omerta_entry.py, NOT server.py. server.py imports FastAPI and uvicorn,
+  // which nothing here installs, so it fails on any machine that has not been
+  // set up by hand. omerta_entry falls back to core/httpd -- same protocol,
+  // same approval gate, stdlib only -- when they are absent.
+  backend = spawn(cmd, [...pre, path.join(root, 'omerta_entry.py'), 'serve'], {
     cwd: root,
     env: { ...process.env, OMERTA_PORT: String(PORT), PYTHONUNBUFFERED: '1' },
   });

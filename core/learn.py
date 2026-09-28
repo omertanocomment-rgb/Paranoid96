@@ -54,7 +54,7 @@ def _index():
     _ensure()
     if INDEX_FILE.exists():
         try:
-            return json.loads(INDEX_FILE.read_text())
+            return json.loads(INDEX_FILE.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
     return {"docs": {}}
@@ -62,7 +62,7 @@ def _index():
 
 def _save(idx):
     _ensure()
-    INDEX_FILE.write_text(json.dumps(idx, indent=2))
+    INDEX_FILE.write_text(json.dumps(idx, indent=2), encoding="utf-8")
 
 
 def _is_text(name, blob):

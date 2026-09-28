@@ -86,13 +86,13 @@ def _device_id():
     f = config.DATA_DIR / "device.json"
     if f.exists():
         try:
-            return json.loads(f.read_text())["device"]
+            return json.loads(f.read_text(encoding="utf-8"))["device"]
         except Exception:  # noqa: BLE001
             pass
     import socket
     import uuid as _u
     did = f"{socket.gethostname()[:20]}-{_u.uuid4().hex[:8]}"
-    f.write_text(json.dumps({"device": did}))
+    f.write_text(json.dumps({"device": did}), encoding="utf-8")
     return did
 
 

@@ -26,7 +26,7 @@ def snapshot(path, project="general"):
     shutil.copy2(p, dest)
     entry = {"ts": ts, "original": str(p.resolve()), "backup": str(dest),
              "project": project, "size": p.stat().st_size}
-    with open(INDEX, "a") as f:
+    with open(INDEX, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
     return entry
 
@@ -35,7 +35,7 @@ def history(limit=30, project=None):
     if not INDEX.exists():
         return []
     out = []
-    for line in INDEX.read_text().strip().splitlines():
+    for line in INDEX.read_text(encoding="utf-8").strip().splitlines():
         try:
             e = json.loads(line)
         except json.JSONDecodeError:

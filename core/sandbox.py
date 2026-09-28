@@ -96,7 +96,7 @@ def classify(cmd: str) -> str:
 
 
 def _log(entry):
-    with open(LOG_FILE, "a") as f:
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
 
 
@@ -190,5 +190,5 @@ def edit(cmd, new_cmd, project="general"):
 def history(n=50):
     if not LOG_FILE.exists():
         return []
-    lines = LOG_FILE.read_text().strip().splitlines()[-n:]
+    lines = LOG_FILE.read_text(encoding="utf-8").strip().splitlines()[-n:]
     return [json.loads(x) for x in lines if x.strip()]

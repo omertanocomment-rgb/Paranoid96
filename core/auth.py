@@ -28,7 +28,7 @@ COOKIE = "omerta_token"
 def _load():
     if AUTH_FILE.exists():
         try:
-            return json.loads(AUTH_FILE.read_text())
+            return json.loads(AUTH_FILE.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             pass
     return {}
@@ -40,7 +40,7 @@ def get_token():
     if "token" in data:
         return data["token"]
     data["token"] = secrets.token_urlsafe(24)
-    AUTH_FILE.write_text(json.dumps(data, indent=2))
+    AUTH_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
     try:
         os.chmod(AUTH_FILE, stat.S_IRUSR | stat.S_IWUSR)  # 0600
     except OSError:
@@ -51,7 +51,7 @@ def get_token():
 def rotate():
     data = _load()
     data["token"] = secrets.token_urlsafe(24)
-    AUTH_FILE.write_text(json.dumps(data, indent=2))
+    AUTH_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
     try:
         os.chmod(AUTH_FILE, stat.S_IRUSR | stat.S_IWUSR)
     except OSError:

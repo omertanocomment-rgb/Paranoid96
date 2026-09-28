@@ -60,7 +60,7 @@ def _index():
     _ensure()
     if INDEX_FILE.exists():
         try:
-            return json.loads(INDEX_FILE.read_text())
+            return json.loads(INDEX_FILE.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
     return {"sandboxes": {}}
@@ -69,7 +69,7 @@ def _index():
 def _save(idx):
     _ensure()
     tmp = INDEX_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(idx, indent=2))
+    tmp.write_text(json.dumps(idx, indent=2), encoding="utf-8")
     os.replace(tmp, INDEX_FILE)
 
 
@@ -137,7 +137,7 @@ def create(args=None):
 
     # a manifest of what we started from, so "changed" means changed-by-you
     manifest = {rel: _digest(os.path.join(dest, rel)) for rel in _walk(dest)}
-    (ROOT / sid / "manifest.json").write_text(json.dumps(manifest))
+    (ROOT / sid / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     idx = _index()
     rec = {"id": sid, "source": src, "path": str(dest),
@@ -167,7 +167,7 @@ def _get(sid):
 
 def _manifest(sid):
     try:
-        return json.loads((ROOT / sid / "manifest.json").read_text())
+        return json.loads((ROOT / sid / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
@@ -377,7 +377,7 @@ def accept(args=None):
         man[rel] = _digest(os.path.join(rec["path"], rel))
     for rel in deleted:
         man.pop(rel, None)
-    (ROOT / rec["id"] / "manifest.json").write_text(json.dumps(man))
+    (ROOT / rec["id"] / "manifest.json").write_text(json.dumps(man), encoding="utf-8")
 
     return {"status": "ok", "written": written, "deleted": deleted,
             "failed": failed, "count": len(written) + len(deleted),

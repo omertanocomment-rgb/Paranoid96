@@ -96,7 +96,7 @@ def _startup():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return (config.WEBUI_DIR / "index.html").read_text()
+    return (config.WEBUI_DIR / "index.html").read_text(encoding="utf-8")
 
 
 @app.get("/favicon.ico")

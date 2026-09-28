@@ -292,7 +292,7 @@ def snapshot(path=".", note=""):
     files = sum(1 for _ in dest.rglob("*") if _.is_file())
     entry = {"id": sid, "src": str(src), "at": time.time(),
              "files": files, "note": note}
-    with open(SNAP_INDEX, "a") as f:
+    with open(SNAP_INDEX, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
     return {"status": "ok", **entry}
 
@@ -301,7 +301,7 @@ def list_snapshots(limit=50):
     if not SNAP_INDEX.exists():
         return []
     out = []
-    for line in SNAP_INDEX.read_text().strip().splitlines():
+    for line in SNAP_INDEX.read_text(encoding="utf-8").strip().splitlines():
         try:
             out.append(json.loads(line))
         except json.JSONDecodeError:

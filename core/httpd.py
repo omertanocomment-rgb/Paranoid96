@@ -228,9 +228,16 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/":
             try:
-                html = (config.WEBUI_DIR / "index.html").read_text()
-            except OSError as e:
-                return self._send(f"web UI missing: {e}".encode(), "text/plain", 500)
+                html = (config.WEBUI_DIR / "index.html").read_text(encoding="utf-8")
+            except (OSError, ValueError) as e:
+                # ValueError covers UnicodeDecodeError. Reading the UI without
+                # naming an encoding used the locale default, which is cp1252
+                # on Windows, and index.html is UTF-8 -- so on Windows this
+                # raised straight out of the handler and the browser got an
+                # empty reply with no clue why. A 500 that says what happened
+                # is worth more than a dropped connection.
+                return self._send(f"web UI unreadable: {e}".encode(),
+                                  "text/plain", 500)
             return self._send(html.encode(), "text/html; charset=utf-8")
         if path == "/api/status":
             return self._json(api.status_payload())

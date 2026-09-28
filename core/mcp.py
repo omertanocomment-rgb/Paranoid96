@@ -31,7 +31,7 @@ def load_config():
     if not config.CONNECTORS_FILE.exists():
         return {}
     try:
-        data = yaml.safe_load(config.CONNECTORS_FILE.read_text()) or {}
+        data = yaml.safe_load(config.CONNECTORS_FILE.read_text(encoding="utf-8")) or {}
         return data.get("servers", {}) or {}
     except Exception as e:  # noqa: BLE001
         return {"_error": str(e)}

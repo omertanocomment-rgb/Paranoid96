@@ -4,6 +4,69 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.3] — 2026-09-28
+
+Desktop packages that work on a machine nobody has prepared. Building them
+found that the desktop app could never have started on Windows at all.
+
+### Fixed
+- **The backend was unimportable on Windows.** `core/terminal.py` imported
+  `fcntl` and `termios` at module scope; both are POSIX-only, and `core/api.py`
+  imports terminal, so the whole backend failed at import. The module already
+  degrades to pipes when no PTY is available -- it never got the chance. The
+  POSIX imports are now guarded, `POSIX_TTY` says which mode is in force, and
+  process-group and signal use is feature-checked (`signal.SIGKILL` does not
+  exist on Windows).
+- **42 text reads and writes named no encoding.** Python falls back to the
+  *locale* default: UTF-8 on Linux, cp1252 on Windows. Serving the web UI did
+  `index.html.read_text()`, and the UI is UTF-8, so on Windows that raised
+  `UnicodeDecodeError` -- a `ValueError`, which the handler's `except OSError`
+  did not catch. The browser got an empty reply and no explanation. Every call
+  now names UTF-8 explicitly. This was the more dangerous of the two: silent
+  and data-dependent, so a chat containing an em-dash would have failed to save
+  on some machines and not others.
+- **The desktop launcher spawned `server.py`**, which imports FastAPI and
+  uvicorn. Nothing in any package installs them, so the backend died on import
+  anywhere it had not been pip-installed by hand. It now runs
+  `omerta_entry.py serve`, which falls back to the stdlib server -- and
+  `omerta_entry.py` was explicitly *excluded* from the packaged resources, so
+  the working path was not even shipped.
+- **Packages carried the previous build's stamp.** A desktop build reported
+  itself as `channel: android`. Both package scripts now stamp before the
+  payload is copied.
+
+### Added
+- **`.deb` at 1.9.3** -- verified by extracting it and serving from the
+  extracted tree: 200 on `/api/status`, the full 90 KB UI on `/`,
+  `channel: deb`.
+- **`.exe` for Windows x64** -- a self-extracting installer that carries its own
+  CPython 3.11.9 (python.org's official embeddable build, checksum-pinned)
+  plus `requests` and `pyyaml`. It needs no Python, no admin rights and no
+  installer prerequisites; it installs per-user, makes Start Menu and Desktop
+  shortcuts, and ships an uninstaller.
+- **`scripts/fetch_win_runtime.sh`** and **`packaging/build-win.sh`** -- the
+  Windows pipeline as one ordered entry point, because the steps are
+  order-dependent in ways that silently produce a wrong artifact.
+- **`tests/test_portability.py`** -- no POSIX-only module imported unguarded at
+  module scope; every text read/write names an encoding; the UI is genuinely
+  UTF-8 and genuinely undecodable as cp1252 (so the bug was real, not
+  theoretical); and `core.terminal` and `core.api` both import with
+  `fcntl`/`termios`/`pty` blocked, which is what Windows looks like to Python.
+- **`tests/test_desktop_launch.py`** -- the launcher runs the entry point that
+  degrades, that entry point is packaged, Windows carries an interpreter, and
+  the stdlib server really does serve with FastAPI and uvicorn absent.
+
+### Notes on verification
+The Windows installer was assembled by concatenation (7-Zip SFX stub + config +
+payload) rather than with electron-builder's NSIS target: NSIS installers are
+32-bit and electron-builder must *run* the installer it builds to generate the
+uninstaller, which needs 32-bit Wine -- unavailable on this host, where the
+i386 dependency chain is broken. The payload was then extracted and run under
+wine64 using the shipped Windows `python.exe`: `/api/status`, `/api/version`,
+`/api/models`, `/api/localai`, `/api/usage` all 200, and `/` served the full
+UI. The terminal endpoint returns an honest error there instead of crashing,
+which is the degradation working. Not yet run on real Windows hardware.
+
 ## [1.9.2] — 2026-09-24
 
 Every provider read "unavailable", including the one that needs no API key.

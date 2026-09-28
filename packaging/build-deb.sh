@@ -14,6 +14,10 @@ if not m:
 print(m.group(1))
 PY
 )"
+# Stamp before the payload is copied, or the .deb ships whichever channel the
+# previous build left in core/build_stamp.json.
+python3 scripts/stamp_build.py deb
+
 PKG="omerta-agent_${VER}_all"
 ROOT="build_pkg/deb/${PKG}"
 rm -rf "$ROOT"

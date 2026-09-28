@@ -21,11 +21,9 @@ Two things worth being explicit about:
     Set OMERTA_TERM_GUARD=0 if you genuinely need to run one; the refusal
     message says so. Every command is logged either way.
 """
-import fcntl
 import os
 import re
 import signal
-import termios
 import shutil
 import threading
 import subprocess
@@ -33,6 +31,20 @@ import time
 import uuid
 
 from . import config, sandbox
+
+# fcntl and termios are POSIX-only. Importing them at module scope made
+# core/terminal unimportable on Windows, and core/api imports terminal, so the
+# ENTIRE backend failed to start there -- the desktop app could never have run
+# on Windows at all. A terminal that cannot allocate a PTY is a degraded
+# terminal, which this module already handles; it is not a reason for the
+# agent to refuse to boot.
+try:
+    import fcntl
+    import termios
+    POSIX_TTY = True
+except ImportError:                                # Windows
+    fcntl = termios = None
+    POSIX_TTY = False
 
 SESSIONS = {}
 _lock = threading.Lock()
@@ -78,6 +90,9 @@ def _become_session_leader(slave_fd):
     must not raise into the parent -- a failure here should cost job control,
     not the whole terminal.
     """
+    if not POSIX_TTY or not hasattr(os, "setsid"):
+        return None                                # Popen accepts preexec_fn=None
+
     def setup():
         os.setsid()
         try:
@@ -204,9 +219,9 @@ class Session:
                      .encode())
 
     def _set_winsize(self, rows, cols):
-        import fcntl
         import struct
-        import termios
+        if not POSIX_TTY:
+            return
         fcntl.ioctl(self._fd, termios.TIOCSWINSZ,
                     struct.pack("HHHH", int(rows), int(cols), 0, 0))
 
@@ -233,9 +248,11 @@ class Session:
                   "TSTP": b"\x1a"}
 
     def send_signal(self, name):
-        sigs = {"INT": signal.SIGINT, "TERM": signal.SIGTERM,
-                "KILL": signal.SIGKILL, "QUIT": signal.SIGQUIT,
-                "HUP": signal.SIGHUP, "TSTP": signal.SIGTSTP}
+        # Windows has SIGINT and SIGTERM and none of the rest; asking for
+        # signal.SIGKILL there is an AttributeError, not a missing feature.
+        sigs = {n: getattr(signal, "SIG" + n, None)
+                for n in ("INT", "TERM", "KILL", "QUIT", "HUP", "TSTP")}
+        sigs = {n: v for n, v in sigs.items() if v is not None}
         # lstrip() strips CHARACTERS, not a prefix: "INT".lstrip("SIG") is "NT".
         want = str(name or "INT").upper()
         if want.startswith("SIG"):
@@ -266,7 +283,8 @@ class Session:
         if self._fd is not None:
             try:
                 self._set_winsize(self.rows, self.cols)
-                os.killpg(os.getpgid(self.proc.pid), signal.SIGWINCH)
+                if hasattr(os, "killpg") and hasattr(signal, "SIGWINCH"):
+                    os.killpg(os.getpgid(self.proc.pid), signal.SIGWINCH)
             except Exception:                      # noqa: BLE001
                 pass
         return {"status": "ok", "cols": self.cols, "rows": self.rows}
@@ -294,8 +312,12 @@ class Session:
         Never close the master here -- see _pump_pty.
         """
         self.closing = True
-        for step in (lambda: os.killpg(os.getpgid(self.proc.pid), signal.SIGHUP),
-                     self.proc.terminate, self.proc.kill):
+        def hangup():
+            if not hasattr(os, "killpg") or not hasattr(signal, "SIGHUP"):
+                raise OSError("no process groups on this platform")
+            os.killpg(os.getpgid(self.proc.pid), signal.SIGHUP)
+
+        for step in (hangup, self.proc.terminate, self.proc.kill):
             if self.proc.poll() is not None:
                 break
             try:

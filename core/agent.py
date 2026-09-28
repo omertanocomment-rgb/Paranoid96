@@ -49,7 +49,7 @@ READ_ONLY_TOOLS = {
 
 def _persona():
     try:
-        return yaml.safe_load(config.PERSONA_FILE.read_text())
+        return yaml.safe_load(config.PERSONA_FILE.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         return {"voice": "You are OMERTA, a coding and firmware agent.", "memory": {}}
 

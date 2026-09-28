@@ -146,7 +146,7 @@ def _index():
     _ensure()
     if INDEX_FILE.exists():
         try:
-            data = json.loads(INDEX_FILE.read_text())
+            data = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
             if isinstance(data, dict) and "themes" in data:
                 return data
         except (OSError, ValueError):
@@ -157,7 +157,7 @@ def _index():
 def _save(idx):
     _ensure()
     tmp = INDEX_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(idx, indent=2))
+    tmp.write_text(json.dumps(idx, indent=2), encoding="utf-8")
     os.replace(tmp, INDEX_FILE)
 
 

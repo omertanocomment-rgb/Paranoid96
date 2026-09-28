@@ -36,3 +36,7 @@ build/
 # Written by scripts/stamp_build.py at package time; regenerated per build,
 # so it is an artifact of building rather than a source file.
 core/build_stamp.json
+
+# Fetched by scripts/fetch_win_runtime.sh, checksum-pinned and reproducible.
+# It is 24 MB of upstream CPython; the script is the source of truth.
+desktop/runtime/

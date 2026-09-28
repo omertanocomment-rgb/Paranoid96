@@ -68,14 +68,14 @@ def _flag(v):
 def _state():
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text())
+            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             pass
     return {"peers": {}, "files": {}}
 
 
 def _save_state(s):
-    STATE_FILE.write_text(json.dumps(s, indent=2))
+    STATE_FILE.write_text(json.dumps(s, indent=2), encoding="utf-8")
 
 
 def last_sync(kind, key):
@@ -236,7 +236,7 @@ def sync_file(path, project=None, full=False):
         if other.resolve() == mine.resolve():
             continue
         try:
-            results.append(merge_bundle(json.loads(other.read_text())))
+            results.append(merge_bundle(json.loads(other.read_text(encoding="utf-8"))))
         except (json.JSONDecodeError, OSError) as e:
             results.append({"status": "error", "file": other.name, "reason": str(e)})
 
@@ -245,14 +245,14 @@ def sync_file(path, project=None, full=False):
     # merge with what we previously wrote so the file stays a full picture
     if mine.exists() and not full:
         try:
-            prev = json.loads(mine.read_text())
+            prev = json.loads(mine.read_text(encoding="utf-8"))
             seen = {f["uid"] for f in bundle["facts"]}
             bundle["facts"] += [f for f in prev.get("facts", []) if f["uid"] not in seen]
             cseen = {c["uid"] for c in bundle["choices"]}
             bundle["choices"] += [c for c in prev.get("choices", []) if c["uid"] not in cseen]
         except (json.JSONDecodeError, OSError, KeyError):
             pass
-    mine.write_text(json.dumps(bundle, indent=1))
+    mine.write_text(json.dumps(bundle, indent=1), encoding="utf-8")
     _mark("files", str(directory), time.time(),
           {"merged": len(results), "exported": len(bundle["facts"])})
     return {"status": "ok", "wrote": str(mine),

@@ -1,7 +1,7 @@
 {
   "name": "omerta-agent",
   "productName": "OMERTA AGENT",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Offline-capable coding & firmware agent that asks before every action",
   "main": "main.js",
   "author": "OMERTA",
@@ -45,7 +45,6 @@
           "!.venv/**",
           "!**/*.AppImage",
           "!**/*.tar.gz",
-          "!omerta_entry.py",
           "!*.spec",
           "!artifacts/**",
           "!android-native/**",
@@ -55,7 +54,8 @@
           "!**/*.ico",
           "!**/.gradle/**",
           "!scratch/**",
-          "!**/*.log"
+          "!**/*.log",
+          "!desktop/runtime/**"
         ]
       }
     ],
@@ -64,13 +64,23 @@
         {
           "target": "nsis",
           "arch": [
-            "x64",
-            "arm64"
+            "x64"
           ]
         },
-        "portable"
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "icon": "../assets/icon.ico"
+      "icon": "../assets/icon.ico",
+      "extraResources": [
+        {
+          "from": "runtime/win-x64",
+          "to": "pyruntime"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
