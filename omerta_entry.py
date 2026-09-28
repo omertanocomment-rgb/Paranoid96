@@ -74,6 +74,11 @@ def main():
             # stdlib server. Same protocol, same approval gate.
             from core import httpd
             return httpd.run()
+    if cmd == "bridge":
+        # The backend over stdin/stdout, for a desktop shell that owns this
+        # process. No socket, no port -- see core/stdio_rpc.py.
+        from core import stdio_rpc
+        return stdio_rpc.run()
     if cmd == "doctor":
         sys.argv = [sys.argv[0]] + argv[1:]
         import runpy

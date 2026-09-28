@@ -4,15 +4,28 @@
  * Spawns the Python backend as a child process, waits for it to bind,
  * then loads the same web UI the phone uses. One codebase, every platform.
  */
-const { app, BrowserWindow, shell, dialog, Menu } = require('electron');
+const { app, BrowserWindow, shell, dialog, Menu, ipcMain, protocol, net } =
+  require('electron');
 const { spawn, execSync } = require('child_process');
 const path = require('path');
-const http = require('http');
 const fs = require('fs');
+const readline = require('readline');
+const { pathToFileURL } = require('url');
 
-const PORT = process.env.OMERTA_PORT || 8787;
-let backend = null;
+// The UI is served from this process, not fetched over a network. A custom
+// scheme registered as standard AND secure gives the page a secure context,
+// which is what navigator.clipboard and getUserMedia require -- on
+// http://127.0.0.1 both were unavailable and the copy buttons needed a
+// fallback.
+const SCHEME = 'omerta';
+const BASE = `${SCHEME}://app/`;
+
+let backend = null;       // the Python child, speaking JSON over stdio
 let win = null;
+let ready = false;
+let lastError = '';
+let nextId = 1;
+const pending = new Map();
 
 function appRoot() {
   // packaged: resources/app ; dev: parent of desktop/
@@ -61,6 +74,7 @@ function findPython() {
 function startBackend() {
   const py = findPython();
   if (!py) {
+    lastError = 'no Python interpreter found';
     dialog.showErrorBox('Python not found',
       'OMERTA AGENT needs Python 3.9+ on PATH.\n\n' +
       'This build was expected to carry its own interpreter; if you are\n' +
@@ -73,30 +87,125 @@ function startBackend() {
   }
   const root = appRoot();
   const [cmd, ...pre] = py.split(' ');
-  // omerta_entry.py, NOT server.py. server.py imports FastAPI and uvicorn,
-  // which nothing here installs, so it fails on any machine that has not been
-  // set up by hand. omerta_entry falls back to core/httpd -- same protocol,
-  // same approval gate, stdlib only -- when they are absent.
-  backend = spawn(cmd, [...pre, path.join(root, 'omerta_entry.py'), 'serve'], {
+  // `bridge`, not `serve`: the backend talks to THIS process over a pipe.
+  // There is no port, nothing listening, and nothing for anything else on the
+  // machine to connect to.
+  backend = spawn(cmd, [...pre, path.join(root, 'omerta_entry.py'), 'bridge'], {
     cwd: root,
-    env: { ...process.env, OMERTA_PORT: String(PORT), PYTHONUNBUFFERED: '1' },
+    env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' },
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
-  backend.stdout.on('data', d => console.log(`[backend] ${d}`));
+
+  // One JSON object per line. Replies carry the id of their request, so they
+  // may arrive in any order -- which they will, because a slow chat turn must
+  // not hold up the status poll behind it.
+  readline.createInterface({ input: backend.stdout }).on('line', line => {
+    let msg;
+    try { msg = JSON.parse(line); } catch (e) { return; }
+    if (msg.id === null || msg.id === undefined) {
+      if (msg.body && msg.body.ready) ready = true;
+      return;
+    }
+    const slot = pending.get(msg.id);
+    if (!slot) return;
+    pending.delete(msg.id);
+    slot(JSON.stringify({ status: msg.status, body: msg.body }));
+  });
+
   backend.stderr.on('data', d => console.error(`[backend] ${d}`));
-  backend.on('exit', code => console.log(`[backend] exited ${code}`));
+  backend.on('exit', code => {
+    ready = false;
+    lastError = `backend exited with code ${code}`;
+    // Fail every request still waiting, or the UI hangs with no explanation.
+    for (const [id, slot] of pending) {
+      slot(JSON.stringify({ status: 500, body: { error: lastError } }));
+      pending.delete(id);
+    }
+  });
 }
 
-function waitForBackend(tries = 60) {
+/** Send one message to the Python child and resolve with its reply. */
+function ask(msg) {
+  return new Promise(resolve => {
+    if (!backend || backend.exitCode !== null) {
+      return resolve(JSON.stringify({
+        status: 500, body: { error: lastError || 'the backend is not running' },
+      }));
+    }
+    const id = nextId++;
+    pending.set(id, resolve);
+    try {
+      backend.stdin.write(JSON.stringify({ ...msg, id }) + '\n');
+    } catch (e) {
+      pending.delete(id);
+      resolve(JSON.stringify({ status: 500, body: { error: String(e) } }));
+    }
+  });
+}
+
+/** Wait for the child to announce itself, so the window opens on a live app. */
+function waitForBackend(tries = 120) {
   return new Promise((resolve, reject) => {
     const attempt = n => {
-      http.get(`http://127.0.0.1:${PORT}/api/status`, res => {
-        res.resume(); resolve();
-      }).on('error', () => {
-        if (n <= 0) return reject(new Error('backend never came up'));
-        setTimeout(() => attempt(n - 1), 500);
-      });
+      if (ready) return resolve();
+      if (backend && backend.exitCode !== null) {
+        return reject(new Error(lastError || 'the backend exited at start-up'));
+      }
+      if (n <= 0) return reject(new Error('the backend did not start in time'));
+      setTimeout(() => attempt(n - 1), 500);
     };
     attempt(tries);
+  });
+}
+
+// ── serving the UI, in-process ───────────────────────────────────────────
+const CTYPES = {
+  '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
+  '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
+};
+
+function serveFile(pathname) {
+  const root = appRoot();
+  let rel;
+  if (pathname === '/' || pathname === '/index.html') rel = 'webui/index.html';
+  else if (pathname.startsWith('/assets/')) rel = 'assets' + pathname.slice(7);
+  else if (pathname === '/icon.svg' || pathname === '/favicon.ico')
+    rel = 'assets' + pathname;
+  else if (pathname.startsWith('/webui/')) rel = 'webui' + pathname.slice(6);
+  else return null;
+
+  const full = path.resolve(root, rel);
+  // A served directory plus "../" is how a UI bug becomes "read any file on
+  // the machine", so anything that climbed out is simply not found.
+  if (!full.startsWith(path.resolve(root) + path.sep)) return null;
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile()) return null;
+  return { body: fs.readFileSync(full),
+           type: CTYPES[path.extname(full).toLowerCase()]
+                 || 'application/octet-stream' };
+}
+
+function registerScheme() {
+  protocol.handle(SCHEME, async (request) => {
+    const url = new URL(request.url);
+    // The theme stylesheet and its images are generated, so they come from the
+    // backend; everything else is a file next to the app.
+    if (url.pathname === '/theme.css' || url.pathname.startsWith('/theme/asset/')) {
+      const raw = await ask({ op: 'asset', path: url.pathname });
+      try {
+        const env = JSON.parse(raw);
+        const b = env.body || {};
+        if (b.data) {
+          return new Response(Buffer.from(b.data, 'base64'),
+                              { headers: { 'content-type': b.ctype || 'text/plain' } });
+        }
+      } catch (e) { /* fall through to 404 */ }
+      return new Response('', { status: 404 });
+    }
+    const got = serveFile(url.pathname);
+    if (!got) return new Response('not found', { status: 404 });
+    return new Response(got.body, { headers: { 'content-type': got.type } });
   });
 }
 
@@ -108,12 +217,64 @@ function createWindow() {
     icon: process.platform === 'linux'
       ? path.join(appRoot(), 'assets', 'icon_512.png') : undefined,
     autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,                 // preload needs require('electron')
+      preload: path.join(__dirname, 'preload.js'),
+    },
   });
-  win.loadURL(`http://127.0.0.1:${PORT}/`);
+  win.loadURL(BASE);
+  // Test hook: run a probe script once loaded and exit with its output.
+  // Only in a development checkout. It executes a file named by an
+  // environment variable, and while anyone who can set the environment of a
+  // packaged app can already run code, there is no reason to ship the
+  // shortcut.
+  if (process.env.OMERTA_E2E && !app.isPackaged) {
+    win.webContents.on('console-message', (_e, _l, msg) => {
+      if (String(msg).startsWith('PROBE ')) { console.log(msg); app.exit(0); }
+    });
+    win.webContents.once('did-finish-load', () => {
+      setTimeout(() => win.webContents.executeJavaScript(
+        require('fs').readFileSync(process.env.OMERTA_E2E, 'utf8')), 1500);
+    });
+    setTimeout(() => { console.log('PROBE {"error":"timeout"}'); app.exit(1); }, 60000);
+  }
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url); return { action: 'deny' };
   });
+}
+
+// Must be declared before the app is ready. `standard` makes relative URLs and
+// fetch() behave normally; `secure` is what makes the page a secure context.
+protocol.registerSchemesAsPrivileged([{
+  scheme: SCHEME,
+  privileges: { standard: true, secure: true, supportFetchAPI: true,
+                corsEnabled: true, stream: true },
+}]);
+
+function wireIpc() {
+  ipcMain.handle('omerta:request', (_e, method, path_, body) => {
+    let parsed = null;
+    if (body) { try { parsed = JSON.parse(body); } catch (e) { parsed = null; } }
+    return ask({ method, path: path_, body: parsed });
+  });
+  ipcMain.handle('omerta:attach-begin', (_e, name, project, note) =>
+    ask({ op: 'attach_begin', name, project, note }).then(unwrap));
+  ipcMain.handle('omerta:attach-chunk', (_e, upload, data) =>
+    ask({ op: 'attach_chunk', upload, data }).then(unwrap));
+  ipcMain.handle('omerta:attach-end', (_e, upload, size) =>
+    ask({ op: 'attach_end', upload, size }).then(unwrap));
+  ipcMain.handle('omerta:attach-abort', (_e, upload) =>
+    ask({ op: 'attach_abort', upload }).then(unwrap));
+  ipcMain.handle('omerta:ready', () => ready);
+  ipcMain.handle('omerta:last-error', () => lastError);
+}
+
+/** The upload calls answer with the payload itself, not the envelope. */
+function unwrap(raw) {
+  try { return JSON.stringify(JSON.parse(raw).body || {}); }
+  catch (e) { return raw; }
 }
 
 app.whenReady().then(async () => {
@@ -125,13 +286,16 @@ app.whenReady().then(async () => {
         { role: 'cut' }, { role: 'copy' }, { role: 'paste' },
         { role: 'selectAll' }] },
   ]));
+  registerScheme();
+  wireIpc();
   startBackend();
   try {
     await waitForBackend();
   } catch (e) {
     dialog.showErrorBox('Backend failed to start',
-      'The Python backend did not start.\n\nRun this in the app folder:\n' +
-      '  pip install -r requirements.txt\n\n' + e.message);
+      'The agent did not start.\n\n' + e.message +
+      '\n\nIf this build was packaged without its own Python, install the\n' +
+      'dependencies in the app folder:\n  pip install -r requirements.txt');
     app.quit(); return;
   }
   createWindow();

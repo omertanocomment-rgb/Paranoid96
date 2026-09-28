@@ -676,7 +676,8 @@ function tokAmp(){const t=qs.get('token');return t?('&token='+encodeURIComponent
    handed to a worker thread and the promise below is settled by
    window.__omertaResolve when the reply comes back. */
 const NATIVE = (typeof window.OmertaNative !== 'undefined' && window.OmertaNative
-                && typeof window.OmertaNative.callAsync === 'function')
+                && (typeof window.OmertaNative.callAsync === 'function'
+                 || typeof window.OmertaNative.invoke === 'function'))
              ? window.OmertaNative : null;
 let __omertaSeq = 0;
 window.__omertaPending = Object.create(null);
@@ -686,19 +687,28 @@ window.__omertaResolve = function(id, json){
   delete window.__omertaPending[id];
   fn(json);
 };
+function envelope(json){
+  let env;
+  try{ env = JSON.parse(json); }catch(e){ throw new Error('bad reply from backend'); }
+  // The transport succeeded even when the route did not; a 404 or a 500 is
+  // data the caller renders, not an exception, exactly as with fetch.
+  const out = (env && typeof env.body === 'object' && env.body !== null)
+            ? env.body : {};
+  if(env && env.status >= 400 && !out.error) out.error = 'HTTP ' + env.status;
+  return out;
+}
 function nativeCall(method, path, body){
+  // Two shapes of bridge. The desktop shell hands back a promise directly;
+  // Android has no way to return one across its JavaScript interface, so it
+  // takes a request id and calls __omertaResolve when the reply is ready.
+  if(typeof NATIVE.invoke === 'function'){
+    return NATIVE.invoke(method, path, body == null ? '' : JSON.stringify(body))
+                 .then(envelope);
+  }
   return new Promise((resolve, reject)=>{
     const id = 'c' + (++__omertaSeq);
     window.__omertaPending[id] = (json)=>{
-      let env;
-      try{ env = JSON.parse(json); }
-      catch(e){ return reject(new Error('bad reply from backend')); }
-      // The transport succeeded even when the route did not; a 404 or a 500
-      // is data the caller renders, not an exception, exactly as with fetch.
-      const out = (env && typeof env.body === 'object' && env.body !== null)
-                ? env.body : {};
-      if(env && env.status >= 400 && !out.error) out.error = 'HTTP ' + env.status;
-      resolve(out);
+      try{ resolve(envelope(json)); }catch(e){ reject(e); }
     };
     try{
       NATIVE.callAsync(id, method, path, body == null ? '' : JSON.stringify(body));
@@ -1469,14 +1479,17 @@ async function doAttach(){
    disk rather than by RAM. */
 async function nativeUpload(f, label, box){
   let beg;
-  try{ beg = JSON.parse(NATIVE.attachBegin(f.name, project||'', '')); }
+  // await works on a plain string too, so this serves both bridges: the
+  // desktop one answers with a promise, Android answers immediately.
+  try{ beg = JSON.parse(await NATIVE.attachBegin(f.name, project||'', '')); }
   catch(e){ return {error:'could not start the upload: '+(e.message||e)}; }
   if(beg.error) return beg;
   const SLICE = 512*1024;
   try{
     for(let off=0; off<f.size; off+=SLICE){
       const buf = await f.slice(off, off+SLICE).arrayBuffer();
-      const r = JSON.parse(NATIVE.attachChunk(beg.id, b64(new Uint8Array(buf))));
+      const r = JSON.parse(await NATIVE.attachChunk(beg.id,
+                                                    b64(new Uint8Array(buf))));
       if(r.error){ try{NATIVE.attachAbort(beg.id);}catch(_){} return r; }
       if(box){
         const pct = f.size ? Math.floor(100*Math.min(off+SLICE,f.size)/f.size) : 100;
@@ -1486,7 +1499,7 @@ async function nativeUpload(f, label, box){
       // let the UI paint between slices
       await new Promise(r2=>setTimeout(r2,0));
     }
-    return JSON.parse(NATIVE.attachEnd(beg.id, String(f.size)));
+    return JSON.parse(await NATIVE.attachEnd(beg.id, String(f.size)));
   }catch(e){
     try{ NATIVE.attachAbort(beg.id); }catch(_){}
     return {error:'upload failed: '+(e.message||e)};

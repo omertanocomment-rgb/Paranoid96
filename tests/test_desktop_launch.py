@@ -55,7 +55,11 @@ print("=== desktop launch ===")
 js = MAIN.read_text()
 check("the launcher runs omerta_entry.py, not server.py",
       "'omerta_entry.py'" in js and "'server.py'" not in js)
-check("it asks that entry point to serve", "'serve'" in js)
+# It asks for `bridge` now, not `serve`: the shell owns the Python process and
+# talks to it over a pipe, so there is no server and no port. `serve` remains
+# for a LAN backend someone runs deliberately.
+check("it asks that entry point for the pipe bridge", "'bridge'" in js)
+check("and does not start a server", "'serve'" not in js)
 check("a bundled interpreter is preferred over PATH", "bundledPython" in js)
 
 pkg = json.loads(PKG.read_text())

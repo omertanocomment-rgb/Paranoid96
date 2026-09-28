@@ -172,6 +172,52 @@ def main():
               up["r"].get("bytes") == up["size"], up["r"])
         check("and the filename survives", up["r"].get("name") == "big.bin", up["r"])
 
+        # ── the other bridge shape: a promise, as the desktop shell gives ──
+        # Android cannot return a promise across its JavaScript interface, so
+        # it answers by id; the Electron preload resolves one directly. Both
+        # have to work, because the page is the same page.
+        page3 = browser.new_page()
+        PROMISE_STUB = """
+        window.__seen = [];
+        window.__httpUsed = false;
+        window.fetch = function(){ window.__httpUsed = true;
+                                   return Promise.reject(new Error('no HTTP here')); };
+        window.OmertaNative = {
+          invoke: function(method, path, body){
+            window.__seen.push(method + ' ' + path);
+            return Promise.resolve(JSON.stringify(
+              path.indexOf('/api/nope') === 0
+                ? {status:404, body:{error:'no route'}}
+                : {status:200, body:{ok:true, saw:method+' '+path, sent:body||''}}));
+          },
+          attachBegin: function(n){ return Promise.resolve(JSON.stringify({id:'u1'})); },
+          attachChunk: function(){ return Promise.resolve('{"written":1}'); },
+          attachEnd: function(i,s){ return Promise.resolve(JSON.stringify({id:'a1',bytes:Number(s)})); },
+          attachAbort: function(){ return Promise.resolve('{}'); },
+          ready: function(){ return Promise.resolve(true); },
+          lastError: function(){ return Promise.resolve(''); }
+        };
+        """
+        page3.set_content(html.replace("<head>",
+                                       "<head>\n<script>" + PROMISE_STUB + "</script>", 1))
+        check("a promise-shaped bridge is detected too",
+              page3.evaluate("() => !!NATIVE") is True)
+        g = page3.evaluate("async () => await get('/api/status')")
+        check("get() works through it", g.get("saw") == "GET /api/status", g)
+        pp = page3.evaluate("async () => await post('/api/chat',{text:'hi'})")
+        check("post() carries its body through it",
+              json.loads(pp.get("sent") or "{}").get("text") == "hi", pp)
+        nf3 = page3.evaluate("async () => await get('/api/nope')")
+        check("a 404 is still data, not an exception", nf3.get("error") == "no route", nf3)
+        up3 = page3.evaluate("""async () => {
+            const f = new File([new Uint8Array(700000)], 'x.bin');
+            return await nativeUpload(f, '1 of 1', null);
+        }""")
+        check("chunked upload works against promises as well",
+              up3.get("bytes") == 700000, up3)
+        check("and still nothing went over HTTP",
+              page3.evaluate("() => window.__httpUsed") is False)
+
         # ── without the bridge, nothing changes for the desktop ────────────
         page2 = browser.new_page()
         page2.set_content(html)
