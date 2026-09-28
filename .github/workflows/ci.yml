@@ -1,12 +1,25 @@
 name: ci
 
+# Every artifact this project ships, built and checked on every push -- so a
+# release does not depend on one machine, or on anyone remembering the steps.
+#
+# The audit gate runs FIRST and everything else needs it. That is the same rule
+# the local build follows: scripts/audit.py refuses to package on a finding, and
+# a CI that packaged anyway would quietly undo it.
+
 on:
-  push: { branches: [main] }
+  push:
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  gate:
+    name: audit gate + tests
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -20,52 +33,116 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: safety + integration suites
-        run: bash tests/run_all.sh
-
-  package:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install build twine
-      - name: build wheel
+      # The browser-driven suites (copy buttons, provider reasons, the
+      # in-process bridge) skip themselves when Playwright is absent rather
+      # than failing, but they are worth actually running.
+      - name: browser for the UI suites
         run: |
-          bash scripts/_stage_package.sh
-          cd build_pkg && python -m build
-      - name: validate distribution metadata
-        run: twine check build_pkg/dist/*
-      - uses: actions/upload-artifact@v4
-        with:
-          name: python-dist
-          path: build_pkg/dist/*
+          pip install playwright
+          python -m playwright install --with-deps chromium
+        continue-on-error: true
+      - name: audit gate
+        run: python scripts/audit.py --phase "ci ${{ matrix.python }}"
 
   android:
+    name: universal apk
+    needs: gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
       # Chaquopy runs pip on the build host to assemble the in-APK Python, so a
-      # host Python 3.8–3.13 must be on PATH.
+      # host Python 3.8-3.13 must be on PATH.
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - uses: android-actions/setup-android@v3
-      - name: build debug apk (embedded Python backend)
-        run: cd android-native && gradle assembleDebug --no-daemon
-      - name: build release apk
-        continue-on-error: true
+      - name: stamp this build
+        run: python scripts/stamp_build.py android
+      # Both ABIs. Shipping arm64 only made the app refuse to install on a
+      # 32-bit phone for eight releases, so the ABI set is explicit here.
+      - name: assemble release (arm64-v8a + armeabi-v7a)
         env:
           OMERTA_KEYSTORE: ${{ secrets.OMERTA_KEYSTORE_PATH }}
           OMERTA_STORE_PASS: ${{ secrets.OMERTA_STORE_PASS }}
           OMERTA_KEY_ALIAS: ${{ secrets.OMERTA_KEY_ALIAS }}
           OMERTA_KEY_PASS: ${{ secrets.OMERTA_KEY_PASS }}
-        run: cd android-native && gradle assembleRelease --no-daemon
+        run: cd android-native && gradle assembleRelease -PomertaAbi=arm64-v8a,armeabi-v7a --no-daemon
+      - name: check what actually got packaged
+        run: |
+          set -e
+          APK=$(find android-native -name '*-release*.apk' | head -1)
+          echo "built $APK"
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+          "$AAPT" dump badging "$APK" | grep -E '^package|native-code'
+          # An APK carrying only one ABI is the bug this line exists to catch.
+          "$AAPT" dump badging "$APK" | grep -q "armeabi-v7a" || {
+            echo "::error::the APK is missing armeabi-v7a"; exit 1; }
       - uses: actions/upload-artifact@v4
-        with: { name: apk, path: android-native/app/build/outputs/apk/**/*.apk }
+        with:
+          name: omerta-apk
+          path: android-native/app/build/outputs/apk/**/*.apk
+
+  linux:
+    name: deb + desktop app
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: gtk + webkit for the desktop window
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 xvfb dpkg-dev
+      - name: build the .deb
+        run: bash packaging/build-deb.sh
+      - name: install it and run the app
+        run: |
+          set -e
+          sudo apt-get install -y ./dist/omerta-agent_*_all.deb
+          omerta --version
+          # The window is the deliverable, so it gets started rather than
+          # assumed: a .deb that installs but cannot open is not a desktop app.
+          xvfb-run -a timeout 60 python3 tests/test_desktop_native.py
+      - uses: actions/upload-artifact@v4
+        with: { name: omerta-deb, path: dist/*.deb }
+
+  windows:
+    name: windows installer
+    needs: gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: stamp this build
+        run: python scripts/stamp_build.py windows
+      - name: stage the bundled interpreter
+        shell: bash
+        run: bash scripts/fetch_win_runtime.sh
+      - name: build
+        shell: bash
+        run: |
+          cd desktop
+          npm ci || npm install
+          # A real Windows runner builds the NSIS installer natively. On Linux
+          # electron-builder has to RUN the installer it just made to generate
+          # the uninstaller, which needs 32-bit Wine -- this is why the build
+          # here produces a proper setup.exe and a local one cannot.
+          npx electron-builder --win --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omerta-windows
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.blockmap
 
   secrets-scan:
+    name: secrets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

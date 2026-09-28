@@ -817,10 +817,69 @@ function addApproval(p){
   log.appendChild(d); log.scrollTop=log.scrollHeight;
 }
 
+/* Streaming.
+
+   A turn can take a minute, and watching a static "thinking" dot for that long
+   makes a working agent look hung. The backend runs the turn on a thread and
+   this polls it by offset, the same way the terminal reads its output -- which
+   is what lets it work identically over HTTP, the app's in-process bridge, the
+   desktop pipe and the GTK scheme. None of those can hold an SSE stream open.
+
+   The streamed text is the MODEL's raw output, so a turn that ends in a tool
+   call streams the call syntax too. That is why the final result replaces what
+   was streamed rather than being appended to it. */
+let streamOn = true;
+function streamBubble(){
+  const d=document.createElement('div');
+  d.className='msg agent streaming';
+  // Same shape as addMsg so the bubble does not jump when the final text
+  // replaces it. The body is set with textContent while streaming: half a
+  // markdown fence rendered as HTML flickers, and the model's raw output may
+  // contain a partial tool call.
+  d.innerHTML='<div class="meta">omerta<span class="tiny" '+
+    'style="margin-left:8px;opacity:.6">writing…</span></div>'+
+    '<div class="body" style="white-space:pre-wrap"></div>';
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+  return d;
+}
+async function chatStreamed(payload){
+  const started = await post('/api/chat/start', payload);
+  if(!started || !started.stream_id) throw new Error('could not start the turn');
+  document.querySelectorAll('.thinking').forEach(x=>x.remove());
+  const bubble = streamBubble();
+  const body = bubble.querySelector('.body');
+  let offset = 0, text = '';
+  for(;;){
+    const p = await get('/api/chat/poll?id='+encodeURIComponent(started.stream_id)+
+                        '&offset='+offset);
+    if(p.error && !p.done) throw new Error(p.error);
+    if(p.text){ text += p.text; body.textContent = text;
+                log.scrollTop = log.scrollHeight; }
+    offset = p.offset || offset;
+    if(p.done){
+      bubble.remove();
+      if(p.error) throw new Error(p.error);
+      return p.result || {text:text, pending:null};
+    }
+    await new Promise(r=>setTimeout(r, 120));
+  }
+}
 async function chat(payload){
   payload.project=project;
   try{
-    const data = await post('/api/chat',payload);
+    let data;
+    if(streamOn && payload.kind==='message'){
+      try{ data = await chatStreamed(payload); }
+      catch(e){
+        // A backend without the streaming routes, or a stream that died: fall
+        // back to the plain turn rather than losing the message.
+        document.querySelectorAll('.msg.streaming').forEach(x=>x.remove());
+        streamOn = false;
+        data = await post('/api/chat',payload);
+      }
+    }else{
+      data = await post('/api/chat',payload);
+    }
     render(data);
     /* The queue drains itself. It pauses on a pending approval, because the
        whole point of the gate is that you look at each one — a queue that

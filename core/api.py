@@ -18,7 +18,8 @@ import time
 from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
                index as codeindex, scratch, theme, version, toolbox, localai,
-               attach, models as modelstore, adbclient, backup, usage)
+               attach, models as modelstore, adbclient, backup, usage,
+               streams)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -376,19 +377,20 @@ def sync_run(payload: dict) -> dict:
 
 
 # ── chat protocol (plain request/response) ──────────────────────────────────
-def dispatch(agent: Agent, msg: dict) -> dict:
+def dispatch(agent: Agent, msg: dict, stream_cb=None) -> dict:
     """Turn one inbound chat message into an agent action + result.
 
-    Plain request/response — one POST in, one JSON reply out, no streaming and
-    no socket. Each turn already returns the agent's full result (including any
-    pending approval), so nothing is lost by not streaming. This is the single
-    implementation of the chat protocol; every side effect the agent proposes
-    still suspends for approval inside `agent`. This only routes the user's
-    intent (send / approve / deny / edit / reset).
+    Request/response by default, and no socket ever. When `stream_cb` is given
+    the model's text is handed over as it arrives as well, which is what makes
+    a reply appear as it is written rather than all at once; the final result
+    is unchanged either way, so a client that ignores streaming loses nothing.
+    This is the single implementation of the chat protocol; every side effect
+    the agent proposes still suspends for approval inside `agent`. This only
+    routes the user's intent (send / approve / deny / edit / reset).
     """
     kind = (msg or {}).get("kind", "message")
     if kind == "message":
-        return agent.turn(msg.get("text", ""))
+        return agent.turn(msg.get("text", ""), stream_cb=stream_cb)
     if kind == "approve":
         return agent.approve()
     if kind == "deny":
@@ -416,6 +418,36 @@ def chat(payload: dict) -> dict:
         result = dispatch(agent, payload)
         _persist_turn(project, payload, result)
         return result
+
+
+def chat_start(payload: dict) -> dict:
+    """Begin a streaming turn and return the id to poll.
+
+    Same routing, same approval gate, same persistence as `chat()` -- the only
+    difference is that the model's text is handed over as it arrives instead of
+    all at once at the end. The per-project lock is taken INSIDE the worker, so
+    starting a turn never blocks the caller waiting on another project's reply.
+    """
+    payload = payload or {}
+    project = payload.get("project", "general")
+
+    def work(write):
+        agent = get_agent(project)
+        with _lock_for(project):
+            result = dispatch(agent, payload, stream_cb=write)
+            _persist_turn(project, payload, result)
+            return result
+
+    return {"stream_id": streams.start(work), "streaming": True}
+
+
+def chat_poll(stream_id: str, offset: int = 0) -> dict:
+    """Whatever has arrived since `offset`, and the result once it is done."""
+    return streams.poll(stream_id, offset)
+
+
+def chat_cancel(payload: dict) -> dict:
+    return streams.cancel((payload or {}).get("id", ""))
 
 
 def _persist_turn(project: str, payload: dict, result: dict) -> None:

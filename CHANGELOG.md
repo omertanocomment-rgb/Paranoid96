@@ -4,6 +4,57 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] — 2026-09-28
+
+Merged with the native console project. What that codebase had and this did not
+was streaming and CI; what this had and that did not was the whole on-device
+agent. Both now exist in one place.
+
+### Added
+- **Replies stream as they are written.** A turn can take a minute, and a
+  static "thinking" dot for that long makes a working agent look hung. The
+  obvious answer is server-sent events, which needs a live HTTP connection —
+  and this agent runs over four transports, three of which have nowhere to put
+  one (the app calls Python in-process, the desktop shell talks over a pipe,
+  the GTK window answers its own URI scheme). So a turn runs on a thread and
+  the client polls by offset (`core/streams.py`, `/api/chat/start`,
+  `/api/chat/poll`), exactly as the terminal already streams its output. One
+  pattern, every transport, and the poll is exactly-once: a slow or dropped
+  poll loses nothing and repeats nothing. A client that ignores streaming gets
+  the identical final result.
+- **The project's constitution reaches the model** (`core/constitution.py`).
+  `OMERTA.md` has been in this repository since early on, stating what the
+  agent must always do and never do — and nothing read it. The approval gate
+  enforces what can be expressed in code; the rest is behaviour, and behaviour
+  comes from the prompt. A repository's own `OMERTA.md` or `CLAUDE.md` is found
+  by walking up from the working directory and outranks the shipped charter.
+  Bounded, and tighter still for a small local model, so rules can never crowd
+  out the conversation — and truncation is stated rather than silently cutting
+  a rule in half.
+- **CI that builds everything** (`.github/workflows/ci.yml`). The audit gate
+  runs first and every build depends on it, mirroring the local rule that
+  `scripts/audit.py` refuses to package on a finding. It builds the universal
+  APK and *fails the run* if the result is missing `armeabi-v7a` — the bug that
+  shipped for eight releases; builds the `.deb`, installs it and starts the
+  desktop window under a virtual display; and builds the Windows installer on a
+  real Windows runner, which produces a proper NSIS setup.exe that a Linux
+  machine cannot (electron-builder has to run the installer it just made, which
+  needs 32-bit Wine).
+- **`tests/test_streaming.py`** — text is readable *before* the turn ends (a
+  test that only checked the final text would pass for a non-streaming
+  implementation), offsets never drop or duplicate, and a turn that raises
+  reaches the client as data instead of vanishing on a thread.
+- **`tests/test_constitution.py`** — the rules reach both prompts, a project's
+  own file wins, an enormous one is bounded, and an undecodable one degrades.
+
+### Notes on the merge
+The uploaded project's engine is a smaller sibling of `core/` (2,600 lines
+against 10,600) and its Android console is a thin client that calls Claude
+directly. Its genuinely better ideas were streaming and CI, and both are here.
+Its native Compose UI remains the one thing not yet taken: adopting it would
+mean rebuilding the terminal, editor, chats, learn and settings tabs that the
+current UI already provides, and is a project of its own rather than a merge.
+
 ## [1.10.0] — 2026-09-28
 
 The backend is part of the app now, on both platforms. No HTTP server, no port,

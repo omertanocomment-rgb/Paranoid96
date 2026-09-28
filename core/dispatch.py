@@ -109,6 +109,12 @@ def _get(path, query):
             archived=str(_one(query, "archived", "0")) in ("1", "true"))
     if path == "/api/chats/open":
         return 200, api.chat_open(_one(query, "id", "") or "")
+    if path == "/api/chat/poll":
+        # Streaming is a poll by offset, exactly like the terminal's, so it
+        # works the same over HTTP, the app's in-process bridge, the desktop
+        # pipe and the GTK scheme. None of those can hold an SSE stream open.
+        return 200, api.chat_poll(_one(query, "id", "") or "",
+                                  _int(query, "offset", 0))
     if path == "/api/term/read":
         return 200, api.term_read({"id": _one(query, "id", "") or "",
                                    "offset": _int(query, "offset", 0)})
@@ -119,6 +125,8 @@ def _get(path, query):
 # Routes that take the request body and nothing else.
 _POST_BODY = {
     "/api/chat": api.chat,
+    "/api/chat/start": api.chat_start,
+    "/api/chat/cancel": api.chat_cancel,
     "/api/model": api.set_model,
     "/api/mode": api.set_mode,
     "/api/sync/push": api.sync_push,

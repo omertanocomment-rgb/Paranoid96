@@ -18,7 +18,7 @@ import yaml
 import time
 
 from . import (config, memory, router, sandbox, skills, plugins, mcp, executor,
-               toolparse, roles, policy, modes)
+               toolparse, roles, policy, modes, constitution, workspace)
 from .providers import ProviderError
 from tools import fileops, devtools, firmware, checkpoint_tools
 
@@ -103,6 +103,20 @@ def _share_across_projects():
     return not config.flag("OMERTA_STRICT_PROJECT")
 
 
+def _project_root(project):
+    """Where to look for the rules: the project's workspace, else the cwd.
+
+    A project being worked on has its own directory, and the rules in it are
+    the ones that apply -- a repository's CLAUDE.md outranks the agent's own
+    shipped charter for work inside that repository.
+    """
+    try:
+        roots = workspace.roots()
+        return roots[0] if roots else None
+    except Exception:  # noqa: BLE001 -- no workspace is not an error here
+        return None
+
+
 def system_prompt(project, user_text=""):
     p = _persona()
     if config.COMPACT:
@@ -126,11 +140,17 @@ Finished? Reply in plain text with no tool block."""]
         if rb:
             blocks.insert(1, rb)
         blocks.insert(1, modes.prompt_block())
+        rules = constitution.block(_project_root(project), compact=True)
+        if rules:
+            blocks.insert(1, rules)
         if mem:
             blocks.append(mem)
         return "\n\n".join(blocks)
 
     parts = [p.get("voice", "")]
+    rules = constitution.block(_project_root(project))
+    if rules:
+        parts.append(rules)
     parts.append(modes.prompt_block())
     rb = roles.block()
     if rb:
@@ -336,7 +356,7 @@ class Agent:
                 self.history.pop(0)
 
     # ── main loop ────────────────────────────────────────────────────────
-    def _loop(self, max_iters=None):
+    def _loop(self, max_iters=None, stream_cb=None):
         self._trim_history()
         max_iters = max_iters or config.MAX_TOOL_ITERS
         tool_log = []
@@ -346,7 +366,8 @@ class Agent:
             sysmsg = system_prompt(self.project,
                                    self.history[-1]["content"] if self.history else "")
             try:
-                r = router.complete(self.history, system=sysmsg)
+                r = router.complete(self.history, system=sysmsg,
+                                    stream_cb=stream_cb)
             except ProviderError as e:
                 return {"text": f"**No model available.**\n\n{e}", "provider": None,
                         "tool_log": tool_log, "pending": None}
@@ -393,9 +414,16 @@ class Agent:
         return {"text": "Hit the tool-iteration cap. Say `continue` to keep going.",
                 "provider": last.get("provider"), "tool_log": tool_log, "pending": None}
 
-    def turn(self, user_message):
+    def turn(self, user_message, stream_cb=None):
+        """One turn. `stream_cb` receives the model's text as it arrives.
+
+        Only the model's own output is streamed, not tool results: the caller
+        gets those in the final reply. A turn that ends in a tool call will
+        have streamed text containing the call syntax, which is why the final
+        result carries the cleaned text -- the UI replaces what it streamed.
+        """
         self.history.append({"role": "user", "content": user_message})
-        return self._loop()
+        return self._loop(stream_cb=stream_cb)
 
     # ── approval handling ────────────────────────────────────────────────
     def approve(self):
