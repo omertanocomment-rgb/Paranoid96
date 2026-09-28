@@ -135,3 +135,20 @@ def test_config_writes_companion_files(tmp_path, monkeypatch):
     proj = scaffold_project(tmp_path)
     for sub in ("artifacts", "snapshots", "reports"):
         assert (proj / sub).is_dir()
+
+
+def test_router_reads_providers_toml(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMERTA_HOME", str(tmp_path))
+    (tmp_path / "providers.toml").write_text(
+        "[openai]\nenabled = false\n\n"
+        "[ollama]\nenabled = true\ndefault_model = \"llama3.2\"\n\n"
+        "[routing]\nlocal = \"ollama:llama3.2\"\n"
+    )
+    from omerta.config import Config
+    from omerta.models.router import Router
+    r = Router(Config())
+    status = dict((n, ok) for n, ok, _ in r.status())
+    assert status["openai"] is False   # disabled via providers.toml
+    assert r.model_for("local") == "ollama:llama3.2"   # category routing honored
+    p, m = r.resolve("ollama:llama3.2")
+    assert p.name == "ollama" and m == "llama3.2"
