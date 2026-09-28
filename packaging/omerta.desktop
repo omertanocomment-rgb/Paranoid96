@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=OMERTA AI
+GenericName=Coding and firmware agent
+Comment=Offline-capable coding and firmware agent that asks before it acts
+Exec=omerta-desktop %U
+Icon=omerta-agent
+Terminal=false
+Categories=Development;IDE;Utility;
+Keywords=agent;ai;code;firmware;android;
+StartupNotify=true
+StartupWMClass=omerta-desktop

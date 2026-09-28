@@ -4,6 +4,79 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] — 2026-09-28
+
+The backend is part of the app now, on both platforms. No HTTP server, no port,
+no terminal.
+
+### Fixed
+- **No model worked, even with an API key.** In auto mode `complete()` asked
+  `has_internet()` and, on a False answer, REMOVED every provider marked
+  `needs_internet` from the routing order — leaving only local providers, none
+  of them running, and reporting "No model available" without ever mentioning
+  the cloud provider holding a valid key. The probe opened a raw socket to
+  `1.1.1.1:443` and `8.8.8.8:53`; carrier networks, captive portals and phones
+  that force their own resolver block both while `api.anthropic.com` stays
+  reachable. A guess about the network was overriding a fact about the
+  configuration. The probe now resolves DNS first and may only REORDER
+  providers, never remove a configured one — whether a provider works is
+  decided by calling it. Offline *mode* still excludes them, explicitly,
+  because that is an instruction rather than a guess.
+
+### Changed
+- **The Android app no longer runs a server.** Routing moved to
+  `core/dispatch.py` as plain functions over (method, path, query, body).
+  `core/httpd.py` delegates to it (468 → 305 lines) and the app calls it
+  directly through Chaquopy. Same routes, same approval gate, same wire format;
+  nothing listening on the device. The loopback server remains for reaching the
+  backend from the LAN, off unless asked for (`OMERTA_ANDROID_HTTP=1`).
+- The page is served from a synthetic `https://omerta.local/` origin via
+  `shouldInterceptRequest`, which makes it a **secure context** — so
+  `navigator.clipboard` and `getUserMedia` work, where `http://127.0.0.1` left
+  both unavailable and the copy buttons needing a fallback.
+- The JavaScript bridge is asynchronous. The synchronous form blocks the JS
+  thread, and a chat turn can take a minute — on a phone, a frozen app with no
+  spinner. Uploads are chunked through it, so a large file is still never
+  assembled in memory.
+- **One definition of the local-only list**, in `core/dispatch.py`, which every
+  transport routes through. Two copies is how `/api/attach` came to be
+  local-only on one server and open on the other.
+
+### Added
+- **A native Linux desktop application** (`desktop_native/omerta_desktop.py`,
+  `omerta-desktop`). A real installed program: applications-menu entry, icons
+  at eight sizes, its own GTK window. It registers a private `omerta://` URI
+  scheme and answers every request — page, assets and `/api/...` — from
+  `core/dispatch` in-process. No HTTP server, no port, no terminal, no browser
+  tab. WebKit has handed request bodies to scheme handlers since 2.40, so the
+  UI needs no special case at all: `fetch('/api/x')` simply arrives.
+- The `.deb` installs that application, depends on `python3-gi`,
+  `gir1.2-gtk-3.0` and `gir1.2-webkit2-4.1`, and refreshes the desktop database
+  and icon cache so the entry appears without a logout. The launcher explains
+  itself if those bindings are missing for the running Python instead of
+  printing a traceback about `_gi`.
+- **`tests/test_routing.py`** — a keyed provider survives a failed probe, an
+  unkeyed one is not attempted, offline mode still excludes cloud providers.
+- **`tests/test_ui_bridge.py`** — the UI driven in a real browser against a
+  stubbed native interface: requests go through the bridge and *not* HTTP, the
+  call is genuinely asynchronous (a synchronous implementation fails the test),
+  a 404 arrives as data rather than an exception, and a 1.3 MiB file is sent in
+  three slices.
+- **`tests/test_desktop_native.py`** — 26 checks, including the real window
+  under Xvfb: the UI loads with its tabs, GET and POST both reach the backend
+  through the private scheme, the page is a secure context, and path traversal
+  out of the served directories is refused.
+- The audit gate now also checks the dynamic `py("name", ...)` dispatch in the
+  Android bridge, which would otherwise be the only unchecked Java→Python calls
+  in the app.
+
+### Notes on verification
+The desktop app was installed from the `.deb` and driven from `/opt` under a
+virtual display: title, tabs, `/api/version` returning 1.10.0 and a build
+channel of "deb", ten providers listed, POST bodies arriving. The APK was
+verified to carry `core/dispatch.py` and the compiled bridge entry points. The
+Android side has not yet been run on a handset.
+
 ## [1.9.3] — 2026-09-28
 
 Desktop packages that work on a machine nobody has prepared. Building them
