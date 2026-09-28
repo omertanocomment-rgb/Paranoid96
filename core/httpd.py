@@ -20,7 +20,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import config, auth, mcp, api
+from . import config, auth, mcp, api, dispatch
 
 PUBLIC_PATHS = {"/favicon.ico", "/icon.svg"}
 _CTYPES = {".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
@@ -52,20 +52,13 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:  # noqa: BLE001
             return None
 
-    # Surfaces that are DIRECT OPERATION of this device rather than the agent
-    # acting: a shell, the editor's writes, a sandbox that executes commands,
-    # and learning a file by absolute path. None of them route through the
-    # approval gate, because you are the one driving them -- which is exactly
-    # why none of them may be driven from another machine. /api/chat is not
-    # here: it goes through the gate, so a token is enough for it.
-    LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path",
-                  "/api/localai", "/api/attach",
-                  "/api/models", "/api/adb",
-                  "/api/backup")
+    # The local-only list lives in core/dispatch, so every transport enforces
+    # the same one. Two copies is how /api/attach came to be local-only on one
+    # server and open on the other.
+    LOCAL_ONLY = dispatch.LOCAL_ONLY
 
     def _is_local_only(self, path):
-        return any(path == p.rstrip("/") or path.startswith(p)
-                   for p in self.LOCAL_ONLY)
+        return dispatch.is_local_only(path)
 
     def _local(self):
         """Did this request genuinely come from this device? Forwarding
@@ -239,79 +232,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(f"web UI unreadable: {e}".encode(),
                                   "text/plain", 500)
             return self._send(html.encode(), "text/html; charset=utf-8")
-        if path == "/api/status":
-            return self._json(api.status_payload())
-        if path == "/api/version":
-            return self._json(api.version_payload())
-        if path == "/api/localai":
-            return self._json(api.localai_status())
-        if path == "/api/usage":
-            q = self._query()
-            return self._json(api.usage_summary(
-                days=int((q.get("days") or [30])[0]),
-                project=(q.get("project") or [None])[0]))
-        if path == "/api/models":
-            return self._json(api.models_status())
-        if path == "/api/attach":
-            return self._json(api.attachments_payload(
-                (self._query().get("project") or [None])[0]))
+        # Streaming download: the bytes must not be assembled in memory, so it
+        # cannot go through the shared dispatcher.
         if path.startswith("/api/attach/"):
             return self._send_attachment(path[len("/api/attach/"):])
-        if path == "/api/memory":
-            q = self._query()
-            return self._json(api.memory_payload(
-                (q.get("q") or [""])[0], project=(q.get("project") or [None])[0],
-                k=int((q.get("k") or [25])[0])))
-        if path == "/api/history":
-            n = int((self._query().get("n") or [50])[0])
-            return self._json(api.history_payload(n))
-        if path == "/api/sync/pull":
-            q = self._query()
-            return self._json(api.sync_pull(
-                since=float((q.get("since") or [0])[0]),
-                project=(q.get("project") or [None])[0]))
-        if path == "/api/sync/status":
-            return self._json(api.sync_status())
-        if path == "/api/secret":
-            return self._json(api.secret_status())
-        if path == "/api/policy":
-            return self._json(api.policy_status())
-        if path == "/api/settings":
-            return self._json(api.settings_payload())
-        if path == "/api/workmode":
-            return self._json(api.mode_status())
-        if path == "/api/learn":
-            q = self._query()
-            return self._json(api.learn_list((q.get("project") or [None])[0]))
-        if path == "/api/learn/doc":
-            return self._json(api.learn_read((self._query().get("id") or [""])[0]))
-        if path == "/api/learn/behaviour":
-            q = self._query()
-            return self._json(api.learned_behaviour((q.get("project") or [None])[0]))
-        if path == "/api/chats":
-            q = self._query()
-            return self._json(api.chat_list(
-                (q.get("project") or [None])[0],
-                archived=(q.get("archived") or ["0"])[0] in ("1", "true")))
-        if path == "/api/theme":
-            return self._json(api.theme_list())
-        if path == "/api/scratch":
-            return self._json(api.scratch_list())
-        if path == "/api/ws/backups":
-            return self._json(api.ws_backups())
-        if path == "/api/chats/projects":
-            return self._json(api.chat_projects())
-        if path == "/api/chats/open":
-            return self._json(api.chat_open((self._query().get("id") or [""])[0]))
-        if path.startswith("/api/term"):
-            if path == "/api/term":
-                return self._json(api.term_list())
-            if path == "/api/term/read":
-                q = self._query()
-                return self._json(api.term_read(
-                    {"id": (q.get("id") or [""])[0],
-                     "offset": int((q.get("offset") or [0])[0])}))
-        return self._json({"error": f"no route {path}"}, 404)
+
+        status, payload = dispatch.handle("GET", path, query=self._query(),
+                                          local=self._local())
+        return self._json(payload, status)
 
     # -- POST -----------------------------------------------------------------
     def do_POST(self):
@@ -320,105 +248,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._unauthorized()
         if self._is_local_only(path) and not self._local():
             return self._json({"error": f"{path} is local-only"}, 403)
-        if path == "/api/chat":
-            return self._json(api.chat(self._body()))
-        if path == "/api/model":
-            return self._json(api.set_model(self._body()))
-        if path == "/api/mode":
-            return self._json(api.set_mode(self._body()))
-        if path == "/api/sync/push":
-            return self._json(api.sync_push(self._body()))
-        if path == "/api/sync/run":
-            return self._json(api.sync_run(self._body()))
-        if path == "/api/plugins/reload":
-            return self._json(api.reload_plugins())
-        if path == "/api/connectors/reconnect":
-            return self._json(api.reconnect())
-        if path == "/api/secret":
-            # writing a secret is only ever allowed from the local device,
-            # in addition to core.api's ALLOW_SECRET_API gate.
-            if not self._local():
-                return self._json({"error": "secrets can only be set locally"}, 403)
-            return self._json(api.set_secret(self._body()))
-        if path == "/api/localai":
-            return self._json(api.localai_control(self._body()))
-        if path == "/api/models":
-            return self._json(api.models_control(self._body()))
-        if path == "/api/adb":
-            return self._json(api.adb_control(self._body()))
-        if path == "/api/backup":
-            return self._json(api.backup_control(self._body()))
-        if path == "/api/usage":
-            return self._json(api.usage_control(self._body()))
-        if path == "/api/attach/delete":
-            return self._json(api.attachment_delete(self._body()))
+        # Streaming upload: no size cap and nothing held in memory, so it
+        # cannot go through the shared dispatcher.
         if path == "/api/attach":
             return self._json(self._recv_attachment())
-        if path == "/api/policy":
-            return self._json(api.set_policy(self._body()))
-        if path == "/api/settings":
-            return self._json(api.set_settings(self._body()))
-        if path == "/api/workmode":
-            return self._json(api.set_work_mode(self._body()))
-        if path == "/api/learn/upload":
-            return self._json(api.learn_upload(self._body()))
-        if path == "/api/learn/path":
-            return self._json(api.learn_add_path(self._body()))
-        if path == "/api/learn/forget":
-            return self._json(api.learn_forget(self._body()))
-        if path == "/api/chats/new":
-            return self._json(api.chat_new(self._body()))
-        if path.startswith("/api/theme/"):
-            verbs = {"use": api.theme_use, "save": api.theme_save,
-                     "delete": api.theme_delete, "image": api.theme_image,
-                     "clear": api.theme_clear_image}
-            fn = verbs.get(path[len("/api/theme/"):])
-            if fn:
-                return self._json(fn(self._body()))
-        if path.startswith("/api/scratch/"):
-            verbs = {"new": api.scratch_new, "run": api.scratch_run,
-                     "changes": api.scratch_changes, "diff": api.scratch_diff,
-                     "propose": api.scratch_propose, "accept": api.scratch_accept,
-                     "discard": api.scratch_discard}
-            fn = verbs.get(path[len("/api/scratch/"):])
-            if fn:
-                return self._json(fn(self._body()))
-        if path == "/api/ws/tree":
-            return self._json(api.ws_tree(self._body()))
-        if path == "/api/ws/read":
-            return self._json(api.ws_read(self._body()))
-        if path == "/api/ws/propose":
-            return self._json(api.ws_propose(self._body()))
-        if path == "/api/ws/commit":
-            return self._json(api.ws_commit(self._body()))
-        if path == "/api/ws/backup":
-            return self._json(api.ws_backup_read(self._body()))
-        if path == "/api/ws/reindex":
-            return self._json(api.ws_reindex(self._body()))
-        if path == "/api/ws/search":
-            return self._json(api.ws_search(self._body()))
-        if path == "/api/chats/export":
-            return self._json(api.chat_action(
-                {**(self._body() or {}), "action": "export"}))
-        if path == "/api/chats/import":
-            return self._json(api.chat_action(
-                {**(self._body() or {}), "action": "import"}))
-        if path == "/api/chats/action":
-            return self._json(api.chat_action(self._body()))
-        # A terminal is a shell on this device. It is local-only on every
-        # transport, regardless of whether a LAN client holds a valid token:
-        # handing a remote client a shell is a different thing entirely from
-        # letting them chat with the agent.
-        if path.startswith("/api/term"):
-            routes = {"/api/term/open": api.term_open,
-                      "/api/term/write": api.term_write,
-                      "/api/term/signal": api.term_signal,
-                      "/api/term/resize": api.term_resize,
-                      "/api/term/close": api.term_close}
-            fn = routes.get(path)
-            if fn:
-                return self._json(fn(self._body()))
-        return self._json({"error": f"no route {path}"}, 404)
+
+        status, payload = dispatch.handle("POST", path, body=self._body(),
+                                          local=self._local())
+        return self._json(payload, status)
 
 
 class _Server(ThreadingHTTPServer):

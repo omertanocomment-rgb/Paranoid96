@@ -90,8 +90,33 @@ check("omerta_boot.start forwards native_lib_dir",
       fwd if fwd is not None else "no forwarding call")
 
 # ── 2. every Java call site matches the shim ───────────────────────────────
+def java_call_sites(text):
+    """(name, args-text) for each callAttr, balancing parentheses.
+
+    A regex that stops at the first ")" undercounts a call whose arguments
+    contain calls of their own, which is most of them.
+    """
+    out = []
+    for m in re.finditer(r'callAttr\(\s*"([A-Za-z_]\w*)"', text):
+        out.append((m.group(1), _balance(text, m.end())))
+    return out
+
+
+def _balance(text, start):
+    depth, buf = 1, []
+    for ch in text[start:]:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+            if depth == 0:
+                break
+        buf.append(ch)
+    return "".join(buf)
+
+
 jsrc = JAVA.read_text()
-sites = re.findall(r'callAttr\(\s*"([A-Za-z_]\w*)"((?:[^;]|\n)*?)\)\s*(?:\.|;|,)', jsrc)
+sites = java_call_sites(jsrc)
 check("Java has call sites to verify", len(sites) >= 2, sites)
 for name, rest in sites:
     check(f"Java calls a function that exists: {name}", name in boot)
@@ -162,7 +187,7 @@ import urllib.request
 
 env_keys = ("OMERTA_DATA_DIR", "OMERTA_HOME", "OMERTA_HOST", "OMERTA_PORT",
             "OMERTA_BUNDLED", "OMERTA_ALLOW_SECRET_API", "OMERTA_COMPACT",
-            "OMERTA_NATIVE_LIB_DIR")
+            "OMERTA_NATIVE_LIB_DIR", "OMERTA_ANDROID_HTTP")
 saved = {k: os.environ.get(k) for k in env_keys}
 try:
     with tempfile.TemporaryDirectory() as td:
@@ -173,11 +198,12 @@ try:
         sys.path.insert(0, str(BOOT.parent))
         import omerta_boot
 
-        # port 0 lets the OS pick, so a busy 8787 cannot fail the suite
+        # ── default: no socket at all ──────────────────────────────────
         res = omerta_boot.start(str(files_dir), str(ROOT), 0, str(natives))
         info = json.loads(res)
-        check("start() returns a usable port", isinstance(info.get("port"), int)
-              and info["port"] > 0, info)
+        check("start() comes up in bridge mode by default",
+              info.get("mode") == "bridge", info)
+        check("and opens no port", info.get("port") is None, info)
         check("start() reports running", info.get("running") is True, info)
         check("native_lib_dir reached the environment",
               os.environ.get("OMERTA_NATIVE_LIB_DIR") == str(natives),
@@ -185,19 +211,50 @@ try:
         check("the app is marked as bundled",
               os.environ.get("OMERTA_BUNDLED") == "1")
 
-        url = f"http://127.0.0.1:{info['port']}/api/status"
-        with urllib.request.urlopen(url, timeout=10) as r:
-            body = r.read().decode()
-            check("the embedded server answers on loopback", r.status == 200,
-                  r.status)
-        check("and answers with JSON", body.lstrip().startswith("{"), body[:80])
+        # the UI's requests, with nothing on the wire
+        r = json.loads(omerta_boot.request(str(ROOT), "GET", "/api/status"))
+        check("an in-process GET is served", r.get("status") == 200, r)
+        check("and carries a real payload", isinstance(r.get("body"), dict)
+              and bool(r["body"]), str(r)[:120])
+        r = json.loads(omerta_boot.request(str(ROOT), "GET", "/api/version"))
+        check("the version endpoint answers in-process",
+              r["status"] == 200 and r["body"].get("version"), str(r)[:120])
+        r = json.loads(omerta_boot.request(str(ROOT), "GET", "/api/nope"))
+        check("an unknown route is a 404, not a crash", r.get("status") == 404, r)
+        r = json.loads(omerta_boot.request(str(ROOT), "POST", "/api/usage",
+                                           json.dumps({"action": "summary"})))
+        check("a POST body reaches the route", r.get("status") in (200, 400), r)
+        # a hostile path must not escape the route table
+        r = json.loads(omerta_boot.request(str(ROOT), "GET", "/../../etc/passwd"))
+        check("a traversal path finds no route", r.get("status") == 404, r)
 
         check("start() is idempotent",
               json.loads(omerta_boot.start(str(files_dir), str(ROOT), 0,
-                                           str(natives)))["port"] == info["port"])
-        check("info() agrees the server is up",
+                                           str(natives)))["mode"] == "bridge")
+        check("info() agrees the backend is up",
               json.loads(omerta_boot.info(str(ROOT)))["running"] is True)
-        check("stop() shuts it down", omerta_boot.stop(str(ROOT)) is True)
+        check("stop() winds it down", omerta_boot.stop(str(ROOT)) is True)
+
+        # ── opt-in: the loopback server, for reaching this app from the LAN ──
+        import omerta_android
+        omerta_android._STATE.update(server=None, thread=None, ready=False,
+                                     port=None, token=None)
+        os.environ["OMERTA_ANDROID_HTTP"] = "1"
+        try:
+            info2 = json.loads(omerta_boot.start(str(files_dir), str(ROOT), 0,
+                                                 str(natives)))
+            check("http mode still available when asked for",
+                  info2.get("mode") == "http", info2)
+            check("and it binds a real port",
+                  isinstance(info2.get("port"), int) and info2["port"] > 0, info2)
+            url = f"http://127.0.0.1:{info2['port']}/api/status"
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                body = resp.read().decode()
+                check("the loopback server answers", resp.status == 200, resp.status)
+            check("and answers with JSON", body.lstrip().startswith("{"), body[:80])
+            check("stop() shuts it down", omerta_boot.stop(str(ROOT)) is True)
+        finally:
+            os.environ.pop("OMERTA_ANDROID_HTTP", None)
 finally:
     for k, v in saved.items():
         if v is None:

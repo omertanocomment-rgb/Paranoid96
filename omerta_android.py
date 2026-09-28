@@ -41,15 +41,52 @@ def _prepare_env(files_dir, home_dir, port, native_lib_dir=None):
         os.environ["OMERTA_NATIVE_LIB_DIR"] = native_lib_dir
 
 
-_STATE = {"server": None, "thread": None, "token": None, "port": None}
+_STATE = {"server": None, "thread": None, "token": None, "port": None,
+          "ready": False}
+
+
+def _want_http():
+    """Should this app also listen on a socket?
+
+    No, by default. The UI runs inside this process and calls `request()`
+    directly, so a loopback server buys nothing and costs a great deal: a port
+    that can be taken, a server that can fail to bind, and a listening socket
+    on the device. Every "backend didn't come up" screen was a failure of that
+    server, not of the agent.
+
+    It stays available for one real use -- letting another machine on the LAN
+    reach this backend -- and is off until someone asks for that.
+    """
+    from core import config
+    return str(config.get("OMERTA_ANDROID_HTTP", "0")).lower() in ("1", "true", "yes")
+
+
+def _bring_up():
+    """Everything the server used to do on the way up, minus the server."""
+    from core import api, mcp
+    api.boot()
+    try:
+        mcp.connect_all()
+    except Exception:  # noqa: BLE001 -- a bad connector must not stop the app
+        pass
+    try:
+        for _label, _result in api.startup_sync():
+            pass
+    except Exception:  # noqa: BLE001
+        pass
+    _STATE["ready"] = True
 
 
 def start(files_dir, home_dir, port=8787, native_lib_dir=None):
-    """Start (idempotently) the embedded backend. Returns a JSON string with
-    {"port", "token", "running"} so the Java side can build the WebView URL."""
-    if _STATE["server"] is not None:
+    """Bring the backend up. Returns a JSON string the Java side reads.
+
+    {"running", "mode", "port", "token"} -- mode is "bridge" when the UI talks
+    to Python in-process, "http" when a loopback server is also listening.
+    """
+    if _STATE["ready"]:
         return json.dumps({"port": _STATE["port"], "token": _STATE["token"],
-                           "running": True})
+                           "running": True,
+                           "mode": "http" if _STATE["server"] else "bridge"})
     _prepare_env(files_dir, home_dir, port, native_lib_dir)
     # import lazily, AFTER the environment is in place
     from core import toolbox
@@ -61,21 +98,160 @@ def start(files_dir, home_dir, port=8787, native_lib_dir=None):
         toolbox.install_python(data, payload=home_dir)
     except Exception:  # noqa: BLE001 -- a missing toolset must not stop the app
         pass
-    from core import httpd
-    srv, thread, token = httpd.serve_background()
-    _STATE.update(server=srv, thread=thread, token=token,
-                  port=srv.server_address[1])
-    return json.dumps({"port": _STATE["port"], "token": _STATE["token"],
-                       "running": True})
+
+    if _want_http():
+        from core import httpd
+        srv, thread, token = httpd.serve_background()
+        _STATE.update(server=srv, thread=thread, token=token,
+                      port=srv.server_address[1], ready=True)
+        return json.dumps({"port": _STATE["port"], "token": _STATE["token"],
+                           "running": True, "mode": "http"})
+
+    _bring_up()
+    return json.dumps({"running": True, "mode": "bridge",
+                       "port": None, "token": None})
+
+
+def request(method, path, payload_json=""):
+    """One request from the app's own UI, with no socket in the way.
+
+    The WebView's fetch() is shimmed to call this instead of going out over
+    HTTP. Because the caller IS this process, the request is local by
+    definition and needs no token -- a token only means anything over a wire.
+
+    Returns a JSON string {"status", "body"} so the JavaScript side can rebuild
+    a Response from it. It never raises: an exception crossing the Chaquopy
+    boundary surfaces in Java as a failed call with no context, so it is
+    reported as a 500 with its text instead.
+    """
+    from urllib.parse import urlparse, parse_qs
+    try:
+        if not _STATE["ready"]:
+            _bring_up()
+        parsed = urlparse(path or "/")
+        body = None
+        if payload_json:
+            try:
+                body = json.loads(payload_json)
+            except (ValueError, TypeError):
+                body = None
+        from core import dispatch
+        status, out = dispatch.handle(method, parsed.path,
+                                      query=parse_qs(parsed.query),
+                                      body=body, local=True)
+        return json.dumps({"status": status, "body": out}, default=str)
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return json.dumps({
+            "status": 500,
+            "body": {"error": f"{type(e).__name__}: {e}",
+                     "trace": traceback.format_exc()[-1200:]},
+        })
+
+
+def asset(path):
+    """Serve a GENERATED resource to the app's WebView: "<ctype>|<base64>".
+
+    Only the theme stylesheet and theme images come through here; everything
+    else in the UI is a file on disk that Java reads directly. Base64 because
+    the value crosses the Chaquopy boundary as a string, and a stylesheet or a
+    PNG is not guaranteed to be valid UTF-8.
+
+    Returns an empty body rather than raising: a broken theme should cost the
+    styling, not the page.
+    """
+    import base64
+    try:
+        if not _STATE["ready"]:
+            _bring_up()
+        from core import api
+        if path == "/theme.css":
+            return "text/css|" + base64.b64encode(
+                api.theme_css().encode("utf-8")).decode("ascii")
+        prefix = "/theme/asset/"
+        if path.startswith(prefix):
+            from core import theme
+            p = theme.image_path(path[len(prefix):])
+            if not p:
+                return "text/plain|"
+            ext = os.path.splitext(str(p))[1].lower()
+            ctype = {".png": "image/png", ".jpg": "image/jpeg",
+                     ".jpeg": "image/jpeg", ".gif": "image/gif",
+                     ".webp": "image/webp"}.get(ext, "image/png")
+            with open(p, "rb") as fh:
+                return ctype + "|" + base64.b64encode(fh.read()).decode("ascii")
+    except Exception:  # noqa: BLE001 -- styling must not take the UI down
+        pass
+    return "text/plain|"
+
+
+# ── chunked upload, straight from the WebView ───────────────────────────────
+# An upload is the one request that cannot be a single call: the whole point is
+# that a multi-gigabyte file never sits in memory. The page reads the file in
+# slices and pushes them here, so only one slice is resident on either side --
+# the same contract core/attach.Incoming already provides to the two servers.
+_UPLOADS = {}
+
+
+def attach_begin(name, project="", note=""):
+    try:
+        if not _STATE["ready"]:
+            _bring_up()
+        from core import attach
+        inc = attach.Incoming(name, project=project or None, note=note or "")
+        if inc.error:
+            return json.dumps({"error": inc.error})
+        _UPLOADS[inc.id] = inc
+        return json.dumps({"id": inc.id})
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def attach_chunk(upload_id, b64):
+    import base64
+    inc = _UPLOADS.get(upload_id)
+    if inc is None:
+        return json.dumps({"error": "no such upload"})
+    try:
+        inc.write(base64.b64decode(b64 or ""))
+    except Exception as e:  # noqa: BLE001
+        inc.error = f"{type(e).__name__}: {e}"
+    if inc.error:
+        return json.dumps({"error": inc.error})
+    return json.dumps({"written": inc.written})
+
+
+def attach_end(upload_id, declared_size=0):
+    inc = _UPLOADS.pop(upload_id, None)
+    if inc is None:
+        return json.dumps({"error": "no such upload"})
+    try:
+        return json.dumps(inc.finish(declared_size=int(declared_size) or None),
+                          default=str)
+    except Exception as e:  # noqa: BLE001
+        inc.abort()
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
+
+
+def attach_abort(upload_id):
+    inc = _UPLOADS.pop(upload_id, None)
+    if inc is not None:
+        inc.abort()
+    return json.dumps({"ok": True})
 
 
 def is_running():
-    return bool(_STATE["server"] and _STATE["thread"] and _STATE["thread"].is_alive())
+    if _STATE["server"]:
+        return bool(_STATE["thread"] and _STATE["thread"].is_alive())
+    # In bridge mode there is no thread to be alive: the backend is simply
+    # importable and initialised, which is what "running" means here.
+    return bool(_STATE["ready"])
 
 
 def info():
     return json.dumps({"port": _STATE["port"], "token": _STATE["token"],
-                       "running": is_running()})
+                       "running": is_running(),
+                       "mode": "http" if _STATE["server"] else "bridge"})
 
 
 def stop():
@@ -85,7 +261,7 @@ def stop():
             srv.shutdown()
         except Exception:  # noqa: BLE001
             pass
-    _STATE.update(server=None, thread=None)
+    _STATE.update(server=None, thread=None, ready=False)
     return True
 
 

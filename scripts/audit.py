@@ -162,6 +162,7 @@ def check_local_only():
     """
     h = (ROOT / "core/httpd.py").read_text(encoding="utf-8")
     s = (ROOT / "server.py").read_text(encoding="utf-8")
+    d = (ROOT / "core/dispatch.py").read_text(encoding="utf-8")
 
     def listed(text, marker):
         i = text.find(marker)
@@ -169,22 +170,35 @@ def check_local_only():
             return None
         return set(re.findall(r'"(/api/[^"]+)"', text[i:i + 400]))
 
-    a = listed(h, "LOCAL_ONLY")
+    # core/dispatch.py is the canonical list: every transport that routes
+    # through it -- the stdlib server and the app's in-process bridge -- gets
+    # the same one by construction. server.py has its own routing, so it is the
+    # copy that can drift, and it is what this compares.
+    a = listed(d, "LOCAL_ONLY = (")
     b = listed(s, "LOCAL_ONLY_PREFIXES")
     if a is None or b is None:
-        finding("local-only", "the LOCAL_ONLY list is missing from a server")
+        finding("local-only", "the LOCAL_ONLY list is missing from "
+                              "core/dispatch.py or server.py")
         return
     if a != b:
         finding("local-only",
-                f"the two servers disagree: only in httpd={sorted(a - b)}, "
+                f"dispatch and server.py disagree: only in dispatch={sorted(a - b)}, "
                 f"only in server.py={sorted(b - a)}")
     else:
-        note(f"local-only: {len(a)} surfaces, identical in both servers")
+        note(f"local-only: {len(a)} surfaces, identical in dispatch and server.py")
 
     # and the rule has to be applied, not merely declared
     for name, text in (("core/httpd.py", h), ("server.py", s)):
         if "_is_local_only" not in text:
             finding("local-only", f"{name} declares the list but never checks it")
+    if "is_local_only" not in d or "local" not in d:
+        finding("local-only", "core/dispatch.py declares the list but never checks it")
+    # httpd must not have grown a second copy of the list
+    own = listed(h, "LOCAL_ONLY = (")
+    if own:
+        finding("local-only",
+                "core/httpd.py has its own copy of the list again; it must use "
+                "dispatch.LOCAL_ONLY so the two cannot drift")
 
 
 # ── 5. the approval gate ────────────────────────────────────────────────────
@@ -481,8 +495,28 @@ def _balanced(src, start):
     return "".join(out)
 
 
+def _args_after_name(rest):
+    """Argument count for a tail that OPENS with the separating comma.
+
+    `callAttr("x", a, b)` and `py("x", a, b)` both leave `, a, b` behind the
+    name literal, so each argument is introduced by a top-level comma and the
+    comma count IS the argument count. Passing this text to _top_level_args
+    instead counts the name as an argument -- which is the off-by-one that has
+    now shown up twice.
+    """
+    depth, args = 0, 0
+    for ch in rest:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            args += 1
+    return args
+
+
 def _top_level_args(rest):
-    """Argument count for an argument list, ignoring commas inside nested calls."""
+    """Argument count for a BARE argument list (no leading comma)."""
     if not rest.strip():
         return 0
     depth, args = 0, 1
@@ -532,31 +566,54 @@ def check_bridge():
     boot_sigs = signatures(boot)
 
     # hop 1: Java -> omerta_boot
-    call = re.compile(r'callAttr\(\s*"([A-Za-z_]\w*)"((?:[^;]|\n)*?)\)\s*(?:\.|;|,)')
+    #
+    # The call is found by balancing parentheses, not by a regex ending at the
+    # first ")". An argument that is itself a call -- callAttr("request",
+    # OmertaPython.homeDir(), ...) -- closes a paren before the call does, and
+    # a non-greedy match stops there and undercounts the arguments. This check
+    # exists to catch an arity mismatch; miscounting here is the same bug with
+    # the auditor's name on it.
+    call = re.compile(r'callAttr\(\s*"([A-Za-z_]\w*)"')
     sites = 0
     for f in java_dir.rglob("*.java"):
         src = f.read_text(encoding="utf-8", errors="replace")
         for m in call.finditer(src):
-            name, rest = m.group(1), m.group(2)
+            name = m.group(1)
+            rest = _balanced(src, m.end())
             if name not in boot_sigs:
                 finding("bridge",
                         f"{f.name}: calls omerta_boot.{name}(), which does not exist")
                 continue
-            # `rest` is the tail after the name literal, so it opens with the
-            # separating comma: one top-level comma per argument, none when
-            # the call passes nothing.
-            depth, args = 0, 0
-            for ch in rest:
-                if ch in "([":
-                    depth += 1
-                elif ch in ")]":
-                    depth -= 1
-                elif ch == "," and depth == 0:
-                    args += 1
+            args = _args_after_name(rest)
             lo, hi, names = boot_sigs[name]
             if not (lo <= args <= hi):
                 finding("bridge",
                         f"{f.name}: callAttr(\"{name}\", ...) passes {args} arg(s); "
+                        f"omerta_boot.{name}{tuple(names)} accepts {lo}-{hi}")
+            sites += 1
+
+    # A helper that dispatches by name -- py("attach_begin", ...) -- is
+    # invisible to the scan above, because the name reaching callAttr is a
+    # variable. Those call sites would be the only unchecked ones in the app,
+    # which is exactly where the last mismatch would hide, so the literal names
+    # handed to the helper are checked too. The helper prepends home_dir, so
+    # its arity is one more than what is written at the call site.
+    helper = re.compile(r'\bpy\(\s*"([A-Za-z_]\w*)"')
+    for f in java_dir.rglob("*.java"):
+        src = f.read_text(encoding="utf-8", errors="replace")
+        if "private String py(" not in src:
+            continue
+        for m in helper.finditer(src):
+            name = m.group(1)
+            if name not in boot_sigs:
+                finding("bridge",
+                        f"{f.name}: py(\"{name}\", ...) names no omerta_boot function")
+                continue
+            args = _args_after_name(_balanced(src, m.end())) + 1  # + home_dir
+            lo, hi, names = boot_sigs[name]
+            if not (lo <= args <= hi):
+                finding("bridge",
+                        f"{f.name}: py(\"{name}\", ...) resolves to {args} arg(s); "
                         f"omerta_boot.{name}{tuple(names)} accepts {lo}-{hi}")
             sites += 1
 

@@ -35,6 +35,44 @@ def start(files_dir, home_dir, port=8787, native_lib_dir=None):
     return omerta_android.start(files_dir, home_dir, int(port), native_lib_dir)
 
 
+def request(home_dir, method, path, payload_json=""):
+    """One in-process request from the app's WebView. No socket, no token."""
+    _wire(home_dir)
+    import omerta_android
+    return omerta_android.request(method, path, payload_json)
+
+
+def asset(home_dir, path):
+    """A generated resource (theme css / theme image) for the app's WebView."""
+    _wire(home_dir)
+    import omerta_android
+    return omerta_android.asset(path)
+
+
+def attach_begin(home_dir, name, project="", note=""):
+    _wire(home_dir)
+    import omerta_android
+    return omerta_android.attach_begin(name, project, note)
+
+
+def attach_chunk(home_dir, upload_id, b64):
+    _wire(home_dir)
+    import omerta_android
+    return omerta_android.attach_chunk(upload_id, b64)
+
+
+def attach_end(home_dir, upload_id, declared_size=0):
+    _wire(home_dir)
+    import omerta_android
+    return omerta_android.attach_end(upload_id, declared_size)
+
+
+def attach_abort(home_dir, upload_id):
+    _wire(home_dir)
+    import omerta_android
+    return omerta_android.attach_abort(upload_id)
+
+
 def info(home_dir):
     _wire(home_dir)
     import omerta_android

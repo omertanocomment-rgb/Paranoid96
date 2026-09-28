@@ -84,6 +84,9 @@ final class OmertaPython {
     /** One-line reason the backend failed, or null if it has not failed. */
     static String lastError() { return lastError; }
 
+    /** The extracted payload directory, which omerta_boot needs on sys.path. */
+    static String homeDir() { return homeDir; }
+
     /** Clear the last failure before a deliberate retry.
      *
      *  Called from the UI thread BEFORE the service thread runs, so the launch

@@ -85,9 +85,14 @@ def main():
     check("no build input hardcodes a stale version",
           sync.returncode == 0 and "!" not in sync.stdout)
 
-    # 8. both servers expose it
-    for f in ("core/httpd.py", "server.py"):
-        check(f"{f} serves /api/version", "/api/version" in (ROOT / f).read_text())
+    # 8. every transport exposes it. core/httpd.py routes through
+    #    core/dispatch.py now, and so does the app's in-process bridge, so the
+    #    route lives there; server.py still has its own routing.
+    for f in ("core/dispatch.py", "server.py"):
+        check(f"{f} serves /api/version",
+              "/api/version" in (ROOT / f).read_text(encoding="utf-8"))
+    check("core/httpd.py routes through the shared dispatcher",
+          "dispatch.handle" in (ROOT / "core/httpd.py").read_text(encoding="utf-8"))
 
     # 9. a malformed stamp must never take the process down. This file is
     #    written by a build and read at import by core.api, so a truncated or

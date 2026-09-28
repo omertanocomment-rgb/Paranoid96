@@ -123,14 +123,17 @@ def main():
         st = attach.stats()
         check("stats report free space", st.get("free", -1) >= 0)
 
-        # both servers must treat uploads as local-only and never render them
-        h = (ROOT / "core/httpd.py").read_text()
-        v = (ROOT / "server.py").read_text()
-        check("httpd marks /api/attach local-only",
+        # every transport must treat uploads as local-only and never render
+        # them. The canonical list is core/dispatch.py, which core/httpd.py and
+        # the app's in-process bridge both route through.
+        h = (ROOT / "core/dispatch.py").read_text(encoding="utf-8")
+        v = (ROOT / "server.py").read_text(encoding="utf-8")
+        check("dispatch marks /api/attach local-only",
               "/api/attach" in h.split("LOCAL_ONLY")[1][:300])
         check("server.py marks /api/attach local-only",
               "/api/attach" in v.split("LOCAL_ONLY_PREFIXES")[1][:300])
-        for name, text in (("httpd", h), ("server.py", v)):
+        served = (ROOT / "core/httpd.py").read_text(encoding="utf-8")
+        for name, text in (("httpd", served), ("server.py", v)):
             check(f"{name} serves attachments as opaque downloads",
                   "application/octet-stream" in text and "nosniff" in text)
         # neither server may buffer the whole upload

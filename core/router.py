@@ -16,7 +16,26 @@ from .providers import KINDS, REACHABLE, ProviderError
 
 
 def has_internet(timeout=config.CONNECTIVITY_TIMEOUT) -> bool:
-    for host in (("1.1.1.1", 443), ("8.8.8.8", 53)):
+    """Best-effort: is there a route off this device?
+
+    This is a HINT, never a veto. Plenty of real networks refuse raw sockets
+    to 1.1.1.1:443 and 8.8.8.8:53 -- carrier networks, captive portals,
+    corporate DNS, a phone that only allows DNS through its own resolver --
+    while api.anthropic.com is perfectly reachable. Treating a failed probe as
+    "no internet" silently removed every cloud provider from the routing
+    order, so a correct API key produced "No model available" and nothing
+    explained why. Whether a provider works is now decided by CALLING it.
+
+    DNS is tried first because it is what actually breaks when a phone is
+    offline, and it succeeds on networks that block the two IPs below.
+    """
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.getaddrinfo("api.anthropic.com", 443)
+        return True
+    except OSError:
+        pass
+    for host in (("1.1.1.1", 443), ("8.8.8.8", 53), ("9.9.9.9", 53)):
         try:
             s = socket.create_connection(host, timeout=timeout)
             s.close()
@@ -32,8 +51,17 @@ def provider_status() -> dict:
     out = {}
     for pid, spec in config.PROVIDERS.items():
         if spec.get("needs_internet") and not net:
-            out[pid] = {"label": spec["label"], "model": spec["model"],
-                        "ready": False, "why": "offline"}
+            # A configured provider is still worth trying: the probe can fail
+            # on a network that reaches the API perfectly well. Say what is
+            # actually known rather than declaring it dead.
+            keyed = _configured(pid)
+            out[pid] = {
+                "label": spec["label"], "model": spec["model"],
+                "ready": keyed,
+                "why": ("no network detected — will still try"
+                        if keyed
+                        else f"no key in ${spec.get('api_key_env', '?')}"),
+            }
             continue
         try:
             ready = REACHABLE[spec["kind"]](spec)
@@ -99,6 +127,20 @@ def _try(pid, messages, system, max_tokens, stream_cb):
             "offline": not spec.get("needs_internet", False)}
 
 
+def _configured(pid):
+    """Has this provider been given what it needs to be worth trying?
+
+    For a cloud provider that means a key; trying one without a key just
+    produces noise in the error list.
+    """
+    spec = config.PROVIDERS.get(pid) or {}
+    env = spec.get("api_key_env")
+    if not env:
+        return True
+    import os
+    return bool(os.environ.get(env))
+
+
 def _mode():
     return config._norm_mode(config.get("OMERTA_MODE", config.MODE))
 
@@ -124,11 +166,26 @@ def complete(messages, system="", max_tokens=None, stream_cb=None) -> dict:
         if fb and fb != active and fb in config.PROVIDERS:
             order.append(fb)
     else:
-        net = has_internet() if mode != "offline" else False
         order = [p for p in config.ROUTING_ORDER if p in config.PROVIDERS]
-        if not net:
+        if mode == "offline":
+            # An explicit instruction, not a guess. Offline means the network
+            # is not touched, so the cloud providers are removed here and the
+            # guarantee does not depend on a later filter still being right.
             order = [p for p in order
                      if not config.PROVIDERS[p].get("needs_internet")]
+        elif not has_internet():
+            # Prefer local providers, but do NOT drop the cloud ones: the probe
+            # is a guess about a network we have not actually tried yet, and a
+            # provider holding a valid key is more likely to work than a local
+            # server that is not running. If the network really is down, the
+            # call fails and its real error is reported instead of a silent
+            # omission.
+            local = [p for p in order
+                     if not config.PROVIDERS[p].get("needs_internet")]
+            remote = [p for p in order
+                      if config.PROVIDERS[p].get("needs_internet")
+                      and _configured(p)]
+            order = local + remote
 
     order = _apply_mode(order, mode)
     if not order:

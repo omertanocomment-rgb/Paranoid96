@@ -19,6 +19,7 @@ import android.view.ViewGroup;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -43,6 +44,10 @@ public class MainActivity extends Activity {
     private static final String K_HOST = "host";
     private static final String K_TOKEN = "token";
     private static final String LOCAL = "127.0.0.1:" + OmertaPython.PORT;
+    /** Synthetic origin for the in-process UI. Nothing is served over a
+     *  socket; this host exists only so the page has a secure origin. */
+    static final String LOCAL_HOST = "omerta.local";
+    static final String LOCAL_URL = "https://" + LOCAL_HOST + "/";
 
     private static final int AMBER = Color.parseColor("#ffb020");
     private static final int BG = Color.parseColor("#0b0a08");
@@ -115,9 +120,13 @@ public class MainActivity extends Activity {
             // a slow 32-bit device is minutes of file writes, not seconds.
             // Give it room, and report what it is actually doing -- a silent
             // splash is indistinguishable from a hang.
+            //
+            // There is no port to poll any more: the backend is up when
+            // Python says it is, so this waits on the interpreter rather than
+            // on a socket that may never bind.
             for (int i = 0; i < 300; i++) {
-                if (BackendLauncher.isUp(LOCAL, 1200)) {
-                    ui(() -> connect(OmertaPython.baseUrl()));
+                if (OmertaPython.isReady()) {
+                    ui(() -> connect(LOCAL_URL));
                     return;
                 }
                 if (OmertaPython.lastError() != null) break;   // no point waiting
@@ -176,8 +185,45 @@ public class MainActivity extends Activity {
         s.setUseWideViewPort(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        web.setWebChromeClient(new WebChromeClient());
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final android.webkit.PermissionRequest r) {
+                // The page is ours and the origin is synthetic, so a mic
+                // request here is the user pressing the mic button in our own
+                // UI. Android still gates it on the app's RECORD_AUDIO grant.
+                ui(() -> r.grant(r.getResources()));
+            }
+        });
+        // The UI is served from this process, not fetched over a network.
+        // A synthetic https origin (rather than file:// or http://127.0.0.1)
+        // makes the page a SECURE CONTEXT, which is what navigator.clipboard
+        // and getUserMedia require -- on http://127.0.0.1 both were missing
+        // and the copy buttons needed a fallback.
+        web.addJavascriptInterface(new OmertaBridge(this, web), "OmertaNative");
         web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(
+                    WebView v, WebResourceRequest req) {
+                if (req == null) return null;
+                android.net.Uri u = req.getUrl();
+                if (u == null || !LOCAL_HOST.equals(u.getHost())) return null;
+                return OmertaAssets.serve(MainActivity.this, u.getPath());
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
+                // Keep the WebView on our own origin; anything else opens in a
+                // real browser rather than inside the agent's window.
+                android.net.Uri u = req == null ? null : req.getUrl();
+                if (u == null || LOCAL_HOST.equals(u.getHost())) return false;
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, u));
+                } catch (Exception ignore) { /* no browser installed */ }
+                return true;
+            }
+
             @Override
             public void onReceivedError(WebView v, WebResourceRequest req, WebResourceError err) {
                 if (req != null && req.isForMainFrame()) {
@@ -257,8 +303,11 @@ public class MainActivity extends Activity {
             ui(() -> {
                 diagnose.setEnabled(true);
                 // The retry inside diagnose() may well have fixed it.
-                if (BackendLauncher.isUp(LOCAL, 1500)) {
-                    connect(OmertaPython.baseUrl());
+                // Readiness is the interpreter's, not a socket's -- there is
+                // no port to probe in bridge mode, so polling one here would
+                // report failure forever however well the retry went.
+                if (OmertaPython.isReady()) {
+                    connect(LOCAL_URL);
                     return;
                 }
                 showReport(report);

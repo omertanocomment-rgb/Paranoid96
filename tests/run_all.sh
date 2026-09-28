@@ -30,6 +30,8 @@ echo "=== chat copy buttons ===" && python3 tests/test_ui_copy.py
 echo "=== python runtime ===" && python3 tests/test_python_runtime.py
 echo "=== adb over TCP ===" && python3 tests/test_adb.py
 echo "=== backup / usage / policy ===" && python3 tests/test_backup_usage.py
+echo "=== model routing ===" && python3 tests/test_routing.py
+echo "=== in-process UI bridge ===" && python3 tests/test_ui_bridge.py
 echo "=== portability ===" && python3 tests/test_portability.py
 echo "=== desktop launch ===" && python3 tests/test_desktop_launch.py
 echo "=== provider reasons ===" && python3 tests/test_ui_providers.py

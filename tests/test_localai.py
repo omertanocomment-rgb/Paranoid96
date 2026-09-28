@@ -79,10 +79,15 @@ def main():
     check("stop when idle is a no-op", localai.stop().get("running") is False)
 
     # the endpoint is direct operation of the device, so it must be local-only
-    for f in ("core/httpd.py", "server.py"):
-        txt = (ROOT / f).read_text()
+    # core/dispatch.py holds the canonical list (core/httpd.py and the app's
+    # in-process bridge both route through it); server.py keeps its own.
+    for f in ("core/dispatch.py", "server.py"):
+        txt = (ROOT / f).read_text(encoding="utf-8")
         check(f"{f} marks /api/localai local-only", "/api/localai" in txt
               and "localai" in txt.split("LOCAL_ONLY")[1][:260])
+    check("core/httpd.py takes the list from dispatch rather than keeping one",
+          "dispatch.LOCAL_ONLY"
+          in (ROOT / "core/httpd.py").read_text(encoding="utf-8"))
 
     # the provider exists and is honest about needing no network
     check("on-device provider is registered", "omerta" in config.PROVIDERS)
