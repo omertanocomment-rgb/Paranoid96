@@ -29,12 +29,15 @@ omerta debug "<error>" | review
 omerta firmware tools|inspect <image>
 omerta web [--host --port]        # web UI + API (mobile console backend)
 omerta config
+omerta selftest                    # Phase 15 release-candidate stress test
 ```
 
 ## Providers
-Set `ANTHROPIC_API_KEY` (default provider, model `claude-opus-5`, adaptive thinking,
-effort via `output_config.effort`). `OPENAI_API_KEY` and local backends are stubbed in
-the router and report unavailable until configured — the engine degrades honestly.
+Three real providers, selectable as `provider:model` (or via `providers.toml` routing):
+- **Anthropic** (default) — `ANTHROPIC_API_KEY`, model `claude-opus-5`, adaptive thinking, effort.
+- **OpenAI** — `OPENAI_API_KEY`, e.g. `omerta chat --model openai:gpt-4o`.
+- **Ollama** (local, no external limits) — `OLLAMA_HOST` (default `http://localhost:11434`), e.g. `--model ollama:llama3.1`.
+Any provider without credentials reports unavailable in `omerta doctor` — the engine degrades honestly.
 
 ## Packaging
 - `.deb`  → `packaging/deb/build-deb.sh`

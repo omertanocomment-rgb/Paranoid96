@@ -242,6 +242,13 @@ def cmd_web(args):
     serve(args.host, args.port)
 
 
+def cmd_selftest(_args):
+    from . import selftest
+    results = selftest.run()
+    _p(selftest.render(results))
+    return 1 if selftest.has_failures(results) else 0
+
+
 def cmd_config(_args):
     from .config import home_dir, scaffold_project
     cfg = Config.load(); path = cfg.save()
@@ -320,6 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--host"); w.add_argument("--port", type=int); w.set_defaults(fn=cmd_web)
 
     sub.add_parser("config", help="write/show config").set_defaults(fn=cmd_config)
+    sub.add_parser("selftest", help="Phase 15 release-candidate stress test").set_defaults(fn=cmd_selftest)
     return p
 
 

@@ -152,3 +152,22 @@ def test_router_reads_providers_toml(tmp_path, monkeypatch):
     assert r.model_for("local") == "ollama:llama3.2"   # category routing honored
     p, m = r.resolve("ollama:llama3.2")
     assert p.name == "ollama" and m == "llama3.2"
+
+
+def test_secret_redaction():
+    from omerta import security
+    s = "ghp_" + "A" * 30 + " tail"
+    assert security.contains_secret(s)
+    assert "[REDACTED]" in security.redact(s)
+    assert not security.contains_secret(security.redact(s))
+    assert security.is_destructive("fastboot flash boot boot.img")
+    assert not security.is_destructive("ls -la")
+
+
+def test_selftest_release_ready(tmp_path, monkeypatch):
+    monkeypatch.setenv("OMERTA_HOME", str(tmp_path))
+    from omerta import selftest
+    results = selftest.run()
+    assert len(results) == 20
+    assert not selftest.has_failures(results), \
+        "; ".join(f"{r.n}:{r.name}:{r.detail}" for r in results if r.status == "FAIL")

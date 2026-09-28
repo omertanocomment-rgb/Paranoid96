@@ -24,6 +24,8 @@ jobs:
           pip install -e ".[dev]" pyinstaller
       - name: Test
         run: python -m pytest -q
+      - name: RC stress test (Phase 15)
+        run: omerta selftest
       - name: Build binary + .deb
         run: |
           bash packaging/pyinstaller/build-binary.sh

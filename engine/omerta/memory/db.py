@@ -6,6 +6,7 @@ scope, type, source/provenance, timestamp, confidence and status.
 from __future__ import annotations
 
 import sqlite3
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,8 +39,15 @@ class Memory:
     def __init__(self, db_path: Optional[Path] = None):
         self.path = db_path or (home_dir() / "memory.db")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.path))
+        # Shared across threads (agents run concurrently); guard every access with a
+        # lock and use WAL so readers don't block the single writer.
+        self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
+        try:
+            self.conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.Error:
+            pass
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -67,20 +75,22 @@ class Memory:
             raise ValueError(f"scope must be one of {SCOPES}")
         if type not in TYPES:
             raise ValueError(f"type must be one of {TYPES}")
-        cur = self.conn.execute(
-            "INSERT INTO memory(scope,type,key,value,source,confidence,status,created_at) "
-            "VALUES(?,?,?,?,?,?, 'active', ?)",
-            (scope, type, key, value, source, confidence, time.time()),
-        )
-        self.conn.commit()
-        return int(cur.lastrowid)
+        with self._lock:
+            cur = self.conn.execute(
+                "INSERT INTO memory(scope,type,key,value,source,confidence,status,created_at) "
+                "VALUES(?,?,?,?,?,?, 'active', ?)",
+                (scope, type, key, value, source, confidence, time.time()),
+            )
+            self.conn.commit()
+            return int(cur.lastrowid)
 
     def forget(self, item_id: int) -> bool:
-        cur = self.conn.execute(
-            "UPDATE memory SET status='forgotten' WHERE id=? AND status='active'", (item_id,)
-        )
-        self.conn.commit()
-        return cur.rowcount > 0
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE memory SET status='forgotten' WHERE id=? AND status='active'", (item_id,)
+            )
+            self.conn.commit()
+            return cur.rowcount > 0
 
     def show(self, scope: Optional[str] = None, type: Optional[str] = None,
              include_inactive: bool = False) -> list[MemoryItem]:
@@ -93,14 +103,16 @@ class Memory:
         if type:
             q += " AND type=?"; args.append(type)
         q += " ORDER BY created_at DESC"
-        return [self._row(r) for r in self.conn.execute(q, args)]
+        with self._lock:
+            return [self._row(r) for r in self.conn.execute(q, args).fetchall()]
 
     def search(self, term: str) -> list[MemoryItem]:
         like = f"%{term}%"
-        rows = self.conn.execute(
-            "SELECT * FROM memory WHERE status='active' AND (key LIKE ? OR value LIKE ?) "
-            "ORDER BY created_at DESC", (like, like),
-        )
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT * FROM memory WHERE status='active' AND (key LIKE ? OR value LIKE ?) "
+                "ORDER BY created_at DESC", (like, like),
+            ).fetchall()
         return [self._row(r) for r in rows]
 
     def record_outcome(self, ok: bool, key: str, value: str, source: str = "buildloop") -> int:
@@ -111,11 +123,12 @@ class Memory:
     def learned_context(self, limit: int = 40) -> str:
         """Format durable teachings (RULE/LESSON/FACT/PROCEDURE) for the system prompt,
         so the model applies what the operator has taught it."""
-        rows = self.conn.execute(
-            "SELECT scope,type,key,value FROM memory "
-            "WHERE status='active' AND type IN ('RULE','LESSON','FACT','PROCEDURE') "
-            "ORDER BY CASE type WHEN 'RULE' THEN 0 WHEN 'PROCEDURE' THEN 1 "
-            "WHEN 'FACT' THEN 2 ELSE 3 END, created_at DESC LIMIT ?", (limit,)).fetchall()
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT scope,type,key,value FROM memory "
+                "WHERE status='active' AND type IN ('RULE','LESSON','FACT','PROCEDURE') "
+                "ORDER BY CASE type WHEN 'RULE' THEN 0 WHEN 'PROCEDURE' THEN 1 "
+                "WHEN 'FACT' THEN 2 ELSE 3 END, created_at DESC LIMIT ?", (limit,)).fetchall()
         if not rows:
             return ""
         lines = ["Operator-taught knowledge (apply unless it conflicts with safety):"]
