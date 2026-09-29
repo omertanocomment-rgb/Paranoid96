@@ -176,6 +176,22 @@ class BrainEngineTest {
         assertFalse(e.respond("what's my name?").text.contains("_style"))
     }
 
+    @Test fun teachingDeduplicates() {
+        val e = engine()
+        e.addFact("The wifi password is bluefish42")
+        val before = e.brain.knowledge.size
+        e.addFact("the wifi password is bluefish42.")   // same fact, trivial variation
+        assertEquals(before, e.brain.knowledge.size)      // merged, not piled up
+        assertTrue(e.respond("what is the wifi password").text.contains("bluefish42"))
+    }
+
+    @Test fun personaAccentRoundTrips() {
+        val e = engine()
+        e.updatePersona(e.brain.persona.copy(accent = "#00E5FF"))
+        val back = BrainFile.parse(e.brain.encode())
+        assertEquals("#00E5FF", back.persona.accent)
+    }
+
     @Test fun perspectiveFlip() {
         assertEquals("your cat is called Tom", TextKit.flipPerspective("my cat is called Tom"))
         assertEquals("You are from Leeds.", TextKit.flipPerspective("I am from Leeds."))

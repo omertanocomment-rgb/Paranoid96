@@ -81,6 +81,7 @@ data class OmertaSettings(
     val suggestBetter: Boolean = true,
     /** Adapt the active brain's personality to how the operator talks over time. */
     val adaptivePersona: Boolean = true,
+    val onboarded: Boolean = false,
 ) {
     val embedded: Boolean get() = engineMode == EngineMode.EMBEDDED
 }
@@ -116,6 +117,7 @@ class SettingsStore(private val context: Context) {
         val AUTONOMY = stringPreferencesKey("autonomy")
         val SUGGEST_BETTER = booleanPreferencesKey("suggest_better")
         val ADAPTIVE_PERSONA = booleanPreferencesKey("adaptive_persona")
+        val ONBOARDED = booleanPreferencesKey("onboarded")
     }
 
     companion object {
@@ -161,6 +163,7 @@ class SettingsStore(private val context: Context) {
             autonomy = p[Keys.AUTONOMY] ?: Autonomy.AUTO_LOW,
             suggestBetter = p[Keys.SUGGEST_BETTER] ?: true,
             adaptivePersona = p[Keys.ADAPTIVE_PERSONA] ?: true,
+            onboarded = p[Keys.ONBOARDED] ?: false,
         )
     }
 
@@ -205,6 +208,8 @@ class SettingsStore(private val context: Context) {
             ollamaUrl?.let { p[Keys.OLLAMA_URL] = it.trim() }
         }
     }
+
+    suspend fun setOnboarded() { context.dataStore.edit { it[Keys.ONBOARDED] = true } }
 
     suspend fun updateBrain(
         llmMode: String? = null,

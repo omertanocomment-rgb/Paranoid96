@@ -73,3 +73,12 @@ class BrainStudioTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DedupeTest(unittest.TestCase):
+    def test_add_fact_dedupes(self):
+        b = ob.blank("X")
+        ob.add_fact(b, "The gate code is 4471")
+        n = len(b["knowledge"])
+        ob.add_fact(b, "the gate code is 4471.")
+        self.assertEqual(n, len(b["knowledge"]))

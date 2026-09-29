@@ -80,6 +80,12 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   `Engine._fuzzy` re-search with token+char-trigram similarity (`TextKit.fuzzySimilarity`)
   so paraphrases/typos still hit — a model-free stand-in for semantic recall.
 - Conversation export: `ChatViewModel.transcriptMarkdown` + the top-bar share action.
+- Dedupe on teach: `BrainEngine.addFact` / `add_fact` refresh an existing near-identical
+  fact (normalized-equal or fuzzy ≥ 0.9) instead of piling up duplicates.
+- Per-brain accent: `Persona.accent` (hex; blank = amber) tints that brain's highlight in
+  the UI (Brain header, personality editor accent chips). The UI base stays amber.
+- First-run onboarding: a one-time dialog (SettingsStore `onboarded` flag) points to going
+  offline, teaching, the Brain screen, and encrypted keys.
 
 ## What this repo is
 - `android/` — native Android app **Omerta AI** (`ai.omerta.assistant`), Kotlin +

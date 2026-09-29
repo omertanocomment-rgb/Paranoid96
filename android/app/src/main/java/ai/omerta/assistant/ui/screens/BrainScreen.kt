@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -154,7 +155,8 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(OmertaSurface)
                     .border(1.dp, OmertaAmber, RoundedCornerShape(10.dp)).padding(14.dp),
             ) {
-                Text("🧠 ${brain.persona.name}", style = MaterialTheme.typography.titleLarge, color = OmertaAmber)
+                val brainAccent = parseAccent(brain.persona.accent)
+                Text("🧠 ${brain.persona.name}", style = MaterialTheme.typography.titleLarge, color = brainAccent)
                 Text("${brain.name} · v${brain.version}${if (brain.author.isNotBlank()) " · by ${brain.author}" else ""}",
                     style = MaterialTheme.typography.labelSmall, color = OmertaTextSecondary)
                 Text(
@@ -518,6 +520,7 @@ private fun PersonalityEditor(
     var emoji by remember(key) { mutableStateOf(p.emoji) }
     var flair by remember(key) { mutableStateOf(p.flair.toFloat()) }
     var sys by remember(key) { mutableStateOf(p.systemPrompt) }
+    var accent by remember(key) { mutableStateOf(p.accent) }
     var brainName by remember(key) { mutableStateOf(brain.name) }
 
     Section("PERSONALITY")
@@ -555,6 +558,14 @@ private fun PersonalityEditor(
     Slider(flair, { flair = it }, valueRange = 0f..1f,
         colors = SliderDefaults.colors(thumbColor = OmertaAmber, activeTrackColor = OmertaAmber))
     field(sys, { sys = it }, "Custom LLM system prompt (optional, overrides generated)", 3)
+    SubLabel("HIGHLIGHT ACCENT (this brain)")
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        val opts = listOf("" to "amber", "#00E5FF" to "cyan", "#7C4DFF" to "violet",
+            "#00E676" to "green", "#FF4081" to "magenta", "#40C4FF" to "blue", "#69F0AE" to "mint")
+        opts.forEach { (hex, label) ->
+            Chip(label, accent == hex, Modifier) { accent = hex }
+        }
+    }
     Button(onClick = {
         fun lines(x: String) = x.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
         scope.launch {
@@ -565,7 +576,7 @@ private fun PersonalityEditor(
                     description = desc.trim(), traits = traits.split(',').map { it.trim() }.filter { it.isNotEmpty() },
                     tone = tone, verbosity = verbosity, speakingStyle = lines(style), catchphrases = lines(catch),
                     fallbacks = lines(fallbacks), signoff = signoff.trim(), emoji = emoji,
-                    flair = flair.toDouble(), systemPrompt = sys.trim(),
+                    flair = flair.toDouble(), systemPrompt = sys.trim(), accent = accent,
                 ))
             }
             toast("Personality saved")
@@ -620,6 +631,10 @@ private fun Hint(text: String) = Text(text, style = MaterialTheme.typography.lab
 @Composable
 private fun SubLabel(text: String) = Text(text, style = MaterialTheme.typography.labelSmall, color = OmertaAmber,
     modifier = Modifier.padding(top = 4.dp))
+
+private fun parseAccent(hex: String): androidx.compose.ui.graphics.Color =
+    if (hex.isBlank()) OmertaAmber
+    else runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex)) }.getOrDefault(OmertaAmber)
 
 @Composable
 private fun Section(text: String) = Text(text, style = MaterialTheme.typography.labelMedium, color = OmertaAmber,

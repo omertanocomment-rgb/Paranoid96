@@ -70,6 +70,30 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit, onBrain: () -> Unit) {
     } ?: false
     val approval by vm.approval.collectAsStateWithLifecycle()
 
+    // First-run onboarding — shown once.
+    if (settings?.onboarded == false) {
+        AlertDialog(
+            onDismissRequest = { vm.markOnboarded() },
+            containerColor = OmertaSurface,
+            title = { Text("Welcome to Omerta AI", color = OmertaAmber, style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Text(
+                    "Your offline operator brain. Silence is golden.\n\n" +
+                        "• Tap “go fully OFFLINE” to use the on-device brain — no key, no network.\n" +
+                        "• Teach it by talking: “remember that …”, “when I say X, say Y”, “wrong, it's …”.\n" +
+                        "• Ask “what do you know”, or open 🧠 Brain to give it a personality, load files,\n" +
+                        "  back up / restore, and see the agent action log.\n" +
+                        "• Prefer Claude/OpenAI? Add a key in Settings — it's encrypted on-device.",
+                    color = OmertaTextPrimary, style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = { TextButton(onClick = { vm.useBrain(); vm.markOnboarded() }) {
+                Text("GO OFFLINE", color = OmertaAmber) } },
+            dismissButton = { TextButton(onClick = { vm.markOnboarded() }) {
+                Text("GOT IT", color = OmertaTextSecondary) } },
+        )
+    }
+
     approval?.let { pending ->
         val high = pending.risk == ai.omerta.assistant.data.agent.RiskLevel.HIGH
         val riskColor = when (pending.risk) {

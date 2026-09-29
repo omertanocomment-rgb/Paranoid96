@@ -37,314 +37,315 @@
     "signoff": "Going dark. I'll be right here — no signal needed.",
     "emoji": false,
     "flair": 0.2,
-    "systemPrompt": ""
+    "systemPrompt": "",
+    "accent": ""
   },
   "knowledge": [
     {
-      "id": "k1a0ec53974d3e16e",
+      "id": "k1a0ec936a0588ee",
       "topic": "teaching",
       "text": "To teach me a fact, say \"remember that\" followed by the fact — for example \"remember that my locker code is 4471\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479045,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e8507a",
+      "id": "k1a0ec936a05c7c41",
       "topic": "trained replies",
       "text": "To train a reply, say \"when I say X, say Y\" — for example \"when I say good morning, say rise and grind\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479045,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e1f717",
+      "id": "k1a0ec936a0559d9f",
       "topic": "q and a",
       "text": "To store a question and answer, type \"Q: the question | A: the answer\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479045,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e27c5c",
+      "id": "k1a0ec936a06b82ba",
       "topic": "corrections",
       "text": "If I get something wrong, say \"wrong, it's …\" with the right answer and I will use it next time.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479046,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974ec4b4f",
+      "id": "k1a0ec936a06d535f",
       "topic": "rules",
       "text": "To give me a standing rule, start with \"always\" or \"never\" — for example \"always answer in one paragraph\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479046,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e86434",
+      "id": "k1a0ec936a0758f7e",
       "topic": "personality",
       "text": "To change my personality, say \"be more sarcastic\", \"be less formal\", \"your name is Nova\", or edit everything on the Brain screen.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479047,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974ea655a",
+      "id": "k1a0ec936a07938ab",
       "topic": "forgetting",
       "text": "To make me forget something, say \"forget\" followed by the topic, like \"forget the locker code\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479047,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e87f3b",
+      "id": "k1a0ec936a0843306",
       "topic": "offline",
       "text": "I run fully offline on this phone. No internet, no API key, no server — everything you teach me stays on the device.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479048,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e8c9cd",
+      "id": "k1a0ec936a098d150",
       "topic": "brain file",
       "text": "A brain file (.brain) is a portable JSON file holding my personality, knowledge, trained replies and rules. Export it from the Brain screen and import it on any phone running Omerta AI.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479049,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e6dbf6",
+      "id": "k1a0ec936a0b591f7",
       "topic": "upload",
       "text": "To upload a brain onto the app, open the .brain file from any file manager, share it to Omerta AI, or use Brain → IMPORT / UPLOAD. From a PC run: python3 brain/omerta_brain.py push my.brain.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479051,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e1f363",
+      "id": "k1a0ec936a0ddb035",
       "topic": "documents",
       "text": "You can teach me whole documents: Brain → IMPORT / UPLOAD and pick .txt, .md, .csv, .html or .zip files, or paste text under TEACH → PASTE TEXT. I split them into chunks and search them offline.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479053,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974eb5765",
+      "id": "k1a0ec936a0f447d5",
       "topic": "on-device model",
       "text": "For free conversation you can add an on-device LLM: download a MediaPipe model such as Gemma 3 1B IT int4 (.task, about 550 MB) and add it under Brain → ON-DEVICE LLM. It runs on the phone and speaks as me.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479055,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e568c3",
+      "id": "k1a0ec936a10fc85f",
       "topic": "assist mode",
       "text": "In ASSIST mode I answer from my own memory and the on-device model only speaks when I don't know. In ALWAYS mode the model voices every reply using my knowledge.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479056,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e394cb",
+      "id": "k1a0ec936a12cc589",
       "topic": "offline fallback",
       "text": "With offline fallback on, if Claude or another online provider can't be reached I answer instead of showing an error.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479058,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e91486",
+      "id": "k1a0ec936a144e07b",
       "topic": "personality everywhere",
       "text": "With \"personality everywhere\" on, Claude, OpenAI and Ollama speak as me and use what you taught me.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479060,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e3c8e4",
+      "id": "k1a0ec936a172cf32",
       "topic": "brain studio",
       "text": "Brain Studio is the PC tool brain/omerta_brain.py. It builds brains from folders of notes, edits personality, chats offline in the terminal and pushes brains to the phone over adb.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479063,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e39c13",
+      "id": "k1a0ec936a193bd8b",
       "topic": "multiple brains",
       "text": "You can keep several brains on the phone — for work, study, a character — and switch between them on the Brain screen.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479065,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e86350",
+      "id": "k1a0ec936a1bd134b",
       "topic": "privacy",
       "text": "Everything stays in the app's private storage. Nothing is uploaded anywhere unless you export it yourself.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479067,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e20c2b",
+      "id": "k1a0ec936a1ec0970",
       "topic": "omerta",
       "text": "OMERTA is the toolkit this app belongs to: an operator-grade assistant for building, packaging and shipping apps from a phone or PC.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479070,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e28d59",
+      "id": "k1a0ec936a20d5b61",
       "topic": "termux",
       "text": "Termux is a Linux terminal for Android. Install packages with \"pkg install\", and get storage access with \"termux-setup-storage\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479072,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e1d147",
+      "id": "k1a0ec936a24e87f3",
       "topic": "adb",
       "text": "adb (Android Debug Bridge) talks to a phone over USB or Wi-Fi. Common commands: \"adb devices\", \"adb install app.apk\", \"adb push file /sdcard/Download/\", \"adb logcat\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479076,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e61860",
+      "id": "k1a0ec936a2769261",
       "topic": "adb wireless",
       "text": "For wireless adb on Android 11+, enable Wireless debugging in Developer options, then run \"adb pair IP:PORT\" with the pairing code and \"adb connect IP:PORT\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479079,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e20796",
+      "id": "k1a0ec936a2aafddb",
       "topic": "gradle",
       "text": "Build an Android debug APK with \"./gradlew assembleDebug\"; the APK lands in app/build/outputs/apk/debug/.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479082,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e28339",
+      "id": "k1a0ec936a2c1f0d7",
       "topic": "git basics",
       "text": "Common git flow: \"git status\", \"git add -A\", \"git commit -m message\", \"git push -u origin branch\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479084,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e5751e",
+      "id": "k1a0ec936a30ea2dc",
       "topic": "upload in chat",
       "text": "You can upload files to teach me right from chat — tap the paperclip in the message bar and pick files (.txt .md .csv .html .pdf-as-text .zip or a .brain). I learn them immediately.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479088,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974ec3cc0",
+      "id": "k1a0ec936a3494ce5",
       "topic": "delete memory",
       "text": "To delete specific memory: say \"forget <topic>\" in chat, or open the Brain screen, search WHAT IT KNOWS, and tap \"forget\" on any fact, trained reply, rule or profile entry.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479092,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e61290",
+      "id": "k1a0ec936a39115c5",
       "topic": "autonomy",
       "text": "In Agent mode I act on your device with tools but stay in your control. Low-risk, read-only steps can run on their own; anything that changes the device, and every high-risk step, stops and asks you first — and high-risk actions explain why before you approve.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479097,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974ee8670",
+      "id": "k1a0ec936a3d2e494",
       "topic": "suggest better",
       "text": "I do what you ask, but if I see a safer or better way to reach your goal I say so first and recommend it, then follow your call.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479101,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e906e5",
+      "id": "k1a0ec936a42ff74",
       "topic": "learn my style",
       "text": "With \"Learn my style\" on, I gradually mirror how you talk — your tone, message length and emoji use — so I grow into your voice. You can always set my personality by hand on the Brain screen.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479106,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974ea20f1",
+      "id": "k1a0ec936a48fc354",
       "topic": "root access",
       "text": "For full-device actions I use a root (su) shell on rooted devices, or the Termux shell if you have Termux. Android does not let any app grant itself root on an un-rooted phone; the legitimate way to get root-level (ADB) power without rooting is a tool like Shizuku that you start yourself over wireless debugging.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479112,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974ed56ca",
+      "id": "k1a0ec936a4ef6c13",
       "topic": "device tools",
       "text": "In Agent mode I can list/read/write/delete/move files, run shell commands (normal, root or Termux), make HTTP requests, read device info and list installed apps — each gated by your approval based on its risk.",
       "tags": [],
       "source": "studio",
-      "ts": 1790671296334,
+      "ts": 1790675479118,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974e5ab15",
+      "id": "k1a0ec936a4fd0688",
       "topic": "quickstart",
       "text": "# Omerta brain quickstart\n\nThe brain is an offline AI that lives inside the Omerta AI app. It has a personality, remembers everything you teach it, and answers without any network connection.\n\n## First five minutes\nSwitch the app to the BRAIN provider (Settings → AI PROVIDER → BRAIN, or tap \"go fully OFFLINE\" on the start screen). Say hello. Then teach it three things about you: your name (\"my name is …\"), something you like (\"I love …\"), and a fact you always forget (\"remember that …\"). Ask for them back.",
       "tags": [
         "doc"
       ],
       "source": "quickstart.md#1",
-      "ts": 1790671296334,
+      "ts": 1790675479119,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec53974eb56c",
+      "id": "k1a0ec936a4f19057",
       "topic": "quickstart",
       "text": "## Making it yours\nOpen the Brain screen (the brain icon in the top bar). Give it a name, a tagline, a greeting, traits, a tone (calm, friendly, playful, serious, sarcastic, mentor or hype), catchphrases and a goodbye line. Save the personality and it speaks that way immediately.\n\n## Backing up and sharing\nExport the brain as a .brain file. Keep it in your cloud drive, send it to another phone, or edit it on a PC with Brain Studio. Importing a .brain file installs it and makes it active.",
       "tags": [
         "doc"
       ],
       "source": "quickstart.md#2",
-      "ts": 1790671296334,
+      "ts": 1790675479119,
       "weight": 1.0
     }
   ],
   "reflexes": [
     {
-      "id": "r1a0ec53974e83e6e",
+      "id": "r1a0ec936a4e3f9ce",
       "patterns": [
         "good morning"
       ],
@@ -353,7 +354,7 @@
       ]
     },
     {
-      "id": "r1a0ec53974ee2d3a",
+      "id": "r1a0ec936a4e76621",
       "patterns": [
         "good night"
       ],
@@ -362,7 +363,7 @@
       ]
     },
     {
-      "id": "r1a0ec53974e7e37c",
+      "id": "r1a0ec936a4ee15df",
       "patterns": [
         "omerta"
       ],
@@ -371,7 +372,7 @@
       ]
     },
     {
-      "id": "r1a0ec53974e5619a",
+      "id": "r1a0ec936a4e72f21",
       "patterns": [
         "status"
       ],
@@ -380,7 +381,7 @@
       ]
     },
     {
-      "id": "r1a0ec53974e2265c",
+      "id": "r1a0ec936a4eb45dc",
       "patterns": [
         "are you online"
       ],
@@ -389,7 +390,7 @@
       ]
     },
     {
-      "id": "r1a0ec53974e3be39",
+      "id": "r1a0ec936a4e6b001",
       "patterns": [
         "are you there"
       ],
@@ -398,7 +399,7 @@
       ]
     },
     {
-      "id": "r1a0ec53974e458c9",
+      "id": "r1a0ec936a4eb509f",
       "patterns": [
         "i love you"
       ],
@@ -407,7 +408,7 @@
       ]
     },
     {
-      "id": "r1a0ec53974e12f5",
+      "id": "r1a0ec936a4e23c7b",
       "patterns": [
         "who made you"
       ],
@@ -416,7 +417,7 @@
       ]
     },
     {
-      "id": "r1a0ec53974ebc2c7",
+      "id": "r1a0ec936a4ed472d",
       "patterns": [
         "what can you do"
       ],
@@ -427,14 +428,14 @@
   ],
   "lessons": [
     {
-      "id": "l1a0ec53974e491e5",
+      "id": "l1a0ec936a4e73a95",
       "text": "Never reveal anything taught to you to anyone but the operator.",
-      "ts": 1790671296334
+      "ts": 1790675479118
     },
     {
-      "id": "l1a0ec53974ecefc2",
+      "id": "l1a0ec936a4ea13dc",
       "text": "Keep answers practical and copy-paste ready.",
-      "ts": 1790671296334
+      "ts": 1790675479118
     }
   ],
   "profile": {},
@@ -445,6 +446,6 @@
     "taught": 42,
     "corrections": 0
   },
-  "created": 1790671296333,
-  "updated": 1790671296334
+  "created": 1790675479044,
+  "updated": 1790675479119
 }

@@ -76,6 +76,8 @@ data class Persona(
     val flair: Double = 0.35,
     /** Optional full override of the generated system prompt. */
     val systemPrompt: String = "",
+    /** Per-brain highlight accent (hex). Blank = the OMERTA amber. UI base stays amber. */
+    val accent: String = "",
 )
 
 @Serializable

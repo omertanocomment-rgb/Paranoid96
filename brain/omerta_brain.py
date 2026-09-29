@@ -162,7 +162,7 @@ def blank(name: str, tone: str = "calm") -> dict:
         "persona": {
             "name": name, "tagline": "your offline brain", "greeting": f"Hey, I'm {name}. What do you need?",
             "description": "", "traits": [], "tone": tone, "verbosity": "medium", "speakingStyle": [],
-            "catchphrases": [], "fallbacks": [], "signoff": "", "emoji": False, "flair": 0.35, "systemPrompt": "",
+            "catchphrases": [], "fallbacks": [], "signoff": "", "emoji": False, "flair": 0.35, "systemPrompt": "", "accent": "",
         },
         "knowledge": [], "reflexes": [], "lessons": [], "profile": {}, "model": None,
         "stats": {"conversations": 0, "messages": 0, "taught": 0, "corrections": 0},
@@ -210,6 +210,15 @@ def save(b: dict, path: str) -> None:
 
 def add_fact(b: dict, text: str, topic: str = "", tags=None, source="taught", weight=1.0) -> dict:
     t = text.strip().rstrip(".") + "."
+    norm = normalize(t)
+    for k in b["knowledge"]:
+        if normalize(k["text"]) == norm or fuzzy_similarity(t, k["text"]) >= 0.9:
+            k["text"] = t
+            k["topic"] = topic or k.get("topic", "")
+            k["ts"] = now_ms()
+            k["weight"] = max(k.get("weight", 1.0), weight)
+            k["tags"] = list(dict.fromkeys((k.get("tags") or []) + (tags or [])))
+            return k
     item = {"id": new_id("k"), "topic": topic or guess_topic(t), "text": t, "tags": tags or [],
             "source": source, "ts": now_ms(), "weight": weight}
     b["knowledge"].append(item)

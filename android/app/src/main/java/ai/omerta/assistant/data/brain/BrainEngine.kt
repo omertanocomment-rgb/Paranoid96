@@ -94,6 +94,17 @@ class BrainEngine(
 
     fun addFact(text: String, topic: String = "", tags: List<String> = emptyList(), weight: Double = 1.0): KnowledgeItem {
         val t = text.trim().trimEnd('.') + "."
+        // Dedupe: if we already know essentially the same thing, refresh it instead of piling up.
+        val norm = TextKit.normalize(t)
+        val dup = brain.knowledge.firstOrNull {
+            TextKit.normalize(it.text) == norm || TextKit.fuzzySimilarity(t, it.text) >= 0.9
+        }
+        if (dup != null) {
+            val merged = dup.copy(text = t, topic = topic.ifBlank { dup.topic }, ts = clock(),
+                weight = maxOf(dup.weight, weight), tags = (dup.tags + tags).distinct())
+            mutate { b -> b.copy(knowledge = b.knowledge.map { if (it.id == dup.id) merged else it }) }
+            return merged
+        }
         val item = KnowledgeItem(newId("k"), topic.ifBlank { guessTopic(t) }, t, tags, "taught", clock(), weight)
         mutate { it.copy(knowledge = it.knowledge + item) }
         mutateStats { it.copy(taught = it.taught + 1) }

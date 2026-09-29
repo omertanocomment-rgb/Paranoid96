@@ -443,6 +443,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun markOnboarded() { viewModelScope.launch { settingsStore.setOnboarded() } }
+
     /** One tap to fully offline: embedded engine + the on-device brain. */
     fun useBrain() {
         viewModelScope.launch {
