@@ -82,6 +82,10 @@ data class OmertaSettings(
     /** Adapt the active brain's personality to how the operator talks over time. */
     val adaptivePersona: Boolean = true,
     val onboarded: Boolean = false,
+    // --- auto-backup ---
+    val autoBackupDir: String = "",   // SAF tree uri (persisted); blank = off
+    val autoBackupHours: Int = 0,     // 0 = off, else min hours between backups
+    val lastBackupMs: Long = 0L,
 ) {
     val embedded: Boolean get() = engineMode == EngineMode.EMBEDDED
 }
@@ -118,6 +122,9 @@ class SettingsStore(private val context: Context) {
         val SUGGEST_BETTER = booleanPreferencesKey("suggest_better")
         val ADAPTIVE_PERSONA = booleanPreferencesKey("adaptive_persona")
         val ONBOARDED = booleanPreferencesKey("onboarded")
+        val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")
+        val AUTO_BACKUP_HOURS = androidx.datastore.preferences.core.intPreferencesKey("auto_backup_hours")
+        val LAST_BACKUP_MS = androidx.datastore.preferences.core.longPreferencesKey("last_backup_ms")
     }
 
     companion object {
@@ -164,6 +171,9 @@ class SettingsStore(private val context: Context) {
             suggestBetter = p[Keys.SUGGEST_BETTER] ?: true,
             adaptivePersona = p[Keys.ADAPTIVE_PERSONA] ?: true,
             onboarded = p[Keys.ONBOARDED] ?: false,
+            autoBackupDir = p[Keys.AUTO_BACKUP_DIR] ?: "",
+            autoBackupHours = p[Keys.AUTO_BACKUP_HOURS] ?: 0,
+            lastBackupMs = p[Keys.LAST_BACKUP_MS] ?: 0L,
         )
     }
 
@@ -210,6 +220,15 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setOnboarded() { context.dataStore.edit { it[Keys.ONBOARDED] = true } }
+
+    suspend fun setAutoBackup(dir: String?, hours: Int?) {
+        context.dataStore.edit { p ->
+            dir?.let { p[Keys.AUTO_BACKUP_DIR] = it }
+            hours?.let { p[Keys.AUTO_BACKUP_HOURS] = it }
+        }
+    }
+
+    suspend fun markBackupNow() { context.dataStore.edit { it[Keys.LAST_BACKUP_MS] = System.currentTimeMillis() } }
 
     suspend fun updateBrain(
         llmMode: String? = null,

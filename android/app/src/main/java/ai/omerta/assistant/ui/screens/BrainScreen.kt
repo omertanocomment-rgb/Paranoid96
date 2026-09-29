@@ -285,6 +285,34 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
                 }
             }
 
+            // ------------------------------------------------ auto-backup
+            Section("AUTO-BACKUP")
+            val pickFolderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                if (uri != null) vm.setAutoBackupFolder(uri)
+            }
+            val hasFolder = s.autoBackupDir.isNotBlank()
+            Hint(if (hasFolder) "Backing up all brains to your chosen folder."
+                 else "Pick a folder (SD card, Documents, a synced folder…) to keep timestamped .zip backups of every brain.")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { pickFolderLauncher.launch(null) }, colors = ghostButton(), modifier = Modifier.weight(1f)) {
+                    Text(if (hasFolder) "CHANGE FOLDER" else "PICK FOLDER", style = MaterialTheme.typography.labelSmall)
+                }
+                Button(onClick = { vm.backupNow() }, colors = amberButton(), modifier = Modifier.weight(1f),
+                    enabled = hasFolder) { Text("BACK UP NOW", style = MaterialTheme.typography.labelSmall) }
+            }
+            SubLabel("FREQUENCY")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(0 to "OFF", 24 to "DAILY", 168 to "WEEKLY").forEach { (h, l) ->
+                    Chip(l, s.autoBackupHours == h, Modifier.weight(1f)) { vm.setAutoBackupHours(h) }
+                }
+            }
+            if (s.lastBackupMs > 0L) {
+                val last = remember(s.lastBackupMs) {
+                    java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(s.lastBackupMs))
+                }
+                Hint("Last backup: $last. Runs on open when due (keeps the latest 10).")
+            } else Hint("Runs automatically on open when due; keeps the latest 10 backups.")
+
             // ------------------------------------------------ teach
             Section("TEACH")
             Hint("Or just talk to it in chat: \"remember that…\", \"when I say X, say Y\", \"Q: … | A: …\", " +

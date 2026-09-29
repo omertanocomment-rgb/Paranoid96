@@ -86,6 +86,10 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   the UI (Brain header, personality editor accent chips). The UI base stays amber.
 - First-run onboarding: a one-time dialog (SettingsStore `onboarded` flag) points to going
   offline, teaching, the Brain screen, and encrypted keys.
+- Auto-backup: pick a SAF folder once (Brain → AUTO-BACKUP, persisted uri permission);
+  `BrainStore.backupAllToTree` writes a timestamped `.zip` of every brain there, keeping the
+  latest 10. Runs on launch when due (`ChatViewModel.maybeAutoBackup`, OFF/DAILY/WEEKLY) or
+  on demand (BACK UP NOW). No background service — a private, on-open safety net.
 
 ## What this repo is
 - `android/` — native Android app **Omerta AI** (`ai.omerta.assistant`), Kotlin +

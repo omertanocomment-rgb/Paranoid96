@@ -79,6 +79,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     init {
         checkConnection()
         scanBrainInbox()
+        maybeAutoBackup()
     }
 
     /** Picks up brains pushed from a PC (`omerta_brain.py push`). */
@@ -444,6 +445,44 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun markOnboarded() { viewModelScope.launch { settingsStore.setOnboarded() } }
+
+    /** Persist a SAF folder for auto-backup (takes a persistable permission so it survives reboots). */
+    fun setAutoBackupFolder(uri: android.net.Uri) {
+        viewModelScope.launch {
+            runCatching {
+                getApplication<Application>().contentResolver.takePersistableUriPermission(
+                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            settingsStore.setAutoBackup(uri.toString(), null)
+            appendAssistant("🧠 auto-backup folder set — I'll snapshot all brains here.")
+            backupNow()
+        }
+    }
+
+    fun setAutoBackupHours(hours: Int) { viewModelScope.launch { settingsStore.setAutoBackup(null, hours) } }
+
+    fun backupNow() {
+        viewModelScope.launch {
+            val s = settingsStore.settings.first()
+            if (s.autoBackupDir.isBlank()) { appendAssistant("🧠 pick an auto-backup folder first (Brain → AUTO-BACKUP)."); return@launch }
+            runCatching { brain.store.backupAllToTree(android.net.Uri.parse(s.autoBackupDir)) }
+                .fold(onSuccess = { settingsStore.markBackupNow(); appendAssistant("🧠 backed up all brains → $it") },
+                      onFailure = { appendAssistant("🧠 backup failed: ${it.message}", isError = true) })
+        }
+    }
+
+    /** On launch: if a folder is set and the interval elapsed, back up silently. */
+    private fun maybeAutoBackup() {
+        viewModelScope.launch {
+            val s = settingsStore.settings.first()
+            if (s.autoBackupDir.isBlank() || s.autoBackupHours <= 0) return@launch
+            val due = System.currentTimeMillis() - s.lastBackupMs >= s.autoBackupHours * 3_600_000L
+            if (!due) return@launch
+            runCatching { brain.store.backupAllToTree(android.net.Uri.parse(s.autoBackupDir)) }
+                .onSuccess { settingsStore.markBackupNow() }
+        }
+    }
 
     /** One tap to fully offline: embedded engine + the on-device brain. */
     fun useBrain() {

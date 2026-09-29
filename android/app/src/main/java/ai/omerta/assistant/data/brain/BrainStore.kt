@@ -185,6 +185,34 @@ class BrainStore(private val context: Context) {
             ?: error("cannot write export")
     }
 
+    /**
+     * Auto-backup: write a timestamped .zip of all brains into a SAF folder the user
+     * granted (persisted tree uri), keeping the most recent [keep]. Returns the file name.
+     */
+    fun backupAllToTree(treeUri: Uri, keep: Int = 10): String {
+        val dir = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, treeUri)
+            ?: error("cannot open backup folder")
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
+        val name = "omerta-brains-$stamp.zip"
+        val file = dir.createFile("application/zip", name) ?: error("cannot create backup file")
+        val brains = brainDir.listFiles { f -> f.name.endsWith(".brain") }.orEmpty()
+        context.contentResolver.openOutputStream(file.uri)?.use { out ->
+            java.util.zip.ZipOutputStream(out).use { zip ->
+                for (bf in brains) {
+                    zip.putNextEntry(java.util.zip.ZipEntry(bf.name))
+                    bf.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        } ?: error("cannot write backup")
+        // Prune old auto-backups.
+        dir.listFiles()
+            .filter { it.name?.startsWith("omerta-brains-") == true && it.name?.endsWith(".zip") == true }
+            .sortedBy { it.name }
+            .let { if (it.size > keep) it.take(it.size - keep).forEach { f -> f.delete() } }
+        return name
+    }
+
     /** Password-encrypted portable export (AES-256-GCM). */
     fun exportEncrypted(b: BrainFile, uri: Uri, password: String) {
         val blob = BrainCrypto.encrypt(b.encode(), password)

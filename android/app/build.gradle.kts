@@ -129,6 +129,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.1")
 
+    // SAF folder access for auto-backup to a user-chosen directory
+    implementation("androidx.documentfile:documentfile:1.0.1")
+
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
