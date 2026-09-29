@@ -30,6 +30,14 @@ them, or in a separate file.
 The block verifies before it installs and refuses on a mismatch, so a truncated
 download fails loudly instead of becoming a "parse error" at the installer.
 
+Take checksums from the artifact being shipped, never from an earlier build of
+the same version. A rebuild is not byte-identical — gradle timestamps and
+signing see to that — so an APK built minutes before has a different hash from
+the one inside the zip. Quoting the wrong one makes the block reject a download
+that was perfectly good, which reads as a corrupt file and is not. Prefer the
+`SHA256SUMS` that ships inside the zip: the block reads it, so nothing has to
+be transcribed at all.
+
 ## Do not build a web app
 
 The Android app is Jetpack Compose — real widgets, no WebView, no HTML, no

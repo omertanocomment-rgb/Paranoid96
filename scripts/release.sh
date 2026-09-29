@@ -93,5 +93,19 @@ unzip -t "$ZIP" >/dev/null || fail "the zip does not verify"
 
 printf '\n\033[92mbuilt %s (%s)\033[0m\n' "$ZIP" "$(du -h "$ZIP" | cut -f1)"
 echo
-find "$OUT" -type f \( -name '*.apk' -o -name '*.deb' -o -name '*.exe' \) \
-  -printf '  %-56p %s bytes\n' | sed "s|$OUT/||"
+
+# Print the checksums of what went INTO the zip, not of anything built earlier.
+# A rebuild is not byte-identical -- gradle timestamps and signing see to that
+# -- so an APK built a minute ago has a different hash from the one packaged
+# here. Quoting the wrong one sends the owner a block that refuses a download
+# that was perfectly good. That happened; this is so it cannot happen quietly.
+echo "  zip  $(sha256sum "$ZIP" | cut -d' ' -f1)"
+while read -r sum path; do
+  case "$path" in
+    *.apk|*.deb|*.exe) printf '  %-4s %s  %s\n' \
+      "$(echo "${path##*.}" | cut -c1-4)" "$sum" "${path#./}" ;;
+  esac
+done < "$OUT/SHA256SUMS"
+echo
+echo "  the zip carries these in SHA256SUMS; read them from there rather than"
+echo "  quoting a hash from an earlier build"
