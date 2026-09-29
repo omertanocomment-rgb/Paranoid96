@@ -95,10 +95,10 @@ class Canvas:
                 chunk(b"IDAT", zlib.compress(bytes(raw), 9)) + chunk(b"IEND", b""))
 
 
-def draw(size: int, colors: dict) -> bytes:
+def draw(size: int, colors: dict, accent: str | None = None) -> bytes:
     black = hex_rgb(colors["black"])
     surface = hex_rgb(colors["surface"])
-    amber = hex_rgb(colors["amber"])
+    amber = hex_rgb(accent or colors["amber"])
     c = Canvas(size, black)
     cx = cy = size / 2.0
     # Inner console panel (subtle).
@@ -129,18 +129,69 @@ def build_ico(png_by_size: dict[int, bytes]) -> bytes:
     return header + entries + blobs
 
 
-def main():
+# Per-app thumbnail accents. The UI theme stays amber everywhere; only the app
+# ICON/thumbnail accent changes per app so they're distinguishable on a home screen —
+# all still on the OMERTA near-black hexagon mark. Curated to stay legible on #0A0A0B.
+APP_ACCENTS = [
+    "#FFB300",  # amber   — Omerta AI (flagship)
+    "#00E5FF",  # cyan
+    "#7C4DFF",  # violet
+    "#00E676",  # green
+    "#FF5252",  # red
+    "#40C4FF",  # blue
+    "#FF4081",  # magenta
+    "#FFD740",  # gold
+    "#69F0AE",  # mint
+    "#B388FF",  # lavender
+    "#FF6E40",  # coral
+    "#18FFFF",  # aqua
+]
+
+
+def derive_accent(name: str) -> str:
+    """Deterministic, distinct per-app thumbnail accent from the app name.
+    'Omerta AI' (and empty) → flagship amber; every other name → a stable family color."""
+    key = (name or "").strip().lower()
+    if key in ("", "omerta", "omerta ai"):
+        return APP_ACCENTS[0]
+    h = 0
+    for ch in key:
+        h = (h * 131 + ord(ch)) & 0xFFFFFFFF
+    return APP_ACCENTS[1 + (h % (len(APP_ACCENTS) - 1))]
+
+
+def generate(accent: str, prefix: str, outdir: str) -> None:
     colors = load_colors()
+    os.makedirs(outdir, exist_ok=True)
     png_by_size = {}
     for size in (256, 64, 32, 16):
-        data = draw(size, colors)
+        data = draw(size, colors, accent)
         png_by_size[size] = data
-        with open(os.path.join(HERE, f"omerta-{size}.png"), "wb") as f:
+        with open(os.path.join(outdir, f"{prefix}-{size}.png"), "wb") as f:
             f.write(data)
-    with open(os.path.join(HERE, "omerta.ico"), "wb") as f:
+    with open(os.path.join(outdir, f"{prefix}.ico"), "wb") as f:
         f.write(build_ico(png_by_size))
-    print("icons: omerta-{256,64,32,16}.png + omerta.ico")
+
+
+def main(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser(description="Generate OMERTA app thumbnail/icons.")
+    ap.add_argument("--name", help="App name; its thumbnail accent is derived from this.")
+    ap.add_argument("--accent", help="Explicit accent hex (overrides --name), e.g. #00E5FF.")
+    ap.add_argument("--prefix", default="omerta", help="Output filename prefix (default: omerta).")
+    ap.add_argument("--outdir", default=HERE, help="Output directory (default: design/logo).")
+    ap.add_argument("--list-accents", action="store_true", help="Print the curated accent palette.")
+    a = ap.parse_args(argv)
+    if a.list_accents:
+        for c in APP_ACCENTS:
+            print(c)
+        return 0
+    accent = a.accent or (derive_accent(a.name) if a.name else load_colors()["amber"])
+    generate(accent, a.prefix, a.outdir)
+    label = f' for "{a.name}"' if a.name else ""
+    print(f"icons: {a.prefix}-{{256,64,32,16}}.png + {a.prefix}.ico  (accent {accent}{label})")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

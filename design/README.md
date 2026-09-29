@@ -46,6 +46,19 @@ Consume the generated files:
 
 Preview the palette: open [`preview.html`](preview.html).
 
+### Per-app thumbnail accent
+The UI theme is the same in every app (amber). Only each app's **icon/thumbnail** takes a
+distinct accent so apps are told apart on a home screen — same OMERTA hexagon mark, dark bg:
+```bash
+python3 design/logo/gen_icons.py                      # flagship Omerta AI — amber
+python3 design/logo/gen_icons.py --name "My App" \
+        --prefix myapp --outdir path/to/app/icons     # derives a stable family color
+python3 design/logo/gen_icons.py --accent "#00E5FF" --prefix myapp   # or set it explicitly
+python3 design/logo/gen_icons.py --list-accents       # the curated palette
+```
+Omerta AI (flagship) is always amber; every other app name maps to a distinct, deterministic
+accent from `APP_ACCENTS`.
+
 ## Every new app inherits this
 1. Theme from these tokens (never hardcode a new palette — add tokens here instead).
 2. JetBrains Mono throughout; amber as the only accent.

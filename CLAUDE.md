@@ -23,6 +23,14 @@ Every new app starts from the **Omerta AI brand**: the OMERTA Design System them
 **slogan "Silence is golden."** with tagline "your offline operator brain" (both in the
 design tokens under `brand`, surfaced in `design/generated/*`, Android `strings.xml`, and
 the desktop app). Reuse these — don't invent per-app branding.
+- **UI is identical across apps** — same near-black theme, JetBrains Mono, and the single
+  **amber** UI accent. Do not recolor the UI per app.
+- **Only the app THUMBNAIL/icon accent changes per app**, so apps are distinguishable on a
+  home screen while staying on the OMERTA hexagon mark. Generate each new app's icons with:
+  `python3 design/logo/gen_icons.py --name "<App Name>" --prefix <app> --outdir <path>`
+  (the accent is derived deterministically from the name; or pass `--accent "#RRGGBB"` from
+  the curated `APP_ACCENTS`). **Omerta AI (flagship) stays amber** — never change it.
+  Use the generated PNGs/`.ico` as that app's launcher/desktop/exe icon.
 
 ## Release & UI standard (ALL projects, going forward)
 Every app is built to a **publishable, signed** standard with a **polished, well-laid-out
