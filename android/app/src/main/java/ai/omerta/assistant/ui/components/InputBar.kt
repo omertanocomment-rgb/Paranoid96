@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,12 +38,22 @@ fun InputBar(
     onSend: () -> Unit,
     onStop: () -> Unit,
     isSending: Boolean,
+    onAttach: (() -> Unit)? = null,
 ) {
     Surface(color = OmertaBlack, modifier = Modifier.navigationBarsPadding().imePadding()) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
+            if (onAttach != null) {
+                IconButton(
+                    onClick = onAttach,
+                    modifier = Modifier.padding(end = 4.dp).size(48.dp),
+                ) {
+                    Icon(Icons.Filled.AttachFile, contentDescription = "Upload a file to teach",
+                        tint = OmertaAmber)
+                }
+            }
             OutlinedTextField(
                 value = value,
                 onValueChange = onValueChange,

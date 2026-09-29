@@ -140,3 +140,46 @@ and the brain flips it when it answers ("your dog is Rex").
 python3 -m unittest brain/test_omerta_brain.py                 # Brain Studio
 cd android && ./gradlew :app:testDebugUnitTest                 # BrainEngine + Robolectric runtime tests
 ```
+
+## Teaching, memory control, autonomy & device access (v1.2)
+
+### Upload files to teach — from chat
+Tap the **paperclip** in the message bar and pick one or more files (`.txt .md .csv
+.html`, extracted `.pdf` text, `.zip`, or a `.brain`). The brain learns them on the spot
+and tells you how many knowledge chunks it added. (Opening/sharing a file to the app and
+Brain → IMPORT / UPLOAD still work too.)
+
+### Delete specific memory
+- In chat: `forget <topic>` removes matching facts, trained replies and rules.
+- On the Brain screen: search **WHAT IT KNOWS** and tap **forget** on any single fact,
+  trained reply, rule or profile entry. Nothing is deleted without you doing it.
+
+### It develops a personality as it learns yours
+Turn on **Brain → Learn my style**. As you chat, the brain quietly tracks your tone,
+message length and emoji use and gradually mirrors them (e.g. short + excited + emoji →
+it becomes playful, briefer, emoji-on). It never overrides a personality you set by hand,
+and the internal counters stay hidden from what it tells you.
+
+### Autonomous, but you stay in control
+In **Agent mode** the brain can act on your **own device** with tools: list/read/write/
+delete/move files, run shell commands, make HTTP requests, read device info, list apps.
+
+- **Autonomy** (Settings → Agent): *Ask every time*, or *Auto low-risk* (read-only
+  steps run on their own; everything else asks). **There is no fully-unattended mode** —
+  anything that changes the device always stops for your approval, and **high-risk actions
+  explain why** in the approval dialog (with a LOW/MEDIUM/HIGH tag and a reason).
+- **It does what you say, but suggests better options.** With *Suggest better options* on,
+  if there's a safer or smarter route to your goal it recommends it first, then follows
+  your decision.
+
+### Phone / computer & internet access — and the honest bit about "root"
+- **Files & internet:** granted through the file tools and `http_request` (any method),
+  plus "all-files access" for the whole device.
+- **Shell / root:** `run_shell` runs commands on your device. On a **rooted** device it can
+  use a `su` shell for full-device reach; with **Termux** installed it can run in the Termux
+  userland. Both are gated by the risk-based approval above.
+- **"Root without rooting":** Android's security model does **not** let any app grant
+  itself root on an un-rooted phone — that's a hard OS boundary, not an app limitation.
+  The legitimate way to get root-level (ADB shell, uid=shell) power *without* rooting is a
+  helper like **Shizuku** that **you** start yourself over wireless debugging; the app can
+  then use that elevated shell. Installing/among a computer works the same way over ADB.

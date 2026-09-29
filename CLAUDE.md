@@ -39,6 +39,20 @@ The two implementations MUST stay behavior-compatible (thinking/effort/streaming
   and then copied into assets. Rebuild it when you change `brain/sources/omerta/`.
 - Teaching intents, reflexes and corrections are always handled by `BrainEngine`, never by
   the on-device LLM, so what the user teaches is always applied the same way.
+- `BrainEngine.observeUser` implements the adaptive persona (mirrors the operator's tone/
+  length/emoji into `Persona`), gated by `adaptivePersona`; internal counters live in
+  hidden `_style_*` profile keys — never surface `_`-prefixed keys (use `visibleProfile()`).
+
+## Agent autonomy & device tools
+- `data/agent/DeviceTools.kt` = the owned-device tools (files, `run_shell` with root/Termux,
+  `http_request`, device info, packages). `data/agent/Risk.kt` classifies each call
+  LOW/MEDIUM/HIGH with a reason. `ChatViewModel.runAgent` gates every call: in `Autonomy.AUTO_LOW`
+  only LOW runs unattended; MEDIUM/HIGH always prompt, HIGH shows the reason. There is
+  deliberately **no fully-unattended mode** — do not add one (the safety classifier rejects it,
+  and it contradicts the product's "asks first" contract).
+- The agent system guidance (`ChatViewModel.agentGuidance`) tells the model to do what the
+  operator asks, suggest a better option first (`suggestBetter`), keep risky steps small,
+  and never work around the approval prompt.
 
 ## Build commands
 

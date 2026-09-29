@@ -26,6 +26,17 @@ object Provider {
     val ALL = listOf(ANTHROPIC, OPENAI, OLLAMA, BRAIN)
 }
 
+/**
+ * How much the agent may act on its own. There is deliberately no "run everything
+ * unattended" mode: anything medium/high-risk always stops for approval, and high-risk
+ * actions explain *why* first. The operator stays in control of anything consequential.
+ */
+object Autonomy {
+    const val ASK_ALL = "ask_all"    // ask before every tool (safest)
+    const val AUTO_LOW = "auto_low"  // run read-only / low-risk tools automatically; ask for everything else
+    val ALL = listOf(ASK_ALL, AUTO_LOW)
+}
+
 /** How the offline brain uses an on-device LLM (when a model file is loaded). */
 object BrainLlmMode {
     const val OFF = "off"        // pure brain engine only (instant, deterministic)
@@ -64,6 +75,12 @@ data class OmertaSettings(
     val personaEverywhere: Boolean = false,
     /** If an online provider fails (no signal), answer from the offline brain instead. */
     val offlineFallback: Boolean = true,
+    // --- agent autonomy (never fully unattended; medium/high always ask) ---
+    val autonomy: String = Autonomy.AUTO_LOW,
+    /** Let the agent propose a better approach before doing exactly what was asked. */
+    val suggestBetter: Boolean = true,
+    /** Adapt the active brain's personality to how the operator talks over time. */
+    val adaptivePersona: Boolean = true,
 ) {
     val embedded: Boolean get() = engineMode == EngineMode.EMBEDDED
 }
@@ -96,6 +113,9 @@ class SettingsStore(private val context: Context) {
         val BRAIN_TEMP = androidx.datastore.preferences.core.floatPreferencesKey("brain_temperature")
         val PERSONA_EVERYWHERE = booleanPreferencesKey("persona_everywhere")
         val OFFLINE_FALLBACK = booleanPreferencesKey("offline_fallback")
+        val AUTONOMY = stringPreferencesKey("autonomy")
+        val SUGGEST_BETTER = booleanPreferencesKey("suggest_better")
+        val ADAPTIVE_PERSONA = booleanPreferencesKey("adaptive_persona")
     }
 
     companion object {
@@ -138,6 +158,9 @@ class SettingsStore(private val context: Context) {
             brainTemperature = p[Keys.BRAIN_TEMP] ?: 0.7f,
             personaEverywhere = p[Keys.PERSONA_EVERYWHERE] ?: false,
             offlineFallback = p[Keys.OFFLINE_FALLBACK] ?: true,
+            autonomy = p[Keys.AUTONOMY] ?: Autonomy.AUTO_LOW,
+            suggestBetter = p[Keys.SUGGEST_BETTER] ?: true,
+            adaptivePersona = p[Keys.ADAPTIVE_PERSONA] ?: true,
         )
     }
 
@@ -191,8 +214,14 @@ class SettingsStore(private val context: Context) {
         temperature: Float? = null,
         personaEverywhere: Boolean? = null,
         offlineFallback: Boolean? = null,
+        autonomy: String? = null,
+        suggestBetter: Boolean? = null,
+        adaptivePersona: Boolean? = null,
     ) {
         context.dataStore.edit { p ->
+            autonomy?.let { p[Keys.AUTONOMY] = it }
+            suggestBetter?.let { p[Keys.SUGGEST_BETTER] = it }
+            adaptivePersona?.let { p[Keys.ADAPTIVE_PERSONA] = it }
             llmMode?.let { p[Keys.BRAIN_LLM] = it }
             model?.let { p[Keys.BRAIN_MODEL] = it }
             promptFormat?.let { p[Keys.BRAIN_FORMAT] = it }

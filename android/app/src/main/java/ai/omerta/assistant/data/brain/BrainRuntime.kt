@@ -70,7 +70,12 @@ class BrainRuntime private constructor(context: Context) {
      */
     fun stream(s: OmertaSettings, history: List<WireMessage>, prefix: String = ""): Flow<StreamEvent> = flow {
         val input = history.lastOrNull { it.role == "user" }?.content.orEmpty()
-        val reply = withContext(Dispatchers.IO) { lock.withLock { engine.respond(input).also { commit() } } }
+        val reply = withContext(Dispatchers.IO) {
+            lock.withLock {
+                if (s.adaptivePersona) engine.observeUser(input)
+                engine.respond(input).also { commit() }
+            }
+        }
         if (prefix.isNotEmpty()) emit(StreamEvent.Delta(prefix))
 
         val model = modelFile(s)

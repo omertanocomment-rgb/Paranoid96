@@ -265,9 +265,10 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
             val q = query.trim().lowercase()
             val kn = brain.knowledge.asReversed().filter { q.isEmpty() || it.text.lowercase().contains(q) || it.topic.lowercase().contains(q) }
             val shown = if (showAll) kn else kn.take(25)
-            if (brain.profile.isNotEmpty()) {
+            val visibleProfile = brain.profile.filterKeys { !it.startsWith("_") }
+            if (visibleProfile.isNotEmpty()) {
                 SubLabel("ABOUT YOU")
-                brain.profile.forEach { (k, v) ->
+                visibleProfile.forEach { (k, v) ->
                     MemRow("${k.replace('_', ' ')}: $v") { scope.launch { rt.edit { it.setProfile(k, null) } } }
                 }
             }
@@ -353,6 +354,8 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
             }
             ToggleLine("Personality everywhere", "Claude / OpenAI / Ollama speak as this brain and use its knowledge",
                 s.personaEverywhere) { vm.saveBrainSettings(personaEverywhere = it) }
+            ToggleLine("Learn my style", "the brain mirrors how you talk (tone, length, emoji) over time",
+                s.adaptivePersona) { vm.saveBrainSettings(adaptivePersona = it) }
 
             // ------------------------------------------------ danger
             Section("DANGER ZONE")

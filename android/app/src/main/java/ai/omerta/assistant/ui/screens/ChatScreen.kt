@@ -70,16 +70,30 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit, onBrain: () -> Unit) {
     val approval by vm.approval.collectAsStateWithLifecycle()
 
     approval?.let { pending ->
+        val high = pending.risk == ai.omerta.assistant.data.agent.RiskLevel.HIGH
+        val riskColor = when (pending.risk) {
+            ai.omerta.assistant.data.agent.RiskLevel.HIGH -> ai.omerta.assistant.ui.theme.OmertaRed
+            ai.omerta.assistant.data.agent.RiskLevel.MEDIUM -> OmertaAmber
+            else -> ai.omerta.assistant.ui.theme.OmertaGreen
+        }
         AlertDialog(
             onDismissRequest = { vm.resolveApproval(false) },
             containerColor = OmertaSurface,
-            title = { Text("Allow tool?", color = OmertaAmber, style = MaterialTheme.typography.titleMedium) },
+            title = {
+                Text("Allow this action?  [${pending.risk}]", color = riskColor,
+                    style = MaterialTheme.typography.titleMedium)
+            },
             text = {
-                Text("Agent wants to run:\n\n${pending.name}\n${pending.input}",
-                    color = OmertaTextPrimary, style = MaterialTheme.typography.bodyMedium)
+                androidx.compose.foundation.layout.Column {
+                    Text("${pending.name}  ${pending.input}", color = OmertaTextPrimary,
+                        style = MaterialTheme.typography.bodyMedium)
+                    Text(pending.reason, color = if (high) riskColor else OmertaTextSecondary,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 10.dp))
+                }
             },
             confirmButton = { TextButton(onClick = { vm.resolveApproval(true) }) {
-                Text("ALLOW", color = OmertaAmber) } },
+                Text(if (high) "ALLOW ANYWAY" else "ALLOW", color = riskColor) } },
             dismissButton = { TextButton(onClick = { vm.resolveApproval(false) }) {
                 Text("DENY", color = OmertaTextSecondary) } },
         )
@@ -99,12 +113,16 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit, onBrain: () -> Unit) {
             )
         },
         bottomBar = {
+            val uploadLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
+            ) { uris -> if (uris.isNotEmpty()) vm.importIncoming(uris) }
             InputBar(
                 value = state.input,
                 onValueChange = vm::updateInput,
                 onSend = vm::send,
                 onStop = vm::stop,
                 isSending = state.isSending,
+                onAttach = { uploadLauncher.launch(arrayOf("*/*")) },
             )
         },
     ) { padding ->

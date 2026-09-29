@@ -162,6 +162,20 @@ class BrainEngineTest {
         assertTrue(e.brain.persona.traits.none { it.contains("answer") })
     }
 
+    @Test fun adaptivePersonaMirrorsStyle() {
+        val e = engine(Persona(name = "N", tone = "calm", verbosity = "medium", emoji = false, flair = 0.0))
+        // Short, excited, emoji-heavy messages → playful, short, emoji on.
+        repeat(8) { e.observeUser("yay!! love it 😄🔥") }
+        assertEquals("playful", e.brain.persona.tone)
+        assertEquals("short", e.brain.persona.verbosity)
+        assertTrue(e.brain.persona.emoji)
+        // Hidden counters are tracked but never leak into what the brain says.
+        assertTrue(e.brain.profile.keys.any { it.startsWith("_") })
+        e.respond("my name is Sam")
+        assertFalse(e.respond("what do you know").text.contains("_style"))
+        assertFalse(e.respond("what's my name?").text.contains("_style"))
+    }
+
     @Test fun perspectiveFlip() {
         assertEquals("your cat is called Tom", TextKit.flipPerspective("my cat is called Tom"))
         assertEquals("You are from Leeds.", TextKit.flipPerspective("I am from Leeds."))

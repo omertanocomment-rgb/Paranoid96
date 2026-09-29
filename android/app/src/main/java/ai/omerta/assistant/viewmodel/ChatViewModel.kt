@@ -55,6 +55,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     data class PendingApproval(
         val name: String,
         val input: Map<String, String>,
+        val risk: ai.omerta.assistant.data.agent.RiskLevel,
+        val reason: String,
         val deferred: CompletableDeferred<Boolean>,
     )
 
@@ -184,8 +186,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         val base = settings.value ?: return
         // Inject operator-taught memory so the app applies what it has learned.
         val taught = memory.learnedContext()
-        val s = if (taught.isBlank()) base
-        else base.copy(systemPrompt = (base.systemPrompt.trim() + "\n\n" + taught).trim())
+        val extras = buildString {
+            if (taught.isNotBlank()) append("\n\n").append(taught)
+            if (base.agentMode) append("\n\n").append(agentGuidance(base))
+        }
+        val s = if (extras.isBlank()) base
+        else base.copy(systemPrompt = (base.systemPrompt.trim() + extras).trim())
         val history = _ui.value.messages.map { it.toWire() }
         when {
             // Agent tool-loop requires the Anthropic tool API.
@@ -195,14 +201,35 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * The system guidance that shapes autonomous behavior: do what the operator asked,
+     * but flag a better option first, run only low-risk steps unattended, and always
+     * pause on anything consequential — spelling out the risk in the tool call.
+     */
+    private fun agentGuidance(s: OmertaSettings): String = buildString {
+        append("You can act on the operator's own device with the provided tools ")
+        append("(files, shell, network, device info). This is authorized, owned-device use.\n")
+        append("- Do what the operator asks. You carry it out — you don't refuse reasonable owned-device tasks.\n")
+        if (s.suggestBetter)
+            append("- If you see a safer or better way to reach their goal, say so in one line and recommend it before acting; then follow their call.\n")
+        append("- Read/inspect freely. Before anything that changes the device, network state, or other apps, ")
+        append("keep the step small and state plainly what it will do; the app will ask the operator to approve it.\n")
+        append("- For high-risk steps (root/su, deletes, system paths, flashing, network writes) explain the risk and why it's needed before requesting it.\n")
+        append("- Never work around the approval prompt. If a step is denied, adapt or ask.")
+    }
+
     /** Autonomous, permission-gated tool-use loop (Agent mode). */
     private fun runAgent(s: OmertaSettings, history: List<ai.omerta.assistant.data.model.WireMessage>) {
         _ui.update { it.copy(isSending = true) }
         streamJob = viewModelScope.launch {
             val handle: suspend (String, Map<String, String>) -> AnthropicClient.ToolOutcome = { name, input ->
-                val allowed = if (s.autoApprove) true else {
+                val risk = ai.omerta.assistant.data.agent.Risk.forTool(name, input)
+                // Low-risk steps may run unattended in AUTO_LOW; everything else always asks.
+                val autoOk = s.autonomy == ai.omerta.assistant.data.local.Autonomy.AUTO_LOW &&
+                    risk.level == ai.omerta.assistant.data.agent.RiskLevel.LOW
+                val allowed = if (autoOk) true else {
                     val d = CompletableDeferred<Boolean>()
-                    _approval.value = PendingApproval(name, input, d)
+                    _approval.value = PendingApproval(name, input, risk.level, risk.reason, d)
                     d.await()
                 }
                 if (!allowed) AnthropicClient.ToolOutcome("denied by operator", isError = true)
@@ -396,9 +423,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         llmMode: String? = null, model: String? = null, promptFormat: String? = null,
         gpu: Boolean? = null, temperature: Float? = null,
         personaEverywhere: Boolean? = null, offlineFallback: Boolean? = null,
+        autonomy: String? = null, suggestBetter: Boolean? = null, adaptivePersona: Boolean? = null,
     ) {
         viewModelScope.launch {
-            settingsStore.updateBrain(llmMode, model, promptFormat, gpu, temperature, personaEverywhere, offlineFallback)
+            settingsStore.updateBrain(llmMode, model, promptFormat, gpu, temperature,
+                personaEverywhere, offlineFallback, autonomy, suggestBetter, adaptivePersona)
             checkConnection()
         }
     }

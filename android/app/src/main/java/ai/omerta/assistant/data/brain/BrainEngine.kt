@@ -100,6 +100,34 @@ class BrainEngine(
         return item
     }
 
+    /**
+     * Learns *how the operator talks* and gently mirrors it: emoji use, message length
+     * (→ answer length), and an enthusiastic/terse lean (→ tone). Signals accumulate in
+     * hidden `_style_*` profile keys and the persona is nudged every few messages, so the
+     * brain grows into your voice without ever overwriting a personality you set by hand.
+     */
+    fun observeUser(text: String) {
+        val words = TextKit.words(text).size
+        val emoji = text.codePoints().filter { it in 0x1F000..0x1FAFF || it in 0x2600..0x27BF }.count().toInt()
+        val excited = text.count { it == '!' } + Regex("\\b(lol|omg|haha|yay|awesome|love it)\\b", RegexOption.IGNORE_CASE).findAll(text).count()
+        fun bump(k: String, by: Int) { setProfileRaw(k, ((brain.profile[k]?.toIntOrNull() ?: 0) + by).toString()) }
+        bump("_style_msgs", 1)
+        if (emoji > 0) bump("_style_emoji", 1)
+        bump("_style_words", words)
+        if (excited > 0) bump("_style_excited", 1)
+        val n = brain.profile["_style_msgs"]?.toIntOrNull() ?: 0
+        if (n < 6 || n % 4 != 0) return
+        val emojiRate = (brain.profile["_style_emoji"]?.toIntOrNull() ?: 0).toDouble() / n
+        val avgWords = (brain.profile["_style_words"]?.toIntOrNull() ?: 0).toDouble() / n
+        val excitedRate = (brain.profile["_style_excited"]?.toIntOrNull() ?: 0).toDouble() / n
+        val p = brain.persona
+        val verbosity = when { avgWords <= 6 -> "short"; avgWords >= 24 -> "long"; else -> p.verbosity }
+        val tone = if (excitedRate >= 0.5 && p.tone in listOf("calm", "serious", "friendly")) "playful" else p.tone
+        val emojiOn = if (emojiRate >= 0.4) true else p.emoji
+        if (verbosity != p.verbosity || tone != p.tone || emojiOn != p.emoji)
+            mutate { it.copy(persona = p.copy(verbosity = verbosity, tone = tone, emoji = emojiOn)) }
+    }
+
     fun addReflex(pattern: String, reply: String): Reflex {
         val norm = TextKit.normalize(pattern)
         val existing = brain.reflexes.firstOrNull { r -> r.patterns.any { TextKit.normalize(it) == norm } }
@@ -126,6 +154,14 @@ class BrainEngine(
     fun setProfile(key: String, value: String?) = mutate { b ->
         b.copy(profile = if (value == null) b.profile - key else b.profile + (key to value))
     }
+
+    /** Set a profile key without reindexing (used for hidden `_style_*` counters). */
+    private fun setProfileRaw(key: String, value: String) {
+        brain = brain.copy(profile = brain.profile + (key to value), updated = clock())
+    }
+
+    /** Visible profile entries (hides internal `_`-prefixed counters). */
+    fun visibleProfile(): Map<String, String> = brain.profile.filterKeys { !it.startsWith("_") }
 
     fun newConversation() {
         lastUserInput = null; lastQuery = null; shownForQuery.clear()
@@ -156,9 +192,10 @@ class BrainEngine(
             brain.lessons.forEach { sb.append("- ${it.text}\n") }
             sb.append('\n')
         }
-        if (brain.profile.isNotEmpty()) {
+        val profile = visibleProfile()
+        if (profile.isNotEmpty()) {
             sb.append("About the user:\n")
-            brain.profile.forEach { (k, v) -> sb.append("- $k: $v\n") }
+            profile.forEach { (k, v) -> sb.append("- $k: $v\n") }
             sb.append('\n')
         }
         val hits = forInput?.let { index.search(it, maxKnowledge) }.orEmpty()
@@ -415,7 +452,7 @@ class BrainEngine(
     }
 
     private fun profileSummary(short: Boolean): String {
-        val rest = brain.profile.filterKeys { it != "name" }
+        val rest = visibleProfile().filterKeys { it != "name" }
         if (rest.isEmpty()) return ""
         val items = rest.entries.take(if (short) 3 else 20).joinToString("; ") { (k, v) -> "${k.replace('_', ' ')}: $v" }
         return " I also know — $items."

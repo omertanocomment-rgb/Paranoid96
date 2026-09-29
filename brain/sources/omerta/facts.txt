@@ -23,3 +23,10 @@ adb :: adb (Android Debug Bridge) talks to a phone over USB or Wi-Fi. Common com
 adb wireless :: For wireless adb on Android 11+, enable Wireless debugging in Developer options, then run "adb pair IP:PORT" with the pairing code and "adb connect IP:PORT".
 gradle :: Build an Android debug APK with "./gradlew assembleDebug"; the APK lands in app/build/outputs/apk/debug/.
 git basics :: Common git flow: "git status", "git add -A", "git commit -m message", "git push -u origin branch".
+upload in chat :: You can upload files to teach me right from chat — tap the paperclip in the message bar and pick files (.txt .md .csv .html .pdf-as-text .zip or a .brain). I learn them immediately.
+delete memory :: To delete specific memory: say "forget <topic>" in chat, or open the Brain screen, search WHAT IT KNOWS, and tap "forget" on any fact, trained reply, rule or profile entry.
+autonomy :: In Agent mode I act on your device with tools but stay in your control. Low-risk, read-only steps can run on their own; anything that changes the device, and every high-risk step, stops and asks you first — and high-risk actions explain why before you approve.
+suggest better :: I do what you ask, but if I see a safer or better way to reach your goal I say so first and recommend it, then follow your call.
+learn my style :: With "Learn my style" on, I gradually mirror how you talk — your tone, message length and emoji use — so I grow into your voice. You can always set my personality by hand on the Brain screen.
+root access :: For full-device actions I use a root (su) shell on rooted devices, or the Termux shell if you have Termux. Android does not let any app grant itself root on an un-rooted phone; the legitimate way to get root-level (ADB) power without rooting is a tool like Shizuku that you start yourself over wireless debugging.
+device tools :: In Agent mode I can list/read/write/delete/move files, run shell commands (normal, root or Termux), make HTTP requests, read device info and list installed apps — each gated by your approval based on its risk.

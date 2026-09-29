@@ -274,10 +274,31 @@ fun SettingsScreen(vm: ChatViewModel, onBack: () -> Unit) {
             ToggleRow("Stream responses", "show text as it generates", streaming, true) { streaming = it }
 
             SectionLabel("AGENT (AUTONOMOUS)")
-            ToggleRow("Agent mode", "let Claude run device tools in a loop", agentMode,
+            ToggleRow("Agent mode", "let Claude act on your device with tools", agentMode,
                 enabled = embedded) { agentMode = it }
-            ToggleRow("Auto-approve tools", "skip the per-action prompt (risky)", autoApprove,
-                enabled = embedded && agentMode) { autoApprove = it }
+            Hint("Autonomy — how much it may do before asking:")
+            val askAll = ai.omerta.assistant.data.local.Autonomy.ASK_ALL
+            val autoLow = ai.omerta.assistant.data.local.Autonomy.AUTO_LOW
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(
+                    onClick = { vm.saveBrainSettings(autonomy = askAll) },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (s.autonomy == askAll) OmertaAmber else OmertaSurface,
+                        contentColor = if (s.autonomy == askAll) OmertaBlack else OmertaTextSecondary),
+                    modifier = Modifier.weight(1f),
+                ) { Text("ASK EVERY TIME", style = MaterialTheme.typography.labelSmall) }
+                OutlinedButton(
+                    onClick = { vm.saveBrainSettings(autonomy = autoLow) },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (s.autonomy == autoLow) OmertaAmber else OmertaSurface,
+                        contentColor = if (s.autonomy == autoLow) OmertaBlack else OmertaTextSecondary),
+                    modifier = Modifier.weight(1f),
+                ) { Text("AUTO LOW-RISK", style = MaterialTheme.typography.labelSmall) }
+            }
+            Hint("Medium and high-risk actions always stop for your approval, and high-risk " +
+                "ones explain why first. There is no fully-unattended mode by design.")
+            ToggleRow("Suggest better options", "propose a safer/better approach before acting", s.suggestBetter,
+                enabled = embedded && agentMode) { vm.saveBrainSettings(suggestBetter = it) }
             OutlinedButton(
                 onClick = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

@@ -15,6 +15,7 @@
         tools:ignore="ScopedStorage" />
 
     <!-- Optional Termux bridge for real shell (OMERTA workflow); user must have Termux. -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <queries>
         <package android:name="com.termux" />
     </queries>
