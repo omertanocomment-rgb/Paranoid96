@@ -4,6 +4,38 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.12.0] — 2026-09-29
+
+The Android app is native. The WebView is gone.
+
+### Changed
+- **The Android interface is Jetpack Compose** — real Android widgets, drawn by
+  the platform. No WebView, no HTML, no JavaScript bridge and no HTTP in the
+  app. The screens call Python in the same process through `OmertaClient` →
+  `core/dispatch`, the same router every other front-end uses, so the approval
+  gate and the wire format are unchanged. Chat (streaming, with the approval
+  card as a real dialog), Terminal (a real shell with a `^C` key) and Settings
+  (providers with the reason each is unavailable and a fix beside it, network
+  mode, approval policy, API key, on-device model catalogue).
+- `webui/` is no longer staged into the APK. It remains for the desktop app and
+  for reaching a backend from a LAN browser.
+
+### Fixed
+- **The payload staging task was a `Copy`, which only ever adds.** Removing
+  `webui/**` from the include list changed nothing: the stale directory stayed
+  in the staging dir and kept shipping. It is a `Sync`, and the APK is verified
+  to contain zero HTML files rather than assumed to.
+
+### Added
+- **`scripts/release.sh`** — one command builds the `.apk`, the `.deb` and the
+  `.exe` and puts all three in one zip with the docs and a `SHA256SUMS`. It
+  runs the audit gate first and refuses to package on a finding, then checks
+  the APK it actually produced carries both ABIs and contains no HTML.
+- **`CLAUDE.md`** — the standing rules, so they survive the session: every
+  release ships three executables; do not build a web app; the gate is not
+  optional; verify the artifact rather than the source that should have made
+  it.
+
 ## [1.11.0] — 2026-09-28
 
 Merged with the native console project. What that codebase had and this did not
