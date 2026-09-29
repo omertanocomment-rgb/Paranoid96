@@ -13,6 +13,7 @@ import json
 
 import requests
 
+from .. import config
 from .base import ProviderError
 
 API_URL = "https://api.anthropic.com/v1/messages"
@@ -20,7 +21,10 @@ API_VERSION = "2023-06-01"
 
 
 def _key(spec):
-    return os.environ.get(spec.get("api_key_env") or "ANTHROPIC_API_KEY", "")
+    # config.secret, not os.environ: a project with its own key must not pick
+    # up the shared one, and the environment is process-wide so it cannot
+    # express that.
+    return config.secret(spec.get("api_key_env") or "ANTHROPIC_API_KEY", "")
 
 
 def reachable(spec):

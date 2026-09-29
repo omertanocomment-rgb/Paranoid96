@@ -1,12 +1,14 @@
 """OpenAI-compatible provider — also serves OpenRouter, Groq, Gemini, LM Studio."""
 import os
 import requests
+from .. import config
 from .base import ProviderError
 
 
 def _key(spec):
+    # config.secret, not os.environ: see anthropic_p._key.
     env = spec.get("api_key_env")
-    return os.environ.get(env, "") if env else ""
+    return config.secret(env, "") if env else ""
 
 
 def reachable(spec):

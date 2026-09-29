@@ -41,6 +41,23 @@ object Intake {
         _dictate.value = _dictate.value + 1
     }
 
+    private val _open = MutableStateFlow<String?>(null)
+    val openPath: StateFlow<String?> = _open.asStateFlow()
+
+    /**
+     * A file the editor should open, from a trace in a reply.
+     *
+     * Carried as a plain path so the editor can resolve it the same way it
+     * resolves anything else; the line number is not passed on, because the
+     * editor is a single text field with no way to scroll to a line yet and
+     * jumping to the wrong place is worse than not jumping.
+     */
+    fun requestOpen(path: String) {
+        if (path.isNotBlank()) _open.value = path
+    }
+
+    fun takeOpen(): String? = _open.value.also { _open.value = null }
+
     /** Taken, so a rotation does not paste it a second time. */
     fun takeText(): String? = _text.value.also { _text.value = null }
 

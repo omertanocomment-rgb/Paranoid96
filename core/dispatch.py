@@ -35,7 +35,8 @@ from . import api
 LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path",
               "/api/localai", "/api/attach",
               "/api/models", "/api/adb",
-              "/api/backup", "/api/wipe", "/api/git", "/api/audit")
+              "/api/backup", "/api/wipe", "/api/git", "/api/audit",
+              "/api/pair/offer", "/api/pair/cancel")
 
 
 def is_local_only(path):
@@ -65,7 +66,6 @@ _GET_PLAIN = {
     "/api/localai": api.localai_status,
     "/api/models": api.models_status,
     "/api/sync/status": api.sync_status,
-    "/api/secret": api.secret_status,
     "/api/policy": api.policy_status,
     "/api/settings": api.settings_payload,
     "/api/workmode": api.mode_status,
@@ -75,6 +75,7 @@ _GET_PLAIN = {
     "/api/chats/projects": api.chat_projects,
     "/api/term": api.term_list,
     "/api/schedule": api.schedule_list,
+    "/api/pair": api.pair_status,
     "/api/wipe": api.wipe_estimate,
     "/api/git": api.git_status,
     "/api/git/branches": api.git_branches,
@@ -87,6 +88,8 @@ def _get(path, query):
     if path == "/api/usage":
         return 200, api.usage_summary(days=_int(query, "days", 30),
                                       project=_one(query, "project"))
+    if path == "/api/secret":
+        return 200, api.secret_status(_one(query, "project"))
     if path == "/api/attach":
         return 200, api.attachments_payload(_one(query, "project"))
     if path == "/api/memory":
@@ -171,6 +174,8 @@ _POST_BODY = {
     "/api/git/diff": api.git_diff,
     "/api/git/review": api.git_review,
     "/api/localai/preflight": api.localai_preflight,
+    "/api/pair/offer": api.pair_offer,
+    "/api/pair/cancel": api.pair_cancel,
     "/api/memory/add": api.memory_add,
     "/api/memory/forget": api.memory_forget,
 }
@@ -214,7 +219,14 @@ def _post(path, body, local):
     return 404, {"error": f"no route {path}"}
 
 
-def handle(method, path, query=None, body=None, local=True):
+def claim_is_open():
+    """Whether the one unauthenticated route should answer. Read by transports."""
+    from . import pairing
+    return pairing.open_offer()
+
+
+def handle(method, path, query=None, body=None, local=True,
+           client_host="", forwarded=False):
     """Route one request.
 
     Returns (status, payload). `payload` is always a JSON-able object, so a
@@ -232,5 +244,12 @@ def handle(method, path, query=None, body=None, local=True):
     if method == "GET":
         return _get(path, query or {})
     if method == "POST":
+        # The claim is the only route that can be reached without a token, and
+        # only while an offer is open. It needs the caller's address, which no
+        # other route does, so it is routed here rather than in the body table.
+        if path == "/api/pair/claim":
+            out = api.pair_claim(body or {}, client_host=client_host,
+                                 forwarded=forwarded)
+            return out.pop("_status", 200), out
         return _post(path, body, local)
     return 405, {"error": f"{method} not allowed"}

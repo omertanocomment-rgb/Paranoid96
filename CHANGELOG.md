@@ -4,7 +4,42 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.14.0] — 2026-09-29
+## [1.15.0] — 2026-09-29
+
+The rest of the list, and the manual caught up with it.
+
+### Added
+- **API keys, per project** — a key can belong to one project instead of the
+  whole install. The scope is thread-local, not an environment variable:
+  `core/api` locks per project and therefore runs two projects concurrently, so
+  a key placed in the process environment would be visible to both. A project
+  with its own keys does **not** fall back to the shared one when a key is
+  removed — it was moved off that account deliberately, and quietly putting it
+  back is the failure this prevents.
+- **Pairing a second device** — the device with the data shows an eight
+  character code for two minutes; the other device types it and receives the
+  token. This is the only route in the program that answers without a token,
+  and only while an offer is open: single use, expiring, five attempts,
+  private addresses only, nothing forwarded, and never written to disk. It
+  does not prove *which* device claimed, and says so.
+- **Files named in a reply become buttons** — a stack trace or a diff header
+  opens that file in CODE. Offered as buttons rather than by making the text
+  tappable, because a trace is full of near-misses and opening the wrong file
+  is worse than not offering.
+- **Dictation prefers the on-device recogniser** (`EXTRA_PREFER_OFFLINE`), and
+  drops the preference on the next press if the recogniser came back empty —
+  several return nothing rather than an error when no language pack is
+  installed. It is a *preference*: nothing in the app can verify where the
+  audio went, so the app never claims it stayed here.
+
+### Changed
+- The Owner's Manual documents all eight tabs, per-project keys, pairing, the
+  audit chain and the panic wipe — including what each one does not prove.
+- `tests/test_guard.py` prints the phrase the audit gate counts. A suite that
+  passed silently was one the gate could not tell apart from one that never
+  ran.
+
+
 
 The feature list, built.
 

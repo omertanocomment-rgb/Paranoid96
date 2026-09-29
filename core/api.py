@@ -19,7 +19,8 @@ from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
                index as codeindex, scratch, theme, version, toolbox, localai,
                attach, models as modelstore, adbclient, backup, usage,
-               streams, gitx, schedule, attest, wipe as wipeout)
+               streams, gitx, schedule, attest, wipe as wipeout,
+               pairing)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -329,12 +330,18 @@ def reconnect() -> dict:
 
 
 # ── secrets (API keys / local hosts) ────────────────────────────────────────
-def secret_status() -> dict:
-    """Which secrets are configured — booleans only, never the values."""
+def secret_status(project=None) -> dict:
+    """Which secrets are configured — booleans and NAMES only, never values."""
     import os
-    return {"allowed": sorted(config.ALLOWED_SECRET_KEYS),
-            "set": {k: bool(os.environ.get(k)) for k in config.ALLOWED_SECRET_KEYS},
-            "enabled": config.ALLOW_SECRET_API}
+    out = {"allowed": sorted(config.ALLOWED_SECRET_KEYS),
+           "set": {k: bool(os.environ.get(k)) for k in config.ALLOWED_SECRET_KEYS},
+           "enabled": config.ALLOW_SECRET_API}
+    if project:
+        # Which keys this project overrides, so the UI can say "this project
+        # has its own" without ever handling the value.
+        out["project"] = project
+        out["project_keys"] = config.project_secret_keys(project)
+    return out
 
 
 def set_secret(payload: dict) -> dict:
@@ -344,11 +351,19 @@ def set_secret(payload: dict) -> dict:
     key = payload.get("key")
     if key not in config.ALLOWED_SECRET_KEYS:
         return {"error": f"'{key}' is not a writable secret", "_status": 400}
+    project = payload.get("project") or None
     try:
-        config.put_secret(key, payload.get("value", ""))
+        config.put_secret(key, payload.get("value", ""), project=project)
     except ValueError as e:
         return {"error": str(e), "_status": 400}
-    return {"ok": True, "key": key, "set": bool(payload.get("value"))}
+    out = {"ok": True, "key": key, "set": bool(payload.get("value"))}
+    if project:
+        out["project"] = project
+        out["note"] = (f"This key is used only by {project}. That project no "
+                       "longer falls back to the shared key — if this one is "
+                       "removed it has none, rather than quietly using the "
+                       "account you moved it away from.")
+    return out
 
 
 # ── sync ────────────────────────────────────────────────────────────────────
@@ -443,7 +458,7 @@ def chat(payload: dict) -> dict:
     payload = payload or {}
     project = payload.get("project", "general")
     agent = get_agent(project)
-    with _lock_for(project):
+    with _lock_for(project), config.scoped_to(project):
         before = _usage_now(project)
         result = dispatch(agent, payload)
         _attach_cost(result, before, project)
@@ -464,7 +479,10 @@ def chat_start(payload: dict) -> dict:
 
     def work(write):
         agent = get_agent(project)
-        with _lock_for(project):
+        # The scope is entered INSIDE the worker, on the worker's own thread:
+        # it is thread-local, and setting it on the caller's thread would
+        # scope the wrong thread and leave the turn unscoped.
+        with _lock_for(project), config.scoped_to(project):
             before = _usage_now(project)
             result = dispatch(agent, payload, stream_cb=write)
             _attach_cost(result, before, project)
@@ -1024,3 +1042,24 @@ def memory_forget(payload=None) -> dict:
     if not p.get("id"):
         return {"status": "error", "reason": "id is required", "_status": 400}
     return learn.forget_behaviour({"id": p["id"]})
+
+
+# ── pairing a second device ─────────────────────────────────────────────────
+# The offer is opened on the device that HAS the data (local-only, like every
+# other direct-operation surface). The claim is the one route in this whole
+# program that answers without a token, and only while an offer is open, from
+# a private address, five attempts, once. See core/pairing.
+def pair_offer(payload=None) -> dict:
+    return pairing.offer(payload)
+
+
+def pair_cancel(payload=None) -> dict:
+    return pairing.cancel(payload)
+
+
+def pair_status() -> dict:
+    return pairing.status()
+
+
+def pair_claim(payload=None, client_host="", forwarded=False) -> dict:
+    return pairing.claim(payload, client_host=client_host, forwarded=forwarded)

@@ -234,6 +234,22 @@ private fun MessageBubble(m: Message, vm: ChatViewModel) {
                         }
                     }
                 }
+                // Files named in the reply — a stack trace, a diff header, a
+                // "see foo.py:120". Offered as buttons rather than by making
+                // the text itself tappable: a trace is full of near-misses,
+                // and a tap that opens the wrong file is worse than a tap
+                // that was never offered.
+                val refs = remember(m.text) { fileRefs(m.text) }
+                if (refs.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    refs.take(4).forEach { ref ->
+                        Chip("OPEN ${ref.substringAfterLast('/')}", false,
+                             Modifier.fillMaxWidth()) {
+                            Intake.requestOpen(ref); open = false
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+                }
             }
         }
     }
@@ -265,6 +281,35 @@ private fun MessageBubble(m: Message, vm: ChatViewModel) {
             },
         )
     }
+}
+
+/**
+ * Files named in a reply: `core/agent.py:120`, `File "x.py", line 3`, a diff
+ * header, a bare path with a known extension.
+ *
+ * Deliberately conservative. It requires a directory separator or a known
+ * source extension, so ordinary prose with a colon in it does not turn into a
+ * button, and it de-duplicates because a stack trace names the same file over
+ * and over. Missing a reference costs a tap; inventing one sends the editor
+ * somewhere that does not exist.
+ */
+private val FILE_REF = Regex(
+    """(?:^|[\s"'(\[`])((?:[\w.@-]+/)*[\w.@-]+\.""" +
+    """(?:py|kt|kts|java|js|ts|tsx|jsx|json|xml|md|sh|toml|gradle|c|h|cpp|rs|go))""" +
+    """(?::(\d+))?"""
+)
+
+fun fileRefs(text: String): List<String> {
+    val out = LinkedHashSet<String>()
+    for (m in FILE_REF.findAll(text)) {
+        val path = m.groupValues[1]
+        // A bare filename with no directory is usually prose ("see the
+        // README.md"), and the editor cannot resolve it anyway.
+        if (!path.contains('/')) continue
+        out.add(path)
+        if (out.size >= 8) break
+    }
+    return out.toList()
 }
 
 /**
@@ -433,6 +478,7 @@ private fun ActionButton(
 @Composable
 private fun InputBar(busy: Boolean, onSend: (String) -> Unit, onStop: () -> Unit) {
     var text by remember { mutableStateOf("") }
+    var offlineRefused by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
 
     // Something shared from another app lands in the box, not in the model.
@@ -447,11 +493,29 @@ private fun InputBar(busy: Boolean, onSend: (String) -> Unit, onStop: () -> Unit
         }
     }
 
-    fun speechIntent(): android.content.Intent {
+    /**
+     * Dictation that prefers to stay on the device.
+     *
+     * EXTRA_PREFER_OFFLINE asks the platform recogniser to use a language pack
+     * already on the phone instead of sending audio to a server. It is a
+     * PREFERENCE, not a guarantee, and nothing in this app — or in any app —
+     * can verify which one happened. So the button says it prefers offline and
+     * never claims the audio stayed here; claiming that unverifiably is the
+     * worst kind of lie this project could tell.
+     *
+     * A recogniser that is offline by construction means shipping an acoustic
+     * model, which is a gigabyte-scale download and belongs behind the weights
+     * catalogue rather than inside the APK.
+     */
+    fun speechIntent(preferOffline: Boolean): android.content.Intent {
         val i = android.content.Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak")
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        if (preferOffline && android.os.Build.VERSION.SDK_INT >= 23) {
+            i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        }
         return i
     }
 
@@ -462,6 +526,12 @@ private fun InputBar(busy: Boolean, onSend: (String) -> Unit, onStop: () -> Unit
             RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (!heard.isNullOrBlank()) {
             text = if (text.isBlank()) heard else text.trimEnd() + " " + heard
+        } else if (result.resultCode != android.app.Activity.RESULT_CANCELED) {
+            // Several recognisers return an empty result rather than an error
+            // when asked to work offline with no language pack installed. The
+            // next press drops the preference, because a button that silently
+            // does nothing reads as a broken microphone.
+            offlineRefused = true
         }
     }
 
@@ -469,7 +539,9 @@ private fun InputBar(busy: Boolean, onSend: (String) -> Unit, onStop: () -> Unit
     // the foreground -- never from the home screen.
     val askedToSpeak by Intake.dictate.collectAsStateWithLifecycleCompat()
     LaunchedEffect(askedToSpeak) {
-        if (askedToSpeak > 0) runCatching { dictation.launch(speechIntent()) }
+        if (askedToSpeak > 0) {
+            runCatching { dictation.launch(speechIntent(!offlineRefused)) }
+        }
     }
 
     Row(
@@ -512,7 +584,9 @@ private fun InputBar(busy: Boolean, onSend: (String) -> Unit, onStop: () -> Unit
                 .background(PanelHi)
                 .border(1.dp, Border, RoundedCornerShape(6.dp))
                 .clickableNoRipple {
-                    runCatching { dictation.launch(speechIntent()) }.onFailure {
+                    runCatching {
+                        dictation.launch(speechIntent(!offlineRefused))
+                    }.onFailure {
                         android.widget.Toast.makeText(
                             ctx, "no speech recogniser on this device",
                             android.widget.Toast.LENGTH_SHORT).show()

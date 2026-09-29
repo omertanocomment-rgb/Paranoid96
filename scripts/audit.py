@@ -165,10 +165,32 @@ def check_local_only():
     d = (ROOT / "core/dispatch.py").read_text(encoding="utf-8")
 
     def listed(text, marker):
+        """Every path in the tuple that follows `marker`.
+
+        Read to the closing parenthesis rather than a fixed number of
+        characters. The window used to be 400 bytes, and the moment the list
+        grew past it the two newest entries fell outside — so the gate
+        reported a disagreement between two files that agreed, and would just
+        as happily have MISSED a real one by reading only part of the list.
+        A safety check whose reach depends on how long the comments are is not
+        a safety check.
+        """
         i = text.find(marker)
         if i < 0:
             return None
-        return set(re.findall(r'"(/api/[^"]+)"', text[i:i + 400]))
+        start = text.find("(", i)
+        if start < 0:
+            return None
+        depth, end = 0, len(text)
+        for j in range(start, len(text)):
+            if text[j] == "(":
+                depth += 1
+            elif text[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    end = j
+                    break
+        return set(re.findall(r'"(/api/[^"]+)"', text[start:end]))
 
     # core/dispatch.py is the canonical list: every transport that routes
     # through it -- the stdlib server and the app's in-process bridge -- gets

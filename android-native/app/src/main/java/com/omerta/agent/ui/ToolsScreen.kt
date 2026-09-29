@@ -383,6 +383,8 @@ private fun SyncPanel() {
     var s by remember { mutableStateOf<JSONObject?>(null) }
     var peer by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var myCode by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
 
     suspend fun refresh() { s = OmertaClient.syncStatus() }
@@ -390,12 +392,53 @@ private fun SyncPanel() {
 
     Section("Sync", trailing = s?.optString("device", "")?.take(8) ?: "") {
         Text("Pull memory and chats from another OMERTA on the same network. " +
-             "The peer needs its own token; nothing is pushed without one.",
+             "Pair once to fetch its token, or paste one you already have.",
              style = MaterialTheme.typography.bodySmall, color = TextLo)
         Spacer(Modifier.height(8.dp))
         Field(peer, { peer = it }, "http://192.168.1.50:8765")
         Spacer(Modifier.height(6.dp))
         Field(token, { token = it }, "that device's token")
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip("SHOW MY CODE", false, Modifier.weight(1f), tint = Amber) {
+                scope.launch {
+                    val r = OmertaClient.pairOffer()
+                    myCode = r.optString("code", "")
+                    note = r.err().ifEmpty {
+                        "type this on the other device within " +
+                        "${r.optInt("expires_in")}s — it works once"
+                    }
+                }
+            }
+            Chip("USE A CODE", false, Modifier.weight(1f), tint = Good) {
+                scope.launch {
+                    // The code is redeemed against the OTHER device, so the
+                    // peer address has to be filled in first -- the code is
+                    // not a name, it is a password for one window.
+                    if (peer.isBlank()) {
+                        note = "fill in that device's address first"
+                        return@launch
+                    }
+                    val r = OmertaClient.pairClaim(code)
+                    val got = r.optString("token", "")
+                    if (got.isEmpty()) {
+                        note = r.err().ifEmpty { "that code did not work" }
+                    } else {
+                        token = got
+                        note = "paired — the token is filled in"
+                    }
+                }
+            }
+        }
+        if (myCode.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Mono(myCode, max = 60)
+            Note("Anything on this network that guesses this inside the " +
+                 "window gets the same access. That is why it is short, " +
+                 "single use and capped at five tries.", Warn)
+        }
+        Spacer(Modifier.height(6.dp))
+        Field(code, { code = it }, "code from the other device")
         Spacer(Modifier.height(8.dp))
         Chip("SYNC NOW", false, Modifier.fillMaxWidth()) {
             scope.launch {

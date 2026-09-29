@@ -137,8 +137,10 @@ def _configured(pid):
     env = spec.get("api_key_env")
     if not env:
         return True
-    import os
-    return bool(os.environ.get(env))
+    # Through config.secret so a project-scoped key counts, and so a project
+    # whose own key is missing is reported as NOT configured rather than
+    # inheriting the shared one.
+    return bool(config.secret(env))
 
 
 def _mode():

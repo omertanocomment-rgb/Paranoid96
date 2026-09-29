@@ -146,10 +146,20 @@ object OmertaClient {
     suspend fun setPolicy(policy: String) =
         post("/api/policy", JSONObject().put("policy", policy))
 
-    suspend fun putSecret(key: String, value: String) =
-        post("/api/secret", JSONObject().put("key", key).put("value", value))
+    /**
+     * Store a key, for everything or for one project only.
+     *
+     * A project-scoped key is NOT put into the process environment, because
+     * the environment is process-wide and turns for different projects run at
+     * the same time -- a per-project key that reached it would be visible to
+     * every project, which is the whole thing scoping is for.
+     */
+    suspend fun putSecret(key: String, value: String, project: String? = null) =
+        post("/api/secret", JSONObject().put("key", key).put("value", value)
+            .apply { project?.let { put("project", it) } })
 
-    suspend fun secretStatus(): JSONObject = get("/api/secret")
+    suspend fun secretStatus(project: String? = null): JSONObject =
+        get("/api/secret" + (project?.let { "?project=" + q(it) } ?: ""))
 
     suspend fun models(): JSONObject = get("/api/models")
 
@@ -339,6 +349,26 @@ object OmertaClient {
     suspend fun history(n: Int = 50) = get("/api/history?n=$n")
 
     suspend fun syncStatus(): JSONObject = get("/api/sync/status")
+
+    // ── pairing a second device ─────────────────────────────────────────
+    /**
+     * Open a pairing window on THIS device, showing a short code.
+     *
+     * The window is short, single use and capped at five wrong attempts, and
+     * it is the only time anything answers without a token. Anything on the
+     * same network that guesses the code inside the window gets the same
+     * access -- that is why it is short and capped, and the UI says so rather
+     * than implying the code identifies the other device.
+     */
+    suspend fun pairOffer(ttl: Int = 120) =
+        post("/api/pair/offer", JSONObject().put("ttl", ttl))
+
+    suspend fun pairCancel() = post("/api/pair/cancel", JSONObject())
+
+    suspend fun pairStatus(): JSONObject = get("/api/pair")
+
+    suspend fun pairClaim(code: String) =
+        post("/api/pair/claim", JSONObject().put("code", code))
 
     suspend fun syncRun(peer: String = "", token: String = "", full: Boolean = false) =
         post("/api/sync/run", JSONObject().put("peer", peer)

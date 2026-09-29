@@ -244,6 +244,18 @@ class Handler(BaseHTTPRequestHandler):
     # -- POST -----------------------------------------------------------------
     def do_POST(self):
         path = urlparse(self.path).path
+        # The pairing claim is the ONE route that answers without a token, and
+        # only while the owner has an offer open on this device. Everything
+        # that makes that safe -- expiry, single use, five attempts, private
+        # addresses only -- is enforced in core/pairing, not here, so both
+        # transports cannot disagree about it.
+        if path == "/api/pair/claim" and dispatch.claim_is_open():
+            status, payload = dispatch.handle(
+                "POST", path, body=self._body(),
+                local=self._local(),
+                client_host=(self.client_address[0] if self.client_address else ""),
+                forwarded=auth.forwarded(self.headers))
+            return self._json(payload, status)
         if not self._authorized():
             return self._unauthorized()
         if self._is_local_only(path) and not self._local():
@@ -253,8 +265,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/attach":
             return self._json(self._recv_attachment())
 
-        status, payload = dispatch.handle("POST", path, body=self._body(),
-                                          local=self._local())
+        status, payload = dispatch.handle(
+            "POST", path, body=self._body(), local=self._local(),
+            client_host=(self.client_address[0] if self.client_address else ""),
+            forwarded=auth.forwarded(self.headers))
         return self._json(payload, status)
 
 

@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from core import config, auth, mcp, api
+from core import config, auth, mcp, api, dispatch
 
 app = FastAPI(title="OMERTA AGENT")
 api.boot()
@@ -44,7 +44,13 @@ MAX_BODY = 16 * 1024 * 1024
 LOCAL_ONLY_PREFIXES = ("/api/term", "/api/ws/", "/api/scratch",
                        "/api/learn/path", "/api/localai", "/api/attach",
                        "/api/models", "/api/adb",
-                       "/api/backup", "/api/wipe", "/api/git", "/api/audit")
+                       "/api/backup", "/api/wipe", "/api/git", "/api/audit",
+                       "/api/pair/offer", "/api/pair/cancel")
+# The pairing CLAIM is deliberately absent from that list: it is the one route
+# that must answer another machine. What keeps it narrow lives in core/pairing
+# — an offer has to be open, it expires, it is single use, five wrong codes
+# close it, and the caller must be on a private address with nothing
+# forwarding for it.
 
 
 def _is_local_only(path: str) -> bool:
@@ -59,6 +65,12 @@ async def auth_gate(request: Request, call_next):
     path = request.url.path
     if (path in PUBLIC_PATHS or path.startswith("/assets")
             or path.startswith("/theme/asset/")):
+        return await call_next(request)
+    # The pairing claim answers without a token, and ONLY while the owner has
+    # an offer open on this device. Expiry, single use, the attempt cap and
+    # the private-address rule all live in core/pairing so this transport and
+    # the embedded one cannot disagree about them.
+    if path == "/api/pair/claim" and dispatch.claim_is_open():
         return await call_next(request)
     try:
         declared = int(request.headers.get("content-length") or 0)
@@ -253,6 +265,40 @@ def sync_pull(since: float = 0, project: str = None):
 @app.post("/api/sync/push")
 async def sync_push(request: Request):
     return api.sync_push(await request.json())
+
+
+# -- pairing a second device ------------------------------------------------
+# The offer is opened on the device that already has the data, and is
+# local-only like every other direct-operation surface. The claim is the one
+# route in this program reachable without a token, and only while an offer is
+# open: expiry, single use, the five-attempt cap and the private-address rule
+# are all enforced in core/pairing, so this transport and the embedded one
+# cannot disagree about them.
+@app.get("/api/pair")
+def pair_status():
+    return api.pair_status()
+
+
+@app.post("/api/pair/offer")
+def pair_offer(request: Request, payload: dict = None):
+    return _local_only(request) or _json(api.pair_offer(payload or {}))
+
+
+@app.post("/api/pair/cancel")
+def pair_cancel(request: Request, payload: dict = None):
+    return _local_only(request) or _json(api.pair_cancel(payload or {}))
+
+
+@app.post("/api/pair/claim")
+async def pair_claim(request: Request):
+    try:
+        body = await request.json()
+    except Exception:                              # noqa: BLE001
+        body = {}
+    client = request.client.host if request.client else ""
+    spoofable = any(h in request.headers for h in
+                    ("x-forwarded-for", "x-real-ip", "forwarded"))
+    return _json(api.pair_claim(body, client_host=client, forwarded=spoofable))
 
 
 @app.get("/api/sync/status")

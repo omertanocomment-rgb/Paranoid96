@@ -176,6 +176,150 @@ def test_preflight():
         localai.binary = real_binary
 
 
+def test_project_keys(tmp):
+    """A project's key must not be visible to another project, or to a
+    concurrently running turn.
+
+    Written against the obvious wrong implementation: swapping os.environ for
+    the duration of a turn. That passes a single-threaded test and fails here,
+    because core/api locks per project and therefore runs two projects at the
+    same time.
+    """
+    import threading
+    from core import config
+
+    config.SECRETS_FILE = Path(tmp) / "secrets.json"
+    config.put_secret("ANTHROPIC_API_KEY", "SHARED")
+    config.put_secret("ANTHROPIC_API_KEY", "WORK-ONLY", project="work")
+
+    check("the shared key is the default",
+          config.secret("ANTHROPIC_API_KEY") == "SHARED")
+    with config.scoped_to("work"):
+        check("a scoped project sees its own key",
+              config.secret("ANTHROPIC_API_KEY") == "WORK-ONLY")
+    check("the scope is released",
+          config.secret("ANTHROPIC_API_KEY") == "SHARED")
+    with config.scoped_to("personal"):
+        check("a project with no key of its own uses the shared one",
+              config.secret("ANTHROPIC_API_KEY") == "SHARED")
+
+    # The concurrency property: one thread inside a scope must not change what
+    # another thread sees.
+    seen = {}
+    gate = threading.Event()
+    done = threading.Event()
+
+    def scoped_thread():
+        with config.scoped_to("work"):
+            gate.set()
+            done.wait(2)
+            seen["inside"] = config.secret("ANTHROPIC_API_KEY")
+
+    t = threading.Thread(target=scoped_thread)
+    t.start()
+    gate.wait(2)
+    seen["other"] = config.secret("ANTHROPIC_API_KEY")
+    done.set()
+    t.join(3)
+    check("another thread does not see the scoped key",
+          seen.get("other") == "SHARED")
+    check("the scoped thread still sees its own",
+          seen.get("inside") == "WORK-ONLY")
+
+    # Removing a project's key must NOT silently fall back to the shared one:
+    # the project was moved off that account deliberately.
+    config.put_secret("ANTHROPIC_API_KEY", "", project="work")
+    config.put_secret("OPENAI_API_KEY", "OTHER-WORK", project="work")
+    with config.scoped_to("work"):
+        check("a project with its own keys does not inherit a missing one",
+              config.secret("ANTHROPIC_API_KEY") == "")
+        check("its other key still works",
+              config.secret("OPENAI_API_KEY") == "OTHER-WORK")
+        # A host is not a credential: where the local server lives is shared.
+        check("a host override is not withheld",
+              config.secret("OMERTA_OLLAMA_HOST", "fallback") == "fallback")
+
+    check("the status reports names, never values",
+          config.project_secret_keys("work") == ["OPENAI_API_KEY"])
+
+    from core import api
+    body = api.secret_status("work")
+    check("the API never returns a secret value",
+          "OTHER-WORK" not in json.dumps(body))
+
+    config.put_secret("ANTHROPIC_API_KEY", "")
+
+
+def test_pairing():
+    """The one route that answers without a token.
+
+    Written against every way this could be too generous: a standing endpoint,
+    an offer that outlives its window, a code that works twice, unlimited
+    guesses, a claim from off the network, and a status call that hands the
+    code out.
+    """
+    from core import pairing, dispatch
+
+    pairing.cancel()
+    check("nothing answers with no offer open", not pairing.open_offer())
+    st, _ = dispatch.handle("POST", "/api/pair/claim", {}, {"code": "AAAA2222"},
+                            local=True, client_host="192.168.1.9")
+    check("a claim with no offer is refused", st == 403)
+
+    off = pairing.offer({"ttl": 60})
+    code = off["raw"]
+    check("an offer opens", pairing.open_offer())
+    check("the code avoids characters people confuse",
+          not set(code) & set("01OIL"))
+
+    check("the status never carries the code",
+          "code" not in pairing.status() and "raw" not in pairing.status())
+
+    bad = pairing.claim({"code": "22223333"}, client_host="192.168.1.9")
+    check("a wrong code is refused", bad["status"] == "error")
+    check("a wrong code does not say why it was wrong",
+          "expired" not in bad["reason"])
+
+    off_net = pairing.claim({"code": code}, client_host="8.8.8.8")
+    check("a claim from off the network is refused",
+          off_net["status"] == "error")
+    fwd = pairing.claim({"code": code}, client_host="192.168.1.9",
+                        forwarded=True)
+    check("a forwarded claim is refused", fwd["status"] == "error")
+
+    # Typed off one screen onto another: spaces, case and the O/0 confusion.
+    typed = " ".join([code[:4], code[4:]]).lower().replace("0", "O")
+    ok = pairing.claim({"code": typed}, client_host="192.168.1.9")
+    check("the code survives being typed by a human", ok["status"] == "ok")
+    check("it hands back the token", bool(ok.get("token")))
+
+    again = pairing.claim({"code": code}, client_host="192.168.1.9")
+    check("a claimed code cannot be used twice", again["status"] == "error")
+    check("the route stops answering once claimed", not pairing.open_offer())
+
+    # The attempt cap.
+    pairing.offer({"ttl": 60})
+    for _ in range(pairing.MAX_ATTEMPTS):
+        pairing.claim({"code": "22223333"}, client_host="192.168.1.9")
+    check("the offer closes after too many guesses", not pairing.open_offer())
+
+    # Expiry.
+    pairing.offer({"ttl": 30})
+    with pairing._lock:
+        pairing._offer["expires"] = time.time() - 1
+    check("an expired offer does not answer", not pairing.open_offer())
+    pairing.cancel()
+
+    # The offer itself is local-only: it must not be openable from elsewhere.
+    st, _ = dispatch.handle("POST", "/api/pair/offer", {}, {}, local=False)
+    check("an offer cannot be opened from another machine", st == 403)
+
+    # And it must never be written down.
+    from core import config
+    disk = (Path(config.DATA_DIR) / "pairing.json")
+    check("an offer is never persisted", not disk.exists())
+
+
 def test_routes():
     from core import dispatch, gitx
 
@@ -202,6 +346,9 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         test_wipe(tmp)
     test_preflight()
+    with tempfile.TemporaryDirectory() as tmp:
+        test_project_keys(tmp)
+    test_pairing()
     test_routes()
 
     if fails:
@@ -209,7 +356,9 @@ def main():
         for f in fails:
             print("  -", f)
         return 1
-    print("\nall good")
+    # The phrase the gate counts. A suite that passes silently is one the
+    # gate cannot tell apart from a suite that never ran.
+    print("\nALL TESTS PASSED")
     return 0
 
 

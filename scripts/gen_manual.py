@@ -399,8 +399,9 @@ def build():
     # ---- ch 5 : interface -----------------------------------------------
     S += chapter(
         "The Interface",
-        "Six tabs. The same interface on the phone, the desktop app and any "
-        "browser on your network.")
+        "Eight tabs. On the phone this is Jetpack Compose — real Android "
+        "widgets, no WebView and no HTML. The desktop app and a browser on "
+        "your network reach the same routes.")
 
     S.append(P("CHAT", H2))
     S.append(P(
@@ -415,7 +416,24 @@ def build():
         ["brainstorm", "Options and trade-offs, deliberately divergent."],
         ["research", "Reads and reports. Investigates without changing anything."],
         ["build", "Executes, still through the approval gate."],
+        ["debate", "Argues both sides before settling on one."],
     ], [1.1 * inch, 5.7 * inch]))
+    S.append(bullets([
+        "<b>Type-ahead</b> — a message typed while a turn is running is held "
+        "and sent in order, not dropped. <b>STOP</b> cancels the turn in "
+        "flight and keeps whatever was already said.",
+        "<b>Tap any message</b> for copy, pin, redo or edit. <b>Pin</b> puts "
+        "it in that project's system prompt from the next turn on; <b>edit</b> "
+        "drops everything after it and runs again from there.",
+        "<b>Cost</b> — each reply carries its own token and spend estimate. "
+        "The tilde is not decoration: most providers do not report usage, so "
+        "the figure is derived from text length.",
+        "<b>Files named in a reply</b> — a stack trace or a diff header "
+        "becomes a button that opens that file in CODE.",
+        "<b>Dictation</b> asks the platform recogniser to prefer a language "
+        "pack already on the device. It is a preference, not a guarantee, and "
+        "nothing in the app can verify which way it went.",
+    ]))
 
     S.append(P("TERMINAL", H2))
     S.append(P(
@@ -427,8 +445,52 @@ def build():
     S.append(P("CODE", H2))
     S.append(P(
         "A file browser and editor over your project, with search across the "
-        "indexed tree. Edits are written straight to disk and a backup of the "
-        "previous contents is kept.", BODY))
+        "indexed tree by text or by symbol, line numbers and syntax "
+        "highlighting.", BODY))
+    S.append(P(
+        "A save is never direct. <b>Review &amp; save</b> describes the write "
+        "and returns a diff having written nothing; only confirming that diff "
+        "moves the file, and a backup of the previous contents is kept as it "
+        "goes. Earlier copies of the open file are listed underneath it, and "
+        "restoring one loads it into the editor rather than writing it — so a "
+        "restore passes the same diff you would see for any other change. "
+        "That is the contract the agent itself is held to, which is what makes "
+        "a change made by hand and a change made by the model equally "
+        "recoverable.", BODY))
+
+    S.append(P("GIT", H2))
+    S.append(P(
+        "Branch, the counts of staged, unstaged and untracked files, the "
+        "working and staged diff, recent commits and branches.", BODY))
+    S.append(P(
+        "Everything on this screen is <b>read-only, and that is the feature</b>. "
+        "The module behind it enforces a whitelist of git subcommands that "
+        "cannot change a repository. The buttons that would change one — "
+        "stage, commit, push — hand the request to the agent instead, so the "
+        "exact command appears on an approval card before it runs. Two ways to "
+        "move a branch, one of them ungated, is how a safety property quietly "
+        "stops being one.", BODY))
+
+    S.append(P("TOOLS", H2))
+    S.append(bullets([
+        "<b>Another device</b> — adb over TCP: connect, read properties, run "
+        "a shell command, and show this device's public key for the other one "
+        "to accept.",
+        "<b>Sandbox</b> — a copy of the project that can be built and run for "
+        "real. Nothing reaches the real tree until you accept it.",
+        "<b>Memory</b> — search what it remembers, and read the preferences it "
+        "inferred from what you approved and refused.",
+        "<b>Cost</b> — calls, tokens and estimated spend over 7, 30 or 90 "
+        "days, with the backend's own caveats about which figures are "
+        "estimated and which could not be priced.",
+        "<b>Sync and pairing</b> — pull memory and chats from another OMERTA "
+        "on your network. Pairing shows a short code for two minutes; see "
+        "Chapter 10.",
+        "<b>Backup</b> — an encrypted archive of everything, with a dry "
+        "restore that reports what it would overwrite before it does.",
+        "<b>Audit log</b> — every command that touched the device, whether the "
+        "agent proposed it or you typed it.",
+    ]))
 
     S.append(P("CHATS", H2))
     S.append(bullets([
@@ -456,7 +518,36 @@ def build():
     S.append(P("SETTINGS", H2))
     S.append(P(
         "Provider and model, network mode, approval policy, API keys, the "
-        "terminal guard, sandbox containment, appearance, and the build stamp.", BODY))
+        "on-device engine, weights, themes, the terminal guard, sandbox "
+        "containment, appearance, and the build stamp. Every writable setting "
+        "is rendered from the backend's own description of itself, so a "
+        "setting added later appears without the app being changed — and the "
+        "search box at the top is there because there are now more than "
+        "twenty.", BODY))
+    S.append(bullets([
+        "<b>API keys, per project</b> — a key can be stored for everything, "
+        "or for one project alone. A project with its own keys does <b>not</b> "
+        "fall back to the shared one if its key is removed: it was moved off "
+        "that account deliberately, and quietly putting it back would be the "
+        "failure this prevents.",
+        "<b>Scheduled turns</b> — \"every morning, check the build\". A "
+        "scheduled turn runs under the same approval policy as one you typed: "
+        "it stops at the gate and the approval waits for you. The clock is a "
+        "thread inside the app, not cron — a phone that kills OMERTA kills the "
+        "schedule with it, and a missed run happens at the next start and says "
+        "it was late.",
+        "<b>Audit chain</b> — seals the log so that each entry's digest "
+        "includes the one before it. See Chapter 10 for what that does and "
+        "does not prove.",
+        "<b>App lock</b> — the device's own passcode in front of OMERTA. "
+        "Deliberately the system credential, not a second secret of OMERTA's "
+        "own kept on the same device.",
+        "<b>Last crash</b> — the stack trace, the device, its ABIs and the "
+        "build, ready to copy or share. A crash that only exists in logcat "
+        "needs a cable and a laptop to read.",
+        "<b>Panic wipe</b> — everything this app holds, on a phrase typed in "
+        "full. See Chapter 10.",
+    ]))
 
     # ---- ch 6 : terminal ------------------------------------------------
     S += chapter(
@@ -667,10 +758,66 @@ def _part_two():
         "commits or exports.",
         "A sandboxed process gets a cleared environment, so it cannot read your "
         "keys even if it goes looking.",
+        "A key can be scoped to one project. That scope is thread-local, not "
+        "an environment variable: turns for different projects run at the same "
+        "time, and a key placed in the process environment would be visible to "
+        "all of them — which is the exact thing scoping is for.",
         "Private chats are encrypted with a key derived from your passcode "
         "(PBKDF2-HMAC-SHA256, then AES-GCM). The passcode is not stored. Lose "
         "it and the chat is unreadable — by anyone, including you.",
     ]))
+
+    S.append(P("Pairing a second device", H2))
+    S.append(P(
+        "Pairing is the one route in this program that answers without a "
+        "token, and only while you have an offer open on the device that "
+        "already has the data. Outside that window it does not answer at all.", BODY))
+    S.append(bullets([
+        "Single use, and it expires — two minutes by default.",
+        "Eight characters from an alphabet with no 0/O or 1/I/l in it. That is "
+        "about 40 bits: weak as a password, ample for one attempt-capped "
+        "window, which is all it is.",
+        "Five wrong codes close the offer.",
+        "A claim must come from a private address with nothing forwarding for "
+        "it. Pairing is two devices in the same room; a proxy in the path "
+        "means it is not.",
+        "The offer lives in memory and is never written to disk, so a restart "
+        "cancels it rather than leaving a live path to the token.",
+    ]))
+    S.append(P(
+        "What this does <i>not</i> do is prove which device claimed. Anything "
+        "on your network that guesses the code inside the window gets the "
+        "token, and the mitigations above are the whole defence. It is a "
+        "convenience over reading a token aloud with the blast radius kept "
+        "small — not an authenticated pairing protocol, and it is not "
+        "described as one.", NOTE))
+
+    S.append(P("The audit chain", H2))
+    S.append(P(
+        "Sealing the log computes a digest for every entry that includes the "
+        "digest before it, so a line cannot be altered or removed without "
+        "breaking every digest after it. The head is a single string you can "
+        "write down somewhere this device cannot reach.", BODY))
+    S.append(P(
+        "This is tamper <b>evidence</b>, not tamper proofing, and the app says "
+        "so. The key lives on the same device as the log, so anything able to "
+        "rewrite the log can also recompute the chain. What it cannot do is "
+        "change the head you already wrote down elsewhere — comparing that "
+        "later is the entire value here. Calling it \"signed\" would promise "
+        "something local storage cannot deliver.", NOTE))
+
+    S.append(P("The panic wipe", H2))
+    S.append(P(
+        "Chats, memory, the learning shelf, attachments, keys, the audit log. "
+        "It is deliberately <b>not</b> behind the approval gate: a panic "
+        "action that stops to ask is a panic action that does not work. The "
+        "confirmation is a phrase typed in full, at the moment.", BODY))
+    S.append(P(
+        "Nothing is backed up first — doing that automatically would defeat "
+        "the point. And it reports what it could <i>not</i> remove rather than "
+        "claiming success: a file held open or a permission it lacks is listed, "
+        "because pretending those were wiped is the single worst lie this "
+        "program could tell.", NOTE))
 
     # ---- ch 11 : troubleshooting ----------------------------------------
     S += chapter(

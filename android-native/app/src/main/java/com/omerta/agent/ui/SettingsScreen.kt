@@ -43,6 +43,8 @@ fun SettingsScreen(vm: ChatViewModel) {
     var saved by remember { mutableStateOf("") }
     var engineNote by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("") }
+    var projectOnly by remember { mutableStateOf(false) }
+    var secrets by remember { mutableStateOf<JSONObject?>(null) }
     var preflight by remember { mutableStateOf<JSONObject?>(null) }
 
     suspend fun refresh() {
@@ -52,6 +54,7 @@ fun SettingsScreen(vm: ChatViewModel) {
         settings = OmertaClient.settings()
         themes = OmertaClient.themes()
         preflight = OmertaClient.enginePreflight()
+        secrets = OmertaClient.secretStatus(st.project)
     }
 
     LaunchedEffect(Unit) { refresh() }
@@ -132,10 +135,30 @@ fun SettingsScreen(vm: ChatViewModel) {
         }
 
         item {
-            Section("API key") {
+            Section("API key",
+                    trailing = if (projectOnly) st.project else "shared") {
                 Text("Stored on this device only, 0600. Never leaves it except " +
                      "to the provider you pick.",
                      style = MaterialTheme.typography.bodySmall, color = TextLo)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip("EVERY PROJECT", !projectOnly, Modifier.weight(1f)) {
+                        projectOnly = false
+                    }
+                    Chip("${st.project.uppercase()} ONLY", projectOnly,
+                         Modifier.weight(1f), tint = Amber) { projectOnly = true }
+                }
+                // A project with its own keys does not fall back to the shared
+                // one. Said here rather than discovered later, because the
+                // failure looks like "the key stopped working".
+                val own = secrets?.optJSONArray("project_keys")
+                if (own != null && own.length() > 0) {
+                    Note("${st.project} has its own: " +
+                         (0 until own.length()).joinToString(", ") {
+                             own.optString(it).removeSuffix("_API_KEY")
+                         } + " — it will not fall back to the shared key",
+                         Amber)
+                }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("ANTHROPIC_API_KEY", "OPENAI_API_KEY",
@@ -149,14 +172,19 @@ fun SettingsScreen(vm: ChatViewModel) {
                 Spacer(Modifier.height(8.dp))
                 Chip("SAVE KEY", false, Modifier.fillMaxWidth(), tint = Good) {
                     scope.launch {
-                        val r = OmertaClient.putSecret(keyName, keyValue)
-                        saved = r.err().ifEmpty { "saved" }
+                        val r = OmertaClient.putSecret(
+                            keyName, keyValue,
+                            if (projectOnly) st.project else null)
+                        saved = r.err().ifEmpty {
+                            if (projectOnly) "saved for ${st.project} only"
+                            else "saved"
+                        }
                         keyValue = ""
                         refresh()
                         vm.refreshStatus()
                     }
                 }
-                Note(saved, if (saved == "saved") Good else Ember)
+                Note(saved, if (saved.startsWith("saved")) Good else Ember)
             }
         }
 

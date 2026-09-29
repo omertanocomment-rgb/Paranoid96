@@ -6,6 +6,7 @@ and the web UI settings panel), then environment variables, then defaults.
 import os
 import sys
 import json
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -131,17 +132,114 @@ def _load_secrets():
             os.environ[k] = v
 
 
-def put_secret(key, value):
-    """Persist an allowed secret (0600) and apply it to the live process."""
+#: The project whose keys the CURRENT THREAD may see.
+#
+# Deliberately thread-local rather than a global or an os.environ swap. Turns
+# for different projects run CONCURRENTLY -- core/api locks per project, not
+# globally -- so mutating the process environment for the duration of a turn
+# would let one project's key be picked up by another project's call already
+# in flight. That is the precise opposite of what scoping a key is for, and it
+# would fail rarely enough to look like it worked.
+_scope = threading.local()
+
+
+def set_project_scope(project):
+    _scope.project = project or None
+
+
+def clear_project_scope():
+    _scope.project = None
+
+
+def project_scope():
+    return getattr(_scope, "project", None)
+
+
+class scoped_to:                                   # noqa: N801  (a context mgr)
+    """Run a block with this thread's secrets scoped to one project."""
+
+    def __init__(self, project):
+        self.project = project
+        self.prior = None
+
+    def __enter__(self):
+        self.prior = project_scope()
+        set_project_scope(self.project)
+        return self
+
+    def __exit__(self, *exc):
+        set_project_scope(self.prior)
+        return False
+
+
+def _secret_file_data():
+    if not SECRETS_FILE.exists():
+        return {}
+    try:
+        data = json.loads(SECRETS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def secret(key, default=""):
+    """The value of a secret for whatever this thread is currently doing.
+
+    A project-scoped key wins over the shared one, and the ABSENCE of a
+    project-scoped key when that project has any of its own is a deliberate
+    empty: a project set up with its own key should not silently fall back to
+    the shared account the moment its key is removed or expires. Falling back
+    would send that project's traffic somewhere it was specifically moved away
+    from, which is the failure this feature exists to prevent.
+    """
+    project = project_scope()
+    if project:
+        per = (_secret_file_data().get("projects") or {}).get(project)
+        if isinstance(per, dict) and per:
+            if key in per:
+                return per[key] or default
+            if _is_key(key):
+                return ""
+    return os.environ.get(key, default)
+
+
+def _is_key(name):
+    """An API credential, as opposed to a host or base URL.
+
+    Only credentials are withheld on a miss. A project with its own key but no
+    host override should still reach the same local model server -- a host is
+    not a secret, it is where the thing is.
+    """
+    return str(name).endswith("_API_KEY")
+
+
+def project_secret_keys(project):
+    """Which secrets this project overrides. Names only, never values."""
+    per = (_secret_file_data().get("projects") or {}).get(project)
+    return sorted(per) if isinstance(per, dict) else []
+
+
+def put_secret(key, value, project=None):
+    """Persist an allowed secret (0600) and apply it to the live process.
+
+    With `project`, the value is stored for that project alone and is NOT put
+    into the environment -- the environment is process-wide and a per-project
+    key that leaked into it would be visible to every project, which is the
+    whole thing this is meant to stop.
+    """
     if key not in ALLOWED_SECRET_KEYS:
         raise ValueError(f"secret '{key}' is not writable")
-    data = {}
-    if SECRETS_FILE.exists():
-        try:
-            data = json.loads(SECRETS_FILE.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            data = {}
-    if value:
+    data = _secret_file_data()
+    if project:
+        projects = data.setdefault("projects", {})
+        per = projects.setdefault(str(project), {})
+        if value:
+            per[key] = value
+        else:
+            per.pop(key, None)
+            if not per:
+                projects.pop(str(project), None)
+    elif value:
         data[key] = value
         os.environ[key] = value
     else:

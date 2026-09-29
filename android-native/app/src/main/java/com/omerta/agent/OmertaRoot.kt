@@ -114,6 +114,14 @@ private fun Console() {
 
     LaunchedEffect(Unit) { vm.boot() }
 
+    // A file named in a reply opens the editor. The tab switch happens here
+    // because the chat screen has no business knowing the tab bar exists.
+    val wantsFile by com.omerta.agent.ui.Intake.openPath
+        .collectAsStateWithLifecycleCompat()
+    LaunchedEffect(wantsFile) {
+        if (wantsFile != null) tab = Tab.CODE
+    }
+
     // Two settings the backend has always exposed and the Compose rebuild
     // never read, so turning them on did nothing at all.
     val ctx = androidx.compose.ui.platform.LocalContext.current

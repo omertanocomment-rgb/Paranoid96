@@ -97,6 +97,20 @@ fun CodeScreen() {
 
     LaunchedEffect(Unit) { browse("") }
 
+    // A file named in a reply. The chat screen offers the button; this is
+    // what happens when it is pressed.
+    val requested by Intake.openPath.collectAsStateWithLifecycleCompat()
+    LaunchedEffect(requested) {
+        val target = Intake.takeOpen() ?: return@LaunchedEffect
+        open(target)
+        if (openPath == null && note.isNotEmpty()) {
+            // A relative path from a trace will not resolve against the
+            // workspace root on its own. Say that, rather than silently
+            // showing the browser again.
+            note = "$target — $note"
+        }
+    }
+
     Column(Modifier.fillMaxSize().background(Ink)) {
         if (openPath == null) {
             LazyColumn(
