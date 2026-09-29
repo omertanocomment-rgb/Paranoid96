@@ -75,6 +75,21 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- One tap from the home screen into a question. It holds no state
+             and wakes nothing on a timer: a widget that kept the Python
+             interpreter resident to show a line of status would be a battery
+             cost paid all day for a second saved once. -->
+        <receiver
+            android:name=".AskWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_ask_info"/>
+        </receiver>
+
         <service
             android:name=".BackendService"
             android:exported="false"

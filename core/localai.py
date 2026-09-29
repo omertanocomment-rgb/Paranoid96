@@ -25,6 +25,7 @@ default context size are chosen to leave the device usable and to avoid the
 thermal throttling that makes a bigger setting slower than a smaller one.
 """
 import os
+import struct
 import shutil
 import signal
 import subprocess
@@ -103,6 +104,110 @@ def suggest_threads():
     return max(1, min(4, n // 2))
 
 
+def memory_bytes():
+    """Total and available RAM, or (0, 0) where the kernel will not say.
+
+    /proc/meminfo is the only source that works on a stock Android handset
+    without a permission, and MemAvailable is the figure that matters: MemFree
+    on a phone is always small because the kernel is using the rest as cache,
+    and refusing to start on MemFree would refuse on every device.
+    """
+    total = avail = 0
+    try:
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                value = rest.strip().split(" ")[0]
+                if not value.isdigit():
+                    continue
+                if key == "MemTotal":
+                    total = int(value) * 1024
+                elif key == "MemAvailable":
+                    avail = int(value) * 1024
+                if total and avail:
+                    break
+    except OSError:
+        return 0, 0
+    return total, avail
+
+
+def thermal_c():
+    """The hottest thermal zone in degrees C, or None if none is readable."""
+    hottest = None
+    try:
+        import glob as _glob
+        for path in _glob.glob("/sys/class/thermal/thermal_zone*/temp"):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    raw = int(f.read().strip())
+            except (OSError, ValueError):
+                continue
+            # Some zones report millidegrees, some degrees. 1000 is not a
+            # temperature either way, so the unit is inferred from magnitude.
+            c = raw / 1000.0 if abs(raw) > 1000 else float(raw)
+            if -40 < c < 150 and (hottest is None or c > hottest):
+                hottest = c
+    except Exception:                              # noqa: BLE001
+        return None
+    return hottest
+
+
+def preflight(model=None):
+    """Whether this device can actually run that model, before it tries.
+
+    An engine that OOMs takes the whole app with it, and on a 32-bit build the
+    process dies without a Python traceback -- the app simply vanishes, which
+    reads to the owner as a crash with no cause. Checking first turns that into
+    a sentence.
+    """
+    avail_models = models()
+    chosen = None
+    if model:
+        for m in avail_models:
+            if m["name"] == model or m["path"] == model:
+                chosen = m
+                break
+    elif avail_models:
+        chosen = avail_models[0]
+
+    total, avail = memory_bytes()
+    temp = thermal_c()
+    bits = 8 * struct.calcsize("P")
+    need = int(chosen["bytes"] * 1.25) if chosen else 0
+
+    blockers, warnings = [], []
+    if binary() is None:
+        blockers.append("no on-device engine in this build "
+                        "(libllamaserver.so not found)")
+    if not avail_models:
+        blockers.append(f"no .gguf model in {models_dir()}")
+    elif chosen is None:
+        blockers.append(f"model not found: {model}")
+
+    if chosen and bits == 32 and need > 2 * 1024**3:
+        blockers.append(
+            f"{chosen['name']} needs about {need // 2**20} MB and this is a "
+            "32-bit process, which cannot address that much no matter how "
+            "much RAM the device has")
+    if chosen and avail and need and need > avail:
+        blockers.append(
+            f"{chosen['name']} needs about {need // 2**20} MB and only "
+            f"{avail // 2**20} MB is available right now")
+    elif chosen and avail and need and need > avail * 0.75:
+        warnings.append(
+            f"this leaves under a quarter of available RAM free — expect the "
+            "system to kill something, possibly OMERTA")
+    if temp is not None and temp >= 45:
+        warnings.append(f"the device is already at {temp:.0f}°C; generation "
+                        "will throttle almost immediately")
+
+    return {"status": "ok", "ok": not blockers,
+            "blockers": blockers, "warnings": warnings,
+            "model": chosen, "threads": suggest_threads(),
+            "bits": bits, "ram_total": total, "ram_available": avail,
+            "needs": need, "temperature_c": temp}
+
+
 def advice():
     """What will actually run here, in plain terms."""
     return {
@@ -152,6 +257,15 @@ def start(model=None, port=None, ctx=None, threads=None):
     """Start the on-device server. Idempotent; returns a status dict."""
     with _lock:
         if running():
+            return status()
+
+        # Ask first whether this device can hold the weights. An engine that
+        # OOMs takes the whole app with it, and on a 32-bit build the process
+        # dies without a traceback -- the app simply vanishes, which reads to
+        # the owner as a crash with no cause.
+        pre = preflight(model)
+        if pre["blockers"]:
+            _state["error"] = "; ".join(pre["blockers"])
             return status()
 
         exe = binary()

@@ -19,6 +19,8 @@ data class Message(
     val role: Role,
     val text: String,
     val streaming: Boolean = false,
+    /** What this turn cost, when the backend could work it out. */
+    val cost: String? = null,
     val id: Long = nextId(),
 ) {
     companion object {
@@ -53,6 +55,8 @@ data class ChatState(
     val attachments: Int = 0,
     val ready: Boolean = false,
     val startupError: String? = null,
+    /** No provider can answer yet: no key, no engine, nothing. */
+    val needsSetup: Boolean = false,
 )
 
 class ChatViewModel : ViewModel() {
@@ -62,6 +66,38 @@ class ChatViewModel : ViewModel() {
 
     /** The turn currently streaming, so STOP has something to cancel. */
     private var liveStream: String? = null
+
+    /** The last thing the user said, so it can be sent again. */
+    private var lastSent: String? = null
+
+    /**
+     * Pick a turn back up after the process was killed.
+     *
+     * Android kills a backgrounded app whenever it likes, and a turn can take
+     * a minute. The stream lives in the backend, not in this ViewModel, so a
+     * relaunch can attach to it again instead of showing an empty chat while
+     * the model is still writing. The id is handed over by whoever saved it;
+     * a stream that has since expired just reports done with nothing, which
+     * is the same as never having existed.
+     */
+    fun resume(streamId: String) {
+        if (streamId.isEmpty() || _state.value.busy) return
+        _state.update { it.copy(busy = true) }
+        liveStream = streamId
+        viewModelScope.launch {
+            val streamed = StringBuilder()
+            add(Message(Role.AGENT, "", streaming = true))
+            val result = OmertaClient.attach(streamId) { delta ->
+                streamed.append(delta)
+                replaceStreaming(streamed.toString(), true)
+            }
+            liveStream = null
+            finish(result)
+        }
+    }
+
+    /** The id of the turn in flight, for whoever wants to save it. */
+    fun liveStreamId(): String? = liveStream
 
     fun boot() {
         viewModelScope.launch {
@@ -83,6 +119,13 @@ class ChatViewModel : ViewModel() {
                 return@launch
             }
             val work = s.optJSONObject("work_mode")
+            // "Nothing can answer yet" is a different situation from "the
+            // backend is broken", and the first one has a fix the owner can
+            // carry out in a minute. Saying so is worth more than a chat
+            // window that accepts a message and then cannot reply to it.
+            val providers = s.optJSONObject("providers")
+            val anyReady = providers != null && providers.keys().asSequence()
+                .any { providers.optJSONObject(it)?.optBoolean("ready") == true }
             _state.update {
                 it.copy(
                     provider = s.optString("active", "—"),
@@ -96,6 +139,7 @@ class ChatViewModel : ViewModel() {
                     attachments = s.optJSONObject("attachments")?.optInt("count", 0) ?: 0,
                     ready = true,
                     startupError = null,
+                    needsSetup = !anyReady,
                 )
             }
         }
@@ -136,6 +180,7 @@ class ChatViewModel : ViewModel() {
         if (text.isBlank()) return
         if (_state.value.busy) { enqueue(text); return }
         add(Message(Role.YOU, text))
+        lastSent = text
         _state.update { it.copy(busy = true) }
         viewModelScope.launch {
             val streamed = StringBuilder()
@@ -171,9 +216,56 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Ask the same thing again.
+     *
+     * The previous answer is dropped rather than kept beside the new one: two
+     * answers on screen with no way to tell which one the agent is now acting
+     * on is worse than one.
+     */
+    fun regenerate() {
+        val text = lastSent ?: return
+        if (_state.value.busy) return
+        _state.update { st ->
+            val msgs = st.messages.toMutableList()
+            while (msgs.isNotEmpty() && msgs.last().role != Role.YOU) msgs.removeAt(msgs.lastIndex)
+            if (msgs.isNotEmpty() && msgs.last().role == Role.YOU) msgs.removeAt(msgs.lastIndex)
+            st.copy(messages = msgs)
+        }
+        send(text)
+    }
+
+    /** Rewrite something you said and run the conversation again from there. */
+    fun resendFrom(id: Long, text: String) {
+        if (_state.value.busy) return
+        _state.update { st ->
+            val idx = st.messages.indexOfFirst { it.id == id }
+            if (idx < 0) st else st.copy(messages = st.messages.take(idx))
+        }
+        send(text)
+    }
+
+    /** Make something a standing instruction for this project. */
+    fun pin(text: String) = viewModelScope.launch {
+        val r = OmertaClient.pinMemory(text, _state.value.project)
+        add(Message(Role.SYSTEM, r.err().ifEmpty {
+            "Pinned. That is in the system prompt for ${_state.value.project} " +
+            "from the next message on."
+        }))
+    }
+
     private fun finish(result: JSONObject) {
         val text = result.optString("text", "")
         val p = result.optJSONObject("pending")
+        val cost = result.optJSONObject("usage")?.let { u ->
+            val usd = u.optDouble("usd", 0.0)
+            val tokens = u.optInt("in", 0) + u.optInt("out", 0)
+            // The backend estimates tokens from text length for providers that
+            // do not report them, and says so. Dropping the "~" would turn an
+            // estimate into a bill.
+            if (tokens <= 0) null
+            else "~$tokens tok" + (if (usd > 0) String.format(" · ~$%.4f", usd) else "")
+        }
         // The streamed text is the model's raw output and may contain a tool
         // call; the final text is the cleaned version, so it replaces it.
         _state.update { st ->
@@ -181,9 +273,10 @@ class ChatViewModel : ViewModel() {
             val idx = msgs.indexOfLast { it.streaming }
             if (idx >= 0) {
                 if (text.isBlank()) msgs.removeAt(idx)
-                else msgs[idx] = msgs[idx].copy(text = text, streaming = false)
+                else msgs[idx] = msgs[idx].copy(text = text, streaming = false,
+                                                cost = cost)
             } else if (text.isNotBlank()) {
-                msgs += Message(Role.AGENT, text)
+                msgs += Message(Role.AGENT, text, cost = cost)
             }
             st.copy(
                 messages = msgs,

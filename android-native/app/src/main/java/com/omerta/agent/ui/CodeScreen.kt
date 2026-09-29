@@ -63,6 +63,7 @@ fun CodeScreen() {
     var query by remember { mutableStateOf("") }
     var hits by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var files by remember { mutableStateOf<List<String>>(emptyList()) }
+    var backups by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
     suspend fun browse(p: String) {
@@ -89,6 +90,9 @@ fun CodeScreen() {
         original = content
         openPath = r.optString("path", target)
         diff = null
+        val base = (openPath ?: "").substringAfterLast('/')
+        backups = OmertaClient.wsBackups().list("backups")
+            .filter { it.optString("origin") == base }
     }
 
     LaunchedEffect(Unit) { browse("") }
@@ -211,7 +215,14 @@ fun CodeScreen() {
                          color = if (content != original) Amber else TextLo)
                 }
                 Spacer(Modifier.height(8.dp))
-                Box(
+                // The gutter is a second Text in the same scroll region
+                // rather than characters prepended to the content: numbers
+                // inside the buffer would be saved to the file.
+                val lineStyle = MaterialTheme.typography.labelSmall.copy(
+                    color = TextHi, fontFamily = FontFamily.Monospace)
+                val lines = remember(content) { content.count { it == '\n' } + 1 }
+                val lang = remember(openPath) { Code.langOf(openPath ?: "") }
+                Row(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
@@ -219,16 +230,47 @@ fun CodeScreen() {
                         .background(Color.Black)
                         .border(1.dp, Border, RoundedCornerShape(6.dp))
                         .verticalScroll(rememberScrollState())
-                        .padding(10.dp),
+                        .padding(vertical = 10.dp),
                 ) {
+                    Text(
+                        (1..lines).joinToString("\n"),
+                        style = lineStyle.copy(color = TextLo.copy(alpha = 0.55f)),
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp),
+                    )
                     BasicTextField(
                         value = content,
                         onValueChange = { content = it },
-                        textStyle = MaterialTheme.typography.labelSmall.copy(
-                            color = TextHi, fontFamily = FontFamily.Monospace),
+                        textStyle = lineStyle,
+                        visualTransformation = CodeTransformation(lang),
                         cursorBrush = SolidColor(Ember),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f).padding(end = 8.dp),
                     )
+                }
+                // Only this file's backups. Every commit keeps the previous
+                // contents, and restoring one loads it into the editor rather
+                // than writing it: a restore goes through the same
+                // propose -> diff -> commit as any other save, so you see what
+                // it would undo before it undoes it.
+                if (backups.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("EARLIER COPIES", color = Ember,
+                         style = MaterialTheme.typography.labelSmall)
+                    Spacer(Modifier.height(4.dp))
+                    backups.take(6).forEach { b ->
+                        ListRow(b.optString("stamp"),
+                                right = bytesLabel(b.optLong("size", 0)),
+                                mono = true) {
+                            scope.launch {
+                                val r = OmertaClient.wsBackupRead(b.optString("path"))
+                                good = r.err().isEmpty()
+                                if (good) {
+                                    content = r.optString("content", "")
+                                    note = "loaded — save it to restore"
+                                } else note = r.err()
+                            }
+                        }
+                        Spacer(Modifier.height(5.dp))
+                    }
                 }
                 Note(note, if (good) Good else Ember)
                 Spacer(Modifier.height(8.dp))

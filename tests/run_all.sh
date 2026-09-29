@@ -40,5 +40,6 @@ echo "=== native desktop app ===" && python3 tests/test_desktop_native.py
 echo "=== desktop launch ===" && python3 tests/test_desktop_launch.py
 echo "=== provider reasons ===" && python3 tests/test_ui_providers.py
 echo "=== java/python bridge ===" && python3 tests/test_bridge.py
+echo "=== schedules / audit chain / wipe ===" && python3 tests/test_guard.py
 echo "=== doctor ==="            && python3 scripts/doctor.py > /dev/null && echo "doctor ran clean"
 echo && echo "ALL TESTS PASSED"

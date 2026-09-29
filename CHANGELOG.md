@@ -4,7 +4,61 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.13.0] — 2026-09-29
+## [1.14.0] — 2026-09-29
+
+The feature list, built.
+
+### Added
+- **GIT tab** — branch, staged/unstaged/untracked counts, the working and
+  staged diff, recent commits and branches. Every action that would CHANGE the
+  repository (stage, commit, push) is handed to the agent instead of run here,
+  so the exact command lands on an approval card first. `core/gitx` stays
+  read-only by whitelist; two ways to move a branch, one of them ungated, is
+  how a safety property quietly stops being one.
+- **Scheduled turns** — "every morning, check the build". A scheduled turn
+  runs under the SAME approval policy as a typed one: it stops at the gate and
+  the approval waits for you. The clock is a thread inside the app, not cron —
+  a phone that kills OMERTA kills the schedule, and a missed run happens at
+  the next start, labelled late.
+- **Audit chain** — each log entry's digest includes the one before it, so a
+  line cannot be edited or removed without breaking every digest after it.
+  Called tamper EVIDENCE, not tamper proofing: the key is on the same device
+  as the log, so what matters is the head you write down somewhere else.
+- **Panic wipe** — chats, memory, the shelf, attachments, keys, the log. Not
+  behind the approval gate, on purpose; the confirmation is a phrase typed in
+  full. It reports what it could NOT remove rather than claiming success.
+- **Engine preflight** — reads `/proc/meminfo` and the thermal zones and
+  refuses weights the process cannot address, instead of OOMing. On a 32-bit
+  build the app used to simply vanish, which reads as a crash with no cause.
+- **Editor**: line numbers, syntax highlighting (an identity-mapped
+  VisualTransformation, so no cursor offset can be mis-mapped into the file),
+  and per-file backup restore — loaded into the editor, then saved through the
+  same propose → diff → commit as any other change.
+- **Chat**: tap a message for COPY / PIN / REDO / EDIT. PIN makes it a standing
+  instruction in that project's system prompt. EDIT drops everything after it
+  and runs again from there. Per-turn token and cost estimate under the reply,
+  marked with a tilde because for most providers it is estimated from text
+  length.
+- **Turns survive the app being killed** — the stream lives in the backend, so
+  a relaunch attaches to the turn already in flight rather than showing an
+  empty chat while the model is still writing.
+- **App lock** — the device's own passcode in front of OMERTA, via
+  `createConfirmDeviceCredentialIntent`. Deliberately the system credential
+  and not one of OMERTA's own. Passes straight through, saying so, on a device
+  with no lock set.
+- **Approval notifications** on their own channel, so a long turn waiting on
+  you is not silent when the phone is face-down.
+- **Home-screen widget** — ASK and SPEAK. It holds no state and wakes nothing
+  on a timer; SPEAK opens the app and dictates there, never from the widget.
+- **Crash reports** written to a file with device, ABIs and build, readable
+  and shareable from Settings. A crash that only lives in logcat needs a
+  cable, a laptop and adb to read.
+- **Settings search**, and a first-run banner in chat when no provider can
+  answer yet.
+- New suite `tests/test_guard.py`, written against the dishonest
+  implementation of each of these rather than the correct one.
+
+
 
 Everything the web UI could do, the native app can do. Seven tabs, no HTML.
 

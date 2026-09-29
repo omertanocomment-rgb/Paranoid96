@@ -19,7 +19,7 @@ from . import (config, memory, router, sandbox, skills, plugins, mcp, sync,
                policy, terminal, modes, learn, chats, workspace,
                index as codeindex, scratch, theme, version, toolbox, localai,
                attach, models as modelstore, adbclient, backup, usage,
-               streams)
+               streams, gitx, schedule, attest, wipe as wipeout)
 from .agent import Agent
 
 # One agent per project, shared across connections to that project so the
@@ -404,6 +404,35 @@ def dispatch(agent: Agent, msg: dict, stream_cb=None) -> dict:
     return {"text": f"unknown action '{kind}'", "pending": None, "tool_log": []}
 
 
+def _usage_now(project):
+    """Today's totals for this project, so a turn can report its own cost."""
+    try:
+        t = usage.summary(days=1, project=project).get("total", {})
+        return (int(t.get("calls", 0)), int(t.get("in", 0)),
+                int(t.get("out", 0)), float(t.get("usd", 0.0)))
+    except Exception:                              # noqa: BLE001
+        return (0, 0, 0, 0.0)
+
+
+def _attach_cost(result, before, project):
+    """What THIS turn cost, as the difference the turn made to the ledger.
+
+    Taken as a delta rather than asked of the provider because most of them do
+    not report usage at all -- the numbers underneath are estimated from text
+    length, and the meter says so. Presenting an estimate as a billed figure
+    would be the same lie twice.
+    """
+    after = _usage_now(project)
+    calls, tin, tout, usd = (after[i] - before[i] for i in range(4))
+    if calls <= 0 and tin <= 0 and tout <= 0:
+        return result
+    if isinstance(result, dict):
+        result["usage"] = {"calls": calls, "in": tin, "out": tout,
+                           "usd": round(usd, 6),
+                           "estimated": True}
+    return result
+
+
 def chat(payload: dict) -> dict:
     """Full chat entry point: pick the project's agent and dispatch one turn.
 
@@ -415,7 +444,9 @@ def chat(payload: dict) -> dict:
     project = payload.get("project", "general")
     agent = get_agent(project)
     with _lock_for(project):
+        before = _usage_now(project)
         result = dispatch(agent, payload)
+        _attach_cost(result, before, project)
         _persist_turn(project, payload, result)
         return result
 
@@ -434,7 +465,9 @@ def chat_start(payload: dict) -> dict:
     def work(write):
         agent = get_agent(project)
         with _lock_for(project):
+            before = _usage_now(project)
             result = dispatch(agent, payload, stream_cb=write)
+            _attach_cost(result, before, project)
             _persist_turn(project, payload, result)
             return result
 
@@ -523,6 +556,8 @@ WRITABLE_SETTINGS = {
     "OMERTA_SYNC_ON_START": ("Sync on startup", "bool", None),
     "OMERTA_KEEP_AWAKE": ("Keep the screen on while working", "bool", None),
     "OMERTA_HAPTICS": ("Vibrate when approval is needed", "bool", None),
+    "OMERTA_NOTIFY_APPROVAL": ("Notify when approval is needed", "bool", None),
+    "OMERTA_APP_LOCK": ("Require the device passcode to open OMERTA", "bool", None),
 }
 
 
@@ -833,3 +868,159 @@ def theme_image(payload=None) -> dict:
 
 def theme_clear_image(payload=None) -> dict:
     return theme.clear_image(payload)
+
+
+# ── git ─────────────────────────────────────────────────────────────────────
+# READ-ONLY, and that is a property rather than a limitation. core/gitx
+# enforces a whitelist of git subcommands that cannot change a repository;
+# anything that rewrites history -- commit, push, reset, checkout, clean --
+# stays a shell command through the approval gate, where `git push --force`
+# and `reset --hard` are already classified High-Risk. Two ways to move a
+# branch, one of them ungated, is how a safety property quietly stops being
+# one.
+def git_status(payload=None) -> dict:
+    try:
+        return gitx.status(payload)
+    except gitx.GitError as e:
+        return {"status": "error", "reason": str(e)}
+
+
+def git_diff(payload=None) -> dict:
+    try:
+        return gitx.diff(payload)
+    except gitx.GitError as e:
+        return {"status": "error", "reason": str(e)}
+
+
+def git_log(payload=None) -> dict:
+    try:
+        return gitx.log(payload)
+    except gitx.GitError as e:
+        return {"status": "error", "reason": str(e)}
+
+
+def git_branches(payload=None) -> dict:
+    try:
+        return gitx.branches(payload)
+    except gitx.GitError as e:
+        return {"status": "error", "reason": str(e)}
+
+
+def git_review(payload=None) -> dict:
+    try:
+        return gitx.review(payload)
+    except gitx.GitError as e:
+        return {"status": "error", "reason": str(e)}
+
+
+# ── scheduled turns ─────────────────────────────────────────────────────────
+def schedule_list() -> dict:
+    return schedule.listing()
+
+
+def schedule_control(payload=None) -> dict:
+    p = payload or {}
+    action = p.get("action", "add")
+    if action == "add":
+        return schedule.add(p)
+    if action == "update":
+        return schedule.update(p)
+    if action == "delete":
+        return schedule.remove(p)
+    if action == "run_now":
+        job = (schedule._load()["jobs"] or {}).get(p.get("id", ""))
+        if not job:
+            return {"status": "error", "reason": "no such schedule"}
+        return {"status": "ok", "fired": schedule.run_due(job["next"] + 1)}
+    return {"status": "error",
+            "reason": f"unknown action: {action!r} (add, update, delete, run_now)"}
+
+
+def _scheduled_turn(payload: dict) -> dict:
+    """What a schedule runs: an ordinary turn, under the ordinary gate.
+
+    A scheduled turn does NOT get a quieter approval policy for being
+    unattended. It gets the same one, and simply stops at it -- the approval
+    waits in the chat until somebody comes back to it. An agent that acts more
+    freely when nobody is watching is the exact thing this project exists not
+    to build.
+    """
+    return chat(payload)
+
+
+def _start_clock_if_wanted():
+    """Start the schedule clock only if there is something to run.
+
+    Starting a thread as a side effect of importing a module is a smell, and
+    here it is also a hazard: the audit gate, the test suite and every CLI
+    invocation import this file, and a clock that ticks in all of them would
+    fire real model calls from a test run. So the runner is registered
+    unconditionally -- it is just a function reference -- and the thread only
+    starts when a schedule actually exists and is enabled.
+    """
+    schedule._runner = _scheduled_turn
+    try:
+        jobs = schedule.listing().get("jobs", [])
+    except Exception:                              # noqa: BLE001
+        return
+    if any(j.get("enabled") for j in jobs):
+        schedule.start(_scheduled_turn)
+
+
+_start_clock_if_wanted()
+
+
+# ── the audit chain ─────────────────────────────────────────────────────────
+def audit_export(payload=None) -> dict:
+    return attest.export(payload)
+
+
+def audit_verify(payload=None) -> dict:
+    return attest.verify(payload)
+
+
+# ── panic ───────────────────────────────────────────────────────────────────
+def wipe_estimate() -> dict:
+    return wipeout.estimate()
+
+
+def wipe_now(payload=None) -> dict:
+    """Destroy everything this app holds. Local-only, and not behind the gate.
+
+    A panic action that stops to ask is a panic action that does not work. The
+    confirmation is the phrase, typed at the moment, and nothing else.
+    """
+    return wipeout.wipe(payload)
+
+
+# ── engine preflight ────────────────────────────────────────────────────────
+def localai_preflight(payload=None) -> dict:
+    return localai.preflight((payload or {}).get("model"))
+
+
+# ── pinning a standing instruction ──────────────────────────────────────────
+def memory_add(payload=None) -> dict:
+    """Pin something as a standing instruction for a project.
+
+    Stored as a `preference`, which is the kind that goes into the system
+    prompt on every turn -- so this is not a note to yourself, it changes how
+    the agent behaves from the next message onwards. Said plainly in the reply
+    because a "save" that silently rewrites the prompt is not a save.
+    """
+    p = payload or {}
+    text = str(p.get("text", "")).strip()
+    if not text:
+        return {"status": "error", "reason": "nothing to remember", "_status": 400}
+    fid = memory.remember(text[:2000], project=p.get("project", "general"),
+                          kind=p.get("kind", "preference"),
+                          tags=str(p.get("tags", "pinned")))
+    return {"status": "ok", "id": fid, "kind": p.get("kind", "preference"),
+            "note": "This is now in the system prompt for that project, on "
+                    "every turn, until you forget it."}
+
+
+def memory_forget(payload=None) -> dict:
+    p = payload or {}
+    if not p.get("id"):
+        return {"status": "error", "reason": "id is required", "_status": 400}
+    return learn.forget_behaviour({"id": p["id"]})

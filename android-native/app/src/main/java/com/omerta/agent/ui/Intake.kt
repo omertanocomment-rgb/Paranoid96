@@ -33,6 +33,14 @@ object Intake {
         if (uris.isNotEmpty()) _files.value = _files.value + uris
     }
 
+    private val _dictate = MutableStateFlow(0)
+    val dictate: StateFlow<Int> = _dictate.asStateFlow()
+
+    /** The widget's SPEAK button, asking the chat box to open the recogniser. */
+    fun requestDictation() {
+        _dictate.value = _dictate.value + 1
+    }
+
     /** Taken, so a rotation does not paste it a second time. */
     fun takeText(): String? = _text.value.also { _text.value = null }
 

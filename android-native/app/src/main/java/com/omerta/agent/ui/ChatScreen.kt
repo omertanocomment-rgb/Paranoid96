@@ -59,6 +59,7 @@ fun ChatScreen(vm: ChatViewModel) {
     }
 
     Column(Modifier.fillMaxSize().background(Ink)) {
+        if (st.needsSetup) SetupBanner()
         WorkModeBar(st, vm)
         LazyColumn(
             state = listState,
@@ -66,7 +67,7 @@ fun ChatScreen(vm: ChatViewModel) {
             contentPadding = PaddingValues(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(st.messages, key = { it.id }) { m -> MessageBubble(m) }
+            items(st.messages, key = { it.id }) { m -> MessageBubble(m, vm) }
             st.pending?.let { p -> item { ApprovalCard(p, vm) } }
             if (st.queued.isNotEmpty()) {
                 item { QueuedNote(st.queued) }
@@ -77,6 +78,32 @@ fun ChatScreen(vm: ChatViewModel) {
             onSend = vm::send,
             onStop = vm::stop,
         )
+    }
+}
+
+/**
+ * Nothing can answer yet, and what to do about it.
+ *
+ * Only shown when EVERY provider reports itself unavailable, which is a
+ * different situation from a broken backend and has a fix the owner can carry
+ * out in a minute. A chat window that takes a message and then cannot reply to
+ * it teaches somebody the app is broken when it is merely empty.
+ */
+@Composable
+private fun SetupBanner() {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Blood.copy(alpha = 0.16f))
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+    ) {
+        Text("NOTHING CAN ANSWER YET",
+             style = MaterialTheme.typography.labelSmall, color = Ember)
+        Spacer(Modifier.height(3.dp))
+        Text("Open SETTINGS and either paste an API key, or get an on-device "
+             + "model under WEIGHTS. Both work; the second needs no network "
+             + "and no account.",
+             style = MaterialTheme.typography.labelSmall, color = TextLo)
     }
 }
 
@@ -128,11 +155,14 @@ private fun QueuedNote(queued: List<String>) {
 }
 
 @Composable
-private fun MessageBubble(m: Message) {
+private fun MessageBubble(m: Message, vm: ChatViewModel) {
     val mine = m.role == Role.YOU
     val system = m.role == Role.SYSTEM
     val ctx = LocalContext.current
     var copied by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf(m.text) }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
@@ -149,7 +179,7 @@ private fun MessageBubble(m: Message) {
                     }
                 )
                 .border(1.dp, if (system) Blood else Border, RoundedCornerShape(7.dp))
-                .clickableNoRipple { copy(ctx, m.text); copied = true }
+                .clickableNoRipple { open = !open }
                 .padding(horizontal = 12.dp, vertical = 9.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -177,7 +207,63 @@ private fun MessageBubble(m: Message) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextHi,
             )
+            // What the turn cost, when the backend could work it out. The
+            // tokens are estimated for providers that do not report them, so
+            // the tilde stays: an estimate shown as a bill is a lie.
+            m.cost?.let {
+                Spacer(Modifier.height(5.dp))
+                Text(it, style = MaterialTheme.typography.labelSmall,
+                     color = TextLo.copy(alpha = 0.75f))
+            }
+            if (open) {
+                Spacer(Modifier.height(9.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Chip("COPY", false, Modifier.weight(1f)) {
+                        copy(ctx, m.text); copied = true; open = false
+                    }
+                    Chip("PIN", false, Modifier.weight(1f)) {
+                        vm.pin(m.text); open = false
+                    }
+                    if (mine) {
+                        Chip("EDIT", false, Modifier.weight(1f), tint = Amber) {
+                            draft = m.text; editing = true; open = false
+                        }
+                    } else {
+                        Chip("REDO", false, Modifier.weight(1f), tint = Amber) {
+                            vm.regenerate(); open = false
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    if (editing) {
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            containerColor = Panel,
+            title = { Text("Say it differently", color = TextHi,
+                           style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Column {
+                    Text("Everything after this message is dropped and the "
+                         + "conversation runs again from here.",
+                         style = MaterialTheme.typography.bodySmall, color = TextLo)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(draft, { draft = it },
+                        textStyle = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                TextButton({ editing = false; vm.resendFrom(m.id, draft) }) {
+                    Text("SEND AGAIN", color = Good)
+                }
+            },
+            dismissButton = {
+                TextButton({ editing = false }) { Text("CANCEL", color = TextLo) }
+            },
+        )
     }
 }
 
@@ -361,15 +447,31 @@ private fun InputBar(busy: Boolean, onSend: (String) -> Unit, onStop: () -> Unit
         }
     }
 
+    fun speechIntent(): android.content.Intent {
+        val i = android.content.Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                   RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak")
+        return i
+    }
+
     val dictation = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    ) { result: androidx.activity.result.ActivityResult ->
         val heard = result.data?.getStringArrayListExtra(
             RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
         if (!heard.isNullOrBlank()) {
             text = if (text.isBlank()) heard else text.trimEnd() + " " + heard
         }
     }
+
+    // The widget's SPEAK button. The recogniser opens here, in the app, in
+    // the foreground -- never from the home screen.
+    val askedToSpeak by Intake.dictate.collectAsStateWithLifecycleCompat()
+    LaunchedEffect(askedToSpeak) {
+        if (askedToSpeak > 0) runCatching { dictation.launch(speechIntent()) }
+    }
+
     Row(
         Modifier
             .fillMaxWidth()
@@ -410,12 +512,7 @@ private fun InputBar(busy: Boolean, onSend: (String) -> Unit, onStop: () -> Unit
                 .background(PanelHi)
                 .border(1.dp, Border, RoundedCornerShape(6.dp))
                 .clickableNoRipple {
-                    val i = android.content.Intent(
-                        RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                               RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak")
-                    runCatching { dictation.launch(i) }.onFailure {
+                    runCatching { dictation.launch(speechIntent()) }.onFailure {
                         android.widget.Toast.makeText(
                             ctx, "no speech recogniser on this device",
                             android.widget.Toast.LENGTH_SHORT).show()

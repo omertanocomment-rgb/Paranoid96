@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="10dp">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="OMERTA AI"
+        android:textColor="#E4453C"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:maxLines="1"/>
+
+    <TextView
+        android:id="@+id/widget_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="tap to ask"
+        android:textColor="#8A8272"
+        android:textSize="10sp"
+        android:maxLines="1"
+        android:layout_marginTop="1dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/widget_ask"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_button"
+            android:gravity="center"
+            android:text="ASK"
+            android:textColor="#E8DDC8"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/widget_speak"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_button"
+            android:gravity="center"
+            android:text="SPEAK"
+            android:textColor="#E8DDC8"
+            android:textSize="12sp"/>
+    </LinearLayout>
+</LinearLayout>

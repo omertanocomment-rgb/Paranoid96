@@ -44,7 +44,7 @@ MAX_BODY = 16 * 1024 * 1024
 LOCAL_ONLY_PREFIXES = ("/api/term", "/api/ws/", "/api/scratch",
                        "/api/learn/path", "/api/localai", "/api/attach",
                        "/api/models", "/api/adb",
-                       "/api/backup")
+                       "/api/backup", "/api/wipe", "/api/git", "/api/audit")
 
 
 def _is_local_only(path: str) -> bool:

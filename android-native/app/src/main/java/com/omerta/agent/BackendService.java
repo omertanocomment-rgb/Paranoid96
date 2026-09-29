@@ -22,7 +22,9 @@ import android.os.IBinder;
 public class BackendService extends Service {
 
     private static final String CHANNEL_ID = "omerta_backend";
+    private static final String ALERT_CHANNEL_ID = "omerta_approval";
     private static final int NOTIF_ID = 1;
+    private static final int ALERT_ID = 2;
 
     @Override
     public void onCreate() {
@@ -53,6 +55,60 @@ public class BackendService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) { return null; }
+
+    /**
+     * Tell the owner the agent is waiting on them.
+     *
+     * A long turn is exactly when the phone is face-down on a desk, and an
+     * approval card nobody can see is an agent that has quietly stopped. This
+     * goes on its own channel at default importance so it actually makes a
+     * sound, rather than joining the silent ongoing one.
+     */
+    static void alertApproval(Context ctx, String action) {
+        NotificationManager nm = ctx.getSystemService(NotificationManager.class);
+        if (nm == null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel ch = new NotificationChannel(
+                    ALERT_CHANNEL_ID, "Approvals",
+                    NotificationManager.IMPORTANCE_DEFAULT);
+            ch.setDescription("The agent is waiting for you to approve something");
+            nm.createNotificationChannel(ch);
+        }
+        Intent open = new Intent(ctx, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        int flags = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= android.app.PendingIntent.FLAG_IMMUTABLE;
+        }
+        android.app.PendingIntent pi =
+                android.app.PendingIntent.getActivity(ctx, 0, open, flags);
+
+        Notification.Builder b = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                ? new Notification.Builder(ctx, ALERT_CHANNEL_ID)
+                : new Notification.Builder(ctx);
+        Notification n = b.setContentTitle("OMERTA needs approval")
+                .setContentText(action)
+                .setStyle(new Notification.BigTextStyle().bigText(action))
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setAutoCancel(true)
+                .setContentIntent(pi)
+                .build();
+        try {
+            nm.notify(ALERT_ID, n);
+        } catch (SecurityException ignored) {
+            // POST_NOTIFICATIONS refused. The card is still on screen; this
+            // was the courtesy, not the mechanism.
+        }
+    }
+
+    static void clearApprovalAlert(Context ctx) {
+        NotificationManager nm = ctx.getSystemService(NotificationManager.class);
+        if (nm != null) {
+            nm.cancel(ALERT_ID);
+        }
+    }
 
     static void startService(Context ctx) {
         Intent i = new Intent(ctx, BackendService.class);

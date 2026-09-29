@@ -41,6 +41,8 @@ import com.omerta.agent.ui.ChatScreen
 import com.omerta.agent.ui.ChatViewModel
 import com.omerta.agent.ui.ChatsScreen
 import com.omerta.agent.ui.CodeScreen
+import com.omerta.agent.ui.GitScreen
+import com.omerta.agent.ui.Intake
 import com.omerta.agent.ui.LearnScreen
 import com.omerta.agent.ui.ToolsScreen
 import com.omerta.agent.ui.Ember
@@ -58,7 +60,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class Tab(val label: String) {
-    CHAT("CHAT"), CHATS("CHATS"), CODE("CODE"), LEARN("LEARN"),
+    CHAT("CHAT"), CHATS("CHATS"), CODE("CODE"), GIT("GIT"), LEARN("LEARN"),
     TOOLS("TOOLS"), TERMINAL("TERM"), SETTINGS("SETTINGS")
 }
 
@@ -99,7 +101,7 @@ private fun Root() {
                     "unpacking Python… $files files\n(one-time step, it does not repeat)"
                 else "starting agent… ${seconds / 2}s",
             )
-            else -> Console()
+            else -> LockGate { Console() }
         }
     }
 }
@@ -117,10 +119,13 @@ private fun Console() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var keepAwake by remember { mutableStateOf(false) }
     var haptics by remember { mutableStateOf(false) }
+    var notifyApproval by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val s = OmertaClient.settings().optJSONObject("settings")
         keepAwake = truthy(s?.optJSONObject("OMERTA_KEEP_AWAKE")?.optString("value"))
         haptics = truthy(s?.optJSONObject("OMERTA_HAPTICS")?.optString("value"))
+        notifyApproval =
+            truthy(s?.optJSONObject("OMERTA_NOTIFY_APPROVAL")?.optString("value"))
     }
     LaunchedEffect(keepAwake) {
         val w = (ctx as? ComponentActivity)?.window ?: return@LaunchedEffect
@@ -130,7 +135,35 @@ private fun Console() {
     // A phone face-down on a desk while a long turn runs is the whole reason
     // this exists: the approval prompt is useless if nobody sees it.
     LaunchedEffect(st.pending) {
-        if (st.pending != null && haptics) buzz(ctx)
+        val p = st.pending
+        if (p != null) {
+            if (haptics) buzz(ctx)
+            if (notifyApproval) BackendService.alertApproval(ctx, p.action)
+        } else {
+            BackendService.clearApprovalAlert(ctx)
+        }
+    }
+
+    // A turn lives in the backend, not in this process. Android kills a
+    // backgrounded app whenever it likes, and a turn can take a minute, so
+    // the id of whatever was in flight is written down and picked back up on
+    // the next launch instead of showing an empty chat while the model is
+    // still writing.
+    val prefs = remember {
+        ctx.getSharedPreferences("omerta-ui", android.content.Context.MODE_PRIVATE)
+    }
+    LaunchedEffect(Unit) {
+        val pending = prefs.getString("live_stream", "") ?: ""
+        prefs.edit().remove("live_stream").apply()
+        if (pending.isNotEmpty()) vm.resume(pending)
+    }
+    LaunchedEffect(st.busy) {
+        val id = vm.liveStreamId()
+        if (st.busy && !id.isNullOrEmpty()) {
+            prefs.edit().putString("live_stream", id).apply()
+        } else if (!st.busy) {
+            prefs.edit().remove("live_stream").apply()
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -141,6 +174,13 @@ private fun Console() {
                 Tab.CHAT -> ChatScreen(vm)
                 Tab.CHATS -> ChatsScreen(vm)
                 Tab.CODE -> CodeScreen()
+                Tab.GIT -> GitScreen(vm) { ask ->
+                    // A git action never runs from that screen. It is put to
+                    // the agent, which proposes the exact command on an
+                    // approval card first.
+                    Intake.offerText(ask)
+                    tab = Tab.CHAT
+                }
                 Tab.LEARN -> LearnScreen(vm)
                 Tab.TOOLS -> ToolsScreen(vm)
                 Tab.TERMINAL -> TerminalScreen()
@@ -352,6 +392,91 @@ private fun buzz(ctx: android.content.Context) {
         } else {
             @Suppress("DEPRECATION")
             vib?.vibrate(40)
+        }
+    }
+}
+
+
+/**
+ * The device passcode, in front of the app.
+ *
+ * Deliberately the SYSTEM credential (PIN, pattern, password or the biometric
+ * bound to it) rather than a passcode of OMERTA's own. A second secret kept by
+ * this app would be one more thing to forget, stored somewhere on the same
+ * device, protecting data that the device lock already protects at rest -- and
+ * it would be weaker than the thing it sits in front of.
+ *
+ * If the device has no lock set, this passes straight through and says so. An
+ * app lock on an unlocked phone is theatre, and refusing to open would lock
+ * the owner out of their own data to no one's benefit.
+ */
+@Composable
+private fun LockGate(content: @Composable () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var want by remember { mutableStateOf<Boolean?>(null) }
+    var unlocked by remember { mutableStateOf(false) }
+    var refused by remember { mutableStateOf(false) }
+
+    val km = remember {
+        ctx.getSystemService(android.app.KeyguardManager::class.java)
+    }
+    val secure = remember {
+        android.os.Build.VERSION.SDK_INT < 23 || km?.isDeviceSecure == true
+    }
+
+    val prompt = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts
+            .StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            unlocked = true
+            refused = false
+        } else {
+            refused = true
+        }
+    }
+
+    fun ask() {
+        val i = km?.createConfirmDeviceCredentialIntent(
+            "OMERTA", "Unlock to open the agent")
+        if (i == null) unlocked = true else runCatching { prompt.launch(i) }
+            .onFailure { unlocked = true }
+    }
+
+    LaunchedEffect(Unit) {
+        val s = OmertaClient.settings().optJSONObject("settings")
+        val on = truthy(s?.optJSONObject("OMERTA_APP_LOCK")?.optString("value"))
+        want = on && secure
+        if (on && !secure) unlocked = true
+        if (want == true) ask()
+    }
+
+    when {
+        want == null -> Splash("OMERTA AI", "checking…")
+        want == false || unlocked -> content()
+        else -> Column(
+            Modifier.fillMaxSize().padding(28.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("LOCKED", style = MaterialTheme.typography.titleMedium, color = Ember)
+            Spacer(Modifier.height(12.dp))
+            Text(if (refused) "Not unlocked. Nothing is readable until it is."
+                 else "Confirm with this device's passcode.",
+                 style = MaterialTheme.typography.bodySmall, color = TextLo,
+                 textAlign = TextAlign.Center)
+            Spacer(Modifier.height(20.dp))
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Panel)
+                    .border(1.dp, Amber, RoundedCornerShape(6.dp))
+                    .clickableNoRipple { refused = false; ask() }
+                    .padding(horizontal = 18.dp, vertical = 13.dp),
+            ) {
+                Text("UNLOCK", style = MaterialTheme.typography.labelLarge,
+                     color = Amber)
+            }
         }
     }
 }

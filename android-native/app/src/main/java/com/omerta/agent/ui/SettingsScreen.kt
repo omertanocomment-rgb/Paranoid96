@@ -42,6 +42,8 @@ fun SettingsScreen(vm: ChatViewModel) {
     var keyValue by remember { mutableStateOf("") }
     var saved by remember { mutableStateOf("") }
     var engineNote by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf("") }
+    var preflight by remember { mutableStateOf<JSONObject?>(null) }
 
     suspend fun refresh() {
         status = OmertaClient.status()
@@ -49,6 +51,7 @@ fun SettingsScreen(vm: ChatViewModel) {
         engine = OmertaClient.localai()
         settings = OmertaClient.settings()
         themes = OmertaClient.themes()
+        preflight = OmertaClient.enginePreflight()
     }
 
     LaunchedEffect(Unit) { refresh() }
@@ -58,6 +61,16 @@ fun SettingsScreen(vm: ChatViewModel) {
         contentPadding = PaddingValues(14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item {
+            Section("Find a setting") {
+                Field(filter, { filter = it }, "type part of a name")
+                if (filter.isNotEmpty()) {
+                    Note("showing settings matching \"$filter\" — clear the box "
+                         + "to see everything again", Amber)
+                }
+            }
+        }
+
         item {
             Section("Model", trailing = st.provider) {
                 val providers = status?.optJSONObject("providers")
@@ -156,6 +169,32 @@ fun SettingsScreen(vm: ChatViewModel) {
                 Spacer(Modifier.height(8.dp))
                 val running = engine?.optBoolean("running", false) == true
                 val available = engine?.optBoolean("available", false) == true
+                // Asked BEFORE start, because an engine that runs out of
+                // memory takes the whole app down with it, and on a 32-bit
+                // build the process dies with no traceback at all -- the app
+                // just vanishes, which reads as a crash with no cause.
+                preflight?.let { pre ->
+                    val ram = pre.optLong("ram_available", 0)
+                    if (ram > 0) {
+                        ListRow("memory available", right = bytesLabel(ram))
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    pre.optDouble("temperature_c", -1.0).takeIf { it > 0 }?.let {
+                        ListRow("device temperature",
+                                right = String.format("%.0f°C", it),
+                                rightColor = if (it >= 45) Warn else TextLo)
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    val blockers = pre.optJSONArray("blockers")
+                    for (i in 0 until (blockers?.length() ?: 0)) {
+                        Note(blockers!!.optString(i), Ember)
+                    }
+                    val warns = pre.optJSONArray("warnings")
+                    for (i in 0 until (warns?.length() ?: 0)) {
+                        Note(warns!!.optString(i), Warn)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
                 if (!available) {
                     Note(engine?.optString("error", "")?.ifEmpty {
                         "no engine binary for this device"
@@ -228,6 +267,10 @@ fun SettingsScreen(vm: ChatViewModel) {
                 if (table == null) Empty("unavailable")
                 else table.keys().forEach { key ->
                     val spec = table.optJSONObject(key) ?: return@forEach
+                    if (filter.isNotEmpty() &&
+                        !key.contains(filter, true) &&
+                        !spec.optString("label").contains(filter, true)
+                    ) return@forEach
                     SettingRow(key, spec) { value ->
                         scope.launch {
                             val r = OmertaClient.setSettings(
@@ -248,7 +291,23 @@ fun SettingsScreen(vm: ChatViewModel) {
         }
 
         item {
+            ScheduleSection(st.project)
+        }
+
+        item {
+            AuditSection()
+        }
+
+        item {
             HomeLauncherSection()
+        }
+
+        item {
+            CrashSection()
+        }
+
+        item {
+            PanicSection()
         }
 
         item {
@@ -396,5 +455,234 @@ private fun HomeLauncherSection() {
                 on = next
             }
         }
+    }
+}
+
+
+/**
+ * Turns that run without you.
+ *
+ * Two things this deliberately does not pretend. A scheduled turn runs under
+ * the SAME approval policy as a typed one -- it stops at the gate and the
+ * approval waits for you, rather than being waved through for being
+ * unattended. And the clock is a thread inside this app, not cron: a phone
+ * that kills OMERTA kills the schedule with it, and a missed run happens at
+ * the next start, late and labelled late.
+ */
+@Composable
+private fun ScheduleSection(project: String) {
+    val scope = rememberCoroutineScope()
+    var jobs by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var text by remember { mutableStateOf("") }
+    var hours by remember { mutableStateOf("24") }
+    var note by remember { mutableStateOf("") }
+
+    suspend fun refresh() { jobs = OmertaClient.schedules().list("jobs") }
+    LaunchedEffect(Unit) { refresh() }
+
+    Section("Scheduled turns", trailing = "${jobs.size}") {
+        Text("Runs only while OMERTA is running, and stops at the approval "
+             + "gate exactly like a message you typed.",
+             style = MaterialTheme.typography.bodySmall, color = TextLo)
+        Spacer(Modifier.height(8.dp))
+        Field(text, { text = it }, "what should it ask?")
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Field(hours, { hours = it }, "every N hours", Modifier.weight(1f))
+            Chip("ADD", false, tint = Good) {
+                val every = ((hours.trim().toDoubleOrNull() ?: 24.0) * 3600).toInt()
+                if (text.isNotBlank()) scope.launch {
+                    val r = OmertaClient.scheduleAdd(text.trim(), project, every, null)
+                    note = r.err().ifEmpty { "scheduled" }
+                    text = ""
+                    refresh()
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        if (jobs.isEmpty()) Empty("nothing scheduled")
+        jobs.forEach { j ->
+            val id = j.optString("id")
+            ListRow(
+                j.optString("text").take(120),
+                detail = "every ${j.optInt("every") / 3600}h · " +
+                         "${j.optInt("runs")} runs" +
+                         (j.optString("last_status", "").takeIf { it.isNotEmpty() }
+                             ?.let { " · $it" } ?: ""),
+                right = if (j.optBoolean("enabled")) "on" else "off",
+                rightColor = if (j.optBoolean("enabled")) Good else TextLo,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Chip(if (j.optBoolean("enabled")) "PAUSE" else "RESUME", false,
+                     Modifier.weight(1f)) {
+                    scope.launch {
+                        OmertaClient.scheduleSet(id, !j.optBoolean("enabled"))
+                        refresh()
+                    }
+                }
+                Chip("RUN NOW", false, Modifier.weight(1f), tint = Amber) {
+                    scope.launch {
+                        val r = OmertaClient.scheduleRunNow(id)
+                        note = r.err().ifEmpty { "fired" }
+                        refresh()
+                    }
+                }
+                Chip("DELETE", false, Modifier.weight(1f), tint = Blood) {
+                    scope.launch { OmertaClient.scheduleDelete(id); refresh() }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+        Note(note, if (note == "scheduled" || note == "fired") Good else Ember)
+    }
+}
+
+/**
+ * Proving the log was not edited.
+ *
+ * This is tamper EVIDENCE and says so. The chain is computed on this device
+ * with a key on this device, so whatever can rewrite the log can recompute
+ * the chain; what it cannot do is change the head you already wrote down
+ * somewhere else. Comparing that head later is the entire value here, and
+ * calling it "signed" would promise something local storage cannot give.
+ */
+@Composable
+private fun AuditSection() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var head by remember { mutableStateOf("") }
+    var detail by remember { mutableStateOf("") }
+    var bad by remember { mutableStateOf(false) }
+
+    Section("Audit chain") {
+        Text("Each entry's digest includes the one before it, so a line "
+             + "cannot be changed or removed without breaking every digest "
+             + "after it. Write the head down somewhere this device cannot "
+             + "reach.",
+             style = MaterialTheme.typography.bodySmall, color = TextLo)
+        Spacer(Modifier.height(8.dp))
+        Chip("SEAL AND SHOW THE HEAD", false, Modifier.fillMaxWidth()) {
+            scope.launch {
+                val r = OmertaClient.auditExport(false)
+                bad = r.optString("warning", "").isNotEmpty() ||
+                      r.err().isNotEmpty()
+                head = r.optString("head", "")
+                detail = r.err().ifEmpty {
+                    r.optString("warning", "").ifEmpty {
+                        "${r.optInt("count")} entries" +
+                        (if (r.has("continuous") && !r.optBoolean("continuous", true))
+                            " — BROKEN" else "") +
+                        (if (r.optBoolean("continuous", false))
+                            " · continuous since the last seal" else "")
+                    }
+                }
+            }
+        }
+        if (head.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Mono(head, max = 80)
+            Spacer(Modifier.height(6.dp))
+            Chip("COPY HEAD", false, Modifier.fillMaxWidth()) { copy(ctx, head) }
+        }
+        Note(detail, if (bad) Ember else Good)
+    }
+}
+
+/**
+ * The last crash, on the device that had it.
+ *
+ * A crash that only exists in logcat is a crash nobody can send me: reading it
+ * needs a cable, a laptop and adb. The trace is written to a file as it
+ * happens and shown here, with the device, the ABIs and the build, so the
+ * report that arrives is the one I can actually work from.
+ */
+@Composable
+private fun CrashSection() {
+    val ctx = LocalContext.current
+    var text by remember { mutableStateOf<String?>(null) }
+    var gone by remember { mutableStateOf(false) }
+
+    LaunchedEffect(gone) {
+        val f = java.io.File(ctx.filesDir, "last_crash.txt")
+        text = if (f.isFile) runCatching { f.readText() }.getOrNull() else null
+    }
+
+    Section("Last crash", trailing = if (text == null) "none" else "saved") {
+        if (text == null) {
+            Empty("nothing has crashed since this was installed")
+        } else {
+            Mono(text!!, max = 220)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip("COPY", false, Modifier.weight(1f)) { copy(ctx, text!!) }
+                Chip("SHARE", false, Modifier.weight(1f)) {
+                    val send = android.content.Intent(
+                        android.content.Intent.ACTION_SEND)
+                    send.type = "text/plain"
+                    send.putExtra(android.content.Intent.EXTRA_TEXT, text)
+                    runCatching {
+                        ctx.startActivity(android.content.Intent.createChooser(
+                            send, "Send the crash report"))
+                    }
+                }
+                Chip("CLEAR", false, Modifier.weight(1f), tint = Blood) {
+                    runCatching {
+                        java.io.File(ctx.filesDir, "last_crash.txt").delete()
+                    }
+                    gone = !gone
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Destroying everything.
+ *
+ * Not behind the approval gate, on purpose: a panic action that stops to ask
+ * is a panic action that does not work. The confirmation is the phrase, typed
+ * in full, at the moment.
+ */
+@Composable
+private fun PanicSection() {
+    val scope = rememberCoroutineScope()
+    var est by remember { mutableStateOf<JSONObject?>(null) }
+    var typed by remember { mutableStateOf("") }
+    var result by remember { mutableStateOf("") }
+    var bad by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { est = OmertaClient.wipeEstimate() }
+    val phrase = est?.optString("phrase", "WIPE EVERYTHING") ?: "WIPE EVERYTHING"
+
+    Section("Panic wipe",
+            trailing = est?.let { bytesLabel(it.optLong("bytes", 0)) } ?: "") {
+        Text("Chats, memory, the shelf, attachments, keys, the log. It cannot "
+             + "be undone and nothing is backed up first — doing that "
+             + "automatically would defeat the point.",
+             style = MaterialTheme.typography.bodySmall, color = Ember)
+        Spacer(Modifier.height(8.dp))
+        est?.list("items")?.take(12)?.forEach { i ->
+            ListRow(i.optString("name"),
+                    right = bytesLabel(i.optLong("bytes", 0)), mono = true)
+            Spacer(Modifier.height(5.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Field(typed, { typed = it }, phrase)
+        Spacer(Modifier.height(8.dp))
+        Chip("WIPE", false, Modifier.fillMaxWidth(), tint = Blood) {
+            scope.launch {
+                val r = OmertaClient.wipeNow(typed)
+                bad = r.err().isNotEmpty() || r.optString("status") == "partial"
+                result = r.err().ifEmpty {
+                    "removed ${r.optJSONArray("removed")?.length() ?: 0} items" +
+                    ((r.optJSONArray("failed")?.length() ?: 0).takeIf { it > 0 }
+                        ?.let { " · $it could NOT be removed" } ?: "") +
+                    " — restart OMERTA"
+                }
+                typed = ""
+            }
+        }
+        Note(result, if (bad) Ember else Good)
     }
 }

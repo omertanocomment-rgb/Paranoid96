@@ -106,6 +106,35 @@ object OmertaClient {
     suspend fun cancelTurn(id: String) =
         post("/api/chat/cancel", JSONObject().put("id", id))
 
+    /**
+     * Attach to a turn that is already running.
+     *
+     * The stream lives in the backend, not in the app, so a process that was
+     * killed mid-turn can pick the same one back up rather than showing an
+     * empty chat while the model is still writing. A stream that has since
+     * expired reports done with nothing, which is indistinguishable from one
+     * that finished while the app was gone -- and in both cases the
+     * transcript on disk is the truth, so nothing is lost either way.
+     */
+    suspend fun attach(id: String, onDelta: suspend (String) -> Unit): JSONObject {
+        var offset = 0
+        while (true) {
+            val p = get("/api/chat/poll?id=$id&offset=$offset")
+            if (p.err().isNotEmpty()) return p
+            val chunk = p.optString("text", "")
+            if (chunk.isNotEmpty()) onDelta(chunk)
+            offset = p.optInt("offset", offset)
+            if (p.optBoolean("done", false)) {
+                return p.optJSONObject("result") ?: JSONObject()
+            }
+            kotlinx.coroutines.delay(120)
+        }
+    }
+
+    suspend fun pinMemory(text: String, project: String) =
+        post("/api/memory/add", JSONObject().put("text", text)
+            .put("project", project))
+
     // ── status / settings ───────────────────────────────────────────────
     suspend fun status(): JSONObject = get("/api/status")
 
@@ -219,8 +248,9 @@ object OmertaClient {
 
     suspend fun wsBackups(): JSONObject = get("/api/ws/backups")
 
-    suspend fun wsBackupRead(id: String) =
-        post("/api/ws/backup", JSONObject().put("id", id))
+    /** `path`, not an id: the backup archive is addressed by file path. */
+    suspend fun wsBackupRead(path: String) =
+        post("/api/ws/backup", JSONObject().put("path", path))
 
     // ── the learning shelf ──────────────────────────────────────────────
     suspend fun learnList(project: String) = get("/api/learn?project=${q(project)}")
@@ -317,6 +347,56 @@ object OmertaClient {
     suspend fun reconnectConnectors() = post("/api/connectors/reconnect", JSONObject())
 
     suspend fun reloadPlugins() = post("/api/plugins/reload", JSONObject())
+
+    // ── git ─────────────────────────────────────────────────────────────
+    // Read-only on purpose. core/gitx enforces a whitelist of subcommands
+    // that cannot change a repository; commit, push, reset and checkout stay
+    // shell commands through the approval gate, where force-push and
+    // reset --hard are already High-Risk. Two ways to move a branch, one of
+    // them ungated, is how a safety property quietly stops being one.
+    suspend fun gitStatus(): JSONObject = get("/api/git")
+
+    suspend fun gitBranches(): JSONObject = get("/api/git/branches")
+
+    suspend fun gitLog(n: Int = 20) = get("/api/git/log?n=$n")
+
+    suspend fun gitDiff(staged: Boolean = false) =
+        post("/api/git/diff", JSONObject().put("staged", staged))
+
+    suspend fun gitReview() = post("/api/git/review", JSONObject())
+
+    // ── scheduled turns ─────────────────────────────────────────────────
+    suspend fun schedules(): JSONObject = get("/api/schedule")
+
+    suspend fun scheduleAdd(text: String, project: String, every: Int, at: Double?) =
+        post("/api/schedule", JSONObject().put("action", "add")
+            .put("text", text).put("project", project).put("every", every)
+            .apply { at?.let { put("at", it) } })
+
+    suspend fun scheduleSet(id: String, enabled: Boolean) =
+        post("/api/schedule", JSONObject().put("action", "update")
+            .put("id", id).put("enabled", enabled))
+
+    suspend fun scheduleDelete(id: String) =
+        post("/api/schedule", JSONObject().put("action", "delete").put("id", id))
+
+    suspend fun scheduleRunNow(id: String) =
+        post("/api/schedule", JSONObject().put("action", "run_now").put("id", id))
+
+    // ── the audit chain ─────────────────────────────────────────────────
+    suspend fun auditExport(full: Boolean = true) =
+        post("/api/audit/export", JSONObject().put("full", full))
+
+    // ── panic ───────────────────────────────────────────────────────────
+    suspend fun wipeEstimate(): JSONObject = get("/api/wipe")
+
+    suspend fun wipeNow(phrase: String) =
+        post("/api/wipe", JSONObject().put("confirm", phrase))
+
+    // ── engine preflight ────────────────────────────────────────────────
+    suspend fun enginePreflight(model: String? = null) =
+        post("/api/localai/preflight",
+             JSONObject().apply { model?.let { put("model", it) } })
 }
 
 /**

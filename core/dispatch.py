@@ -35,7 +35,7 @@ from . import api
 LOCAL_ONLY = ("/api/term", "/api/ws/", "/api/scratch", "/api/learn/path",
               "/api/localai", "/api/attach",
               "/api/models", "/api/adb",
-              "/api/backup")
+              "/api/backup", "/api/wipe", "/api/git", "/api/audit")
 
 
 def is_local_only(path):
@@ -74,6 +74,10 @@ _GET_PLAIN = {
     "/api/ws/backups": api.ws_backups,
     "/api/chats/projects": api.chat_projects,
     "/api/term": api.term_list,
+    "/api/schedule": api.schedule_list,
+    "/api/wipe": api.wipe_estimate,
+    "/api/git": api.git_status,
+    "/api/git/branches": api.git_branches,
 }
 
 
@@ -115,6 +119,9 @@ def _get(path, query):
         # pipe and the GTK scheme. None of those can hold an SSE stream open.
         return 200, api.chat_poll(_one(query, "id", "") or "",
                                   _int(query, "offset", 0))
+    if path == "/api/git/log":
+        return 200, api.git_log({"n": _int(query, "n", 15),
+                                 "cwd": _one(query, "cwd", ".")})
     if path == "/api/term/read":
         return 200, api.term_read({"id": _one(query, "id", "") or "",
                                    "offset": _int(query, "offset", 0)})
@@ -157,6 +164,15 @@ _POST_BODY = {
     "/api/term/signal": api.term_signal,
     "/api/term/resize": api.term_resize,
     "/api/term/close": api.term_close,
+    "/api/schedule": api.schedule_control,
+    "/api/wipe": api.wipe_now,
+    "/api/audit/export": api.audit_export,
+    "/api/audit/verify": api.audit_verify,
+    "/api/git/diff": api.git_diff,
+    "/api/git/review": api.git_review,
+    "/api/localai/preflight": api.localai_preflight,
+    "/api/memory/add": api.memory_add,
+    "/api/memory/forget": api.memory_forget,
 }
 
 _THEME_VERBS = {"use": api.theme_use, "save": api.theme_save,
