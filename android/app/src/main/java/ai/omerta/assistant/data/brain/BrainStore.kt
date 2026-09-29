@@ -41,13 +41,44 @@ class BrainStore(private val context: Context) {
         return seeded
     }
 
-    fun load(id: String): BrainFile? = File(brainDir, "${safe(id)}.brain").takeIf { it.exists() }
-        ?.let { runCatching { BrainFile.parse(it.readText()) }.getOrNull() }
+    fun load(id: String): BrainFile? {
+        val f = File(brainDir, "${safe(id)}.brain")
+        if (!f.exists()) return null
+        runCatching { BrainFile.parse(f.readText()) }.getOrNull()?.let { return it }
+        // Primary file is unreadable/corrupt — recover from the last-good backup.
+        return File(brainDir, "${safe(id)}.brain.bak").takeIf { it.exists() }
+            ?.let { runCatching { BrainFile.parse(it.readText()) }.getOrNull() }
+    }
 
     fun save(b: BrainFile) {
         val f = File(brainDir, "${safe(b.id)}.brain")
         val tmp = File(brainDir, "${safe(b.id)}.brain.tmp")
+        // Keep the previous good copy as .bak before replacing (crash/corruption safety).
+        if (f.exists()) runCatching { f.copyTo(File(brainDir, "${safe(b.id)}.brain.bak"), overwrite = true) }
         tmp.writeText(b.encode()); tmp.renameTo(f)
+    }
+
+    /** Back up every brain to a single .zip at [uri]. Returns the count. */
+    fun backupAll(uri: Uri): Int {
+        val files = brainDir.listFiles { f -> f.name.endsWith(".brain") }.orEmpty()
+        context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+            java.util.zip.ZipOutputStream(out).use { zip ->
+                for (bf in files) {
+                    zip.putNextEntry(java.util.zip.ZipEntry(bf.name))
+                    bf.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        } ?: error("cannot write backup")
+        return files.size
+    }
+
+    /** Restore brains from a .zip (or a single .brain) backup. Returns the count installed. */
+    fun restoreAll(uri: Uri): Int {
+        val items = readImport(uri)
+        var n = 0
+        for (it in items.filterIsInstance<Imported.Brain>()) { install(it.brain, keepBoth = false); n++ }
+        return n
     }
 
     fun delete(id: String) {

@@ -5,6 +5,9 @@ The single source of truth for how every Omerta app looks. **All themes derive f
 radii and spacing. This is a hard rule for every project in this repo: build to a
 publishable, signed standard with a polished, well-laid-out UI, themed from this file.
 
+## Slogan & tagline
+Slogan **“Silence is golden.”** · tagline *“your offline operator brain.”* (in `omerta-design.json` → `brand`).
+
 ## The look
 Dark operator console. Near-black canvas, layered surfaces, a single **amber** accent
 (`#FFB300`), and **JetBrains Mono** for *all* type. Calm, precise, discreet.

@@ -47,6 +47,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = ChatRepository(brain)
     private val deviceTools = DeviceTools(app)
     private val memory = MemoryStore(app)
+    val agentLog = ai.omerta.assistant.data.agent.AgentLog(app)
 
     val settings: StateFlow<OmertaSettings?> =
         settingsStore.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -232,10 +233,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     _approval.value = PendingApproval(name, input, risk.level, risk.reason, d)
                     d.await()
                 }
-                if (!allowed) AnthropicClient.ToolOutcome("denied by operator", isError = true)
-                else withContext(Dispatchers.IO) {
+                if (!allowed) {
+                    agentLog.record(name, input, risk.level, "DENIED")
+                    AnthropicClient.ToolOutcome("denied by operator", isError = true)
+                } else withContext(Dispatchers.IO) {
                     runCatching { AnthropicClient.ToolOutcome(deviceTools.execute(name, input)) }
                         .getOrElse { AnthropicClient.ToolOutcome(it.message ?: "tool error", isError = true) }
+                        .also { agentLog.record(name, input, risk.level,
+                            if (autoOk) "AUTO-RAN" else "ALLOWED", it.content) }
                 }
             }
             try {
@@ -381,6 +386,22 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 agentMode, autoApprove, provider, openAiKey, ollamaUrl,
             )
             checkConnection()
+        }
+    }
+
+    fun backupAllBrains(uri: android.net.Uri) {
+        viewModelScope.launch {
+            runCatching { brain.store.backupAll(uri) }.fold(
+                onSuccess = { appendAssistant("🧠 backed up $it brain(s) to the chosen file.") },
+                onFailure = { appendAssistant("🧠 backup failed: ${it.message}", isError = true) })
+        }
+    }
+
+    fun restoreAllBrains(uri: android.net.Uri) {
+        viewModelScope.launch {
+            runCatching { brain.importAll(uri) }.fold(
+                onSuccess = { appendAssistant("🧠 restored $it brain(s).") },
+                onFailure = { appendAssistant("🧠 restore failed: ${it.message}", isError = true) })
         }
     }
 

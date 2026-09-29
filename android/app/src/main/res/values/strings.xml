@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Omerta AI</string>
-    <string name="tagline">Operator-grade AI console</string>
+    <string name="tagline">your offline operator brain</string>
+    <string name="slogan">Silence is golden.</string>
 </resources>

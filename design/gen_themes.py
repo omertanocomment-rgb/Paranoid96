@@ -67,6 +67,9 @@ def gen_python(d: dict) -> str:
         out.append(f'{_camel_to_upper(k)} = "{v}"')
     out.append(f'FONT = "{d["typography"]["family"]}"')
     out.append(f'FONT_FALLBACK = "{d["typography"]["fallback"]}"')
+    out.append(f'BRAND = "{d["brand"]["name"]}"')
+    out.append(f'SLOGAN = "{d["brand"].get("slogan", "")}"')
+    out.append(f'TAGLINE = "{d["brand"].get("tagline", "")}"')
     return "\n".join(out) + "\n"
 
 
@@ -87,6 +90,9 @@ def gen_env(d: dict) -> str:
     for k, v in c.items():
         out.append(f"OMERTA_{_camel_to_upper(k)}={v}")
     out.append(f'OMERTA_FONT="{d["typography"]["family"]}"')
+    out.append(f'OMERTA_BRAND="{d["brand"]["name"]}"')
+    out.append(f'OMERTA_SLOGAN="{d["brand"].get("slogan", "")}"')
+    out.append(f'OMERTA_TAGLINE="{d["brand"].get("tagline", "")}"')
     return "\n".join(out) + "\n"
 
 

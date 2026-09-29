@@ -150,11 +150,23 @@ def blank(name: str, tone: str = "calm") -> dict:
     }
 
 
-def load(path: str) -> dict:
+def _read_brain(path: str) -> dict:
     with open(path, encoding="utf-8-sig") as f:
         b = json.load(f)
     if not str(b.get("format", "")).startswith("omerta-brain/"):
-        sys.exit(f"{path}: not an Omerta brain")
+        raise ValueError(f"{path}: not an Omerta brain")
+    return b
+
+
+def load(path: str) -> dict:
+    try:
+        b = _read_brain(path)
+    except (json.JSONDecodeError, OSError, ValueError):
+        # Fall back to the last-good backup if the primary file is corrupt.
+        if os.path.exists(path + ".bak"):
+            b = _read_brain(path + ".bak")
+        else:
+            raise
     base = blank(b.get("name", "Brain"))
     base.update(b)
     base["persona"] = {**blank("x")["persona"], **b.get("persona", {})}
@@ -163,6 +175,13 @@ def load(path: str) -> dict:
 
 def save(b: dict, path: str) -> None:
     b["updated"] = now_ms()
+    # Keep the previous good copy as <path>.bak before replacing (crash/corruption safety).
+    if os.path.exists(path):
+        try:
+            import shutil
+            shutil.copy2(path, path + ".bak")
+        except OSError:
+            pass
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(b, f, ensure_ascii=False, indent=2)

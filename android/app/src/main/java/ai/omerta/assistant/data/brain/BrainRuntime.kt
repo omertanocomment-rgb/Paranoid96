@@ -183,6 +183,13 @@ class BrainRuntime private constructor(context: Context) {
 
     suspend fun export(uri: Uri) = withContext(Dispatchers.IO) { store.export(engine.brain, uri) }
 
+    /** Restore every brain from a .zip/.brain backup, then activate the first one. */
+    suspend fun importAll(uri: Uri): Int = withContext(Dispatchers.IO) {
+        val n = store.restoreAll(uri)
+        store.list().firstOrNull()?.let { switchTo(it.id) }
+        n
+    }
+
     suspend fun importModel(uri: Uri, onProgress: (Long, Long) -> Unit): File = withContext(Dispatchers.IO) {
         store.importModel(uri, onProgress)
     }

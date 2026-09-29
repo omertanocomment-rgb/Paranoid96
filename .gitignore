@@ -45,3 +45,6 @@ engine/omerta.spec
 # ---- Desktop app build artifacts ----
 desktop/build/
 desktop/dist/
+
+# brain last-good backups (runtime only)
+*.brain.bak

@@ -32,6 +32,7 @@ for _cand in (_HERE, os.path.join(_HERE, "brain"), os.path.abspath(os.path.join(
 import omerta_brain as ob  # noqa: E402
 
 APP_NAME = "Omerta AI"
+SLOGAN = "Silence is golden."
 VERSION = "1.1.0"
 
 # OMERTA operator-console palette.
@@ -168,6 +169,40 @@ class BrainLibrary:
     def export(self, path: str):
         ob.save(self.brain, path)
 
+    def backup_all(self, path: str) -> int:
+        """Write every brain to a single .zip backup. Returns the count."""
+        import zipfile
+        self.commit()
+        brains = [f for f in os.listdir(self.dir) if f.endswith(".brain")]
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            for fn in brains:
+                z.write(os.path.join(self.dir, fn), fn)
+        return len(brains)
+
+    def restore_all(self, path: str) -> int:
+        """Install every brain from a .zip (or a single .brain) backup. Returns the count."""
+        import tempfile, zipfile
+        n = 0
+
+        def install_bytes(raw: bytes):
+            nonlocal n
+            tf = os.path.join(tempfile.mkdtemp(), "b.brain")
+            with open(tf, "wb") as f:
+                f.write(raw)
+            self.save(ob.load(tf)); n += 1
+
+        if zipfile.is_zipfile(path):
+            with zipfile.ZipFile(path) as z:
+                for name in z.namelist():
+                    if name.endswith(".brain"):
+                        install_bytes(z.read(name))
+        else:
+            self.save(ob.load(path)); n = 1
+        remaining = self.list()
+        if remaining:
+            self.switch_to(remaining[0]["id"])
+        return n
+
     def stats_line(self) -> str:
         b = self.brain
         return (f'{b["persona"]["name"]} · {b["persona"]["tone"]} · '
@@ -203,6 +238,7 @@ def launch_gui(lib: BrainLibrary):
     header.pack(fill="x", padx=14, pady=(12, 4))
     title = tk.Label(header, text="◆ OMERTA AI", fg=AMBER, bg=BLACK, font=(mono[0], 15, "bold"))
     title.pack(side="left")
+    tk.Label(header, text=SLOGAN, fg=TEXT_DIM, bg=BLACK, font=(mono[0], 9, "italic")).pack(side="left", padx=(10,0))
     status = tk.Label(header, text="offline", fg=GREEN, bg=BLACK, font=(mono[0], 10))
     status.pack(side="right")
 
@@ -333,9 +369,24 @@ def launch_gui(lib: BrainLibrary):
         add("brain", lib.brain["persona"].get("greeting", "Ready."))
         refresh_status()
 
+    def do_backup_all():
+        p = filedialog.asksaveasfilename(title="Back up all brains", defaultextension=".zip",
+                                         initialfile="omerta-brains-backup.zip")
+        if p:
+            n = lib.backup_all(p); add("sys", f"🧠 backed up {n} brain(s) → {p}")
+
+    def do_restore_all():
+        p = filedialog.askopenfilename(title="Restore brains", filetypes=[("Backup", "*.zip *.brain"), ("All", "*.*")])
+        if p:
+            try:
+                n = lib.restore_all(p); add("sys", f"🧠 restored {n} brain(s)"); reload_all()
+            except Exception as e:
+                messagebox.showerror("Restore failed", str(e))
+
     for label, cmd in [("＋ Upload files", do_upload), ("Personality", do_personality),
                        ("New", do_new), ("Switch", do_switch), ("Import", do_import),
-                       ("Export", do_export), ("Delete", do_reset)]:
+                       ("Export", do_export), ("Backup all", do_backup_all),
+                       ("Restore", do_restore_all), ("Delete", do_reset)]:
         btn(bar, label, cmd, fg=AMBER, bg=SURFACE).pack(side="left", padx=(0, 6))
 
     hint = tk.Label(root, text='teach me: "remember that…" · "when I say X, say Y" · "wrong, it\'s…" · '

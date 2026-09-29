@@ -6,29 +6,49 @@
     "name": "Omerta AI",
     "accentName": "amber",
     "logo": "design/logo/omerta.svg",
-    "voice": "operator-grade, precise, discreet"
+    "voice": "operator-grade, precise, discreet",
+    "slogan": "Silence is golden.",
+    "tagline": "your offline operator brain"
   },
   "color": {
-    "black":          "#0A0A0B",
-    "surface":        "#141416",
-    "surfaceHigh":    "#1E1E22",
-    "border":         "#2A2A2E",
-    "amber":          "#FFB300",
-    "amberDim":       "#8A6100",
-    "green":          "#00E676",
-    "red":            "#FF5252",
-    "textPrimary":    "#ECECEC",
-    "textSecondary":  "#9A9AA0",
-    "userBubble":     "#1F2A1A",
-    "assistantBubble":"#16161A"
+    "black": "#0A0A0B",
+    "surface": "#141416",
+    "surfaceHigh": "#1E1E22",
+    "border": "#2A2A2E",
+    "amber": "#FFB300",
+    "amberDim": "#8A6100",
+    "green": "#00E676",
+    "red": "#FF5252",
+    "textPrimary": "#ECECEC",
+    "textSecondary": "#9A9AA0",
+    "userBubble": "#1F2A1A",
+    "assistantBubble": "#16161A"
   },
   "typography": {
     "family": "JetBrains Mono",
     "fallback": "monospace",
-    "weights": [400, 500, 600, 700],
+    "weights": [
+      400,
+      500,
+      600,
+      700
+    ],
     "note": "JetBrains Mono for ALL UI typography, per the OMERTA house style."
   },
-  "radius": { "sm": 8, "md": 10, "lg": 14, "pill": 999 },
-  "spacing": { "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24 },
-  "elevation": { "gutter": 16 }
+  "radius": {
+    "sm": 8,
+    "md": 10,
+    "lg": 14,
+    "pill": 999
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24
+  },
+  "elevation": {
+    "gutter": 16
+  }
 }

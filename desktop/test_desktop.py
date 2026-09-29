@@ -42,3 +42,31 @@ class DesktopLibraryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BackupRestoreTest(unittest.TestCase):
+    def test_backup_all_and_restore(self):
+        import tempfile, os as _os
+        lib = d.BrainLibrary(tempfile.mkdtemp())
+        lib.respond("remember that alpha is one")
+        lib.create("Second"); lib.respond("remember that beta is two")
+        n_before = len(lib.list())
+        bak = _os.path.join(lib.dir, "all.zip")
+        self.assertEqual(lib.backup_all(bak), n_before)
+        # fresh library, restore
+        lib2 = d.BrainLibrary(tempfile.mkdtemp())
+        restored = lib2.restore_all(bak)
+        self.assertEqual(restored, n_before)
+        ids = {b["id"] for b in lib2.list()}
+        self.assertTrue({"omerta", "second"}.issubset(ids) or n_before <= len(ids))
+
+    def test_corrupt_brain_falls_back_to_bak(self):
+        import tempfile, os as _os
+        lib = d.BrainLibrary(tempfile.mkdtemp())
+        p = lib.path_for(lib.brain["id"])
+        lib.respond("remember that gamma is three")   # writes .bak of the seed
+        lib.respond("remember that delta is four")     # .bak now has gamma
+        with open(p, "w") as f:
+            f.write("{ this is corrupt json ]")
+        b = ob.load(p)                                  # should recover from .bak
+        self.assertEqual(b["format"], "omerta-brain/1")

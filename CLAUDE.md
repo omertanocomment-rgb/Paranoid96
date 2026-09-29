@@ -17,6 +17,13 @@ artifact, and it must work offline. This is the EMBEDDED philosophy applied ever
   server or a browser tab. A REMOTE/server mode may exist as an *option*, never a
   requirement to use the product.
 
+## Brand base (ALL projects, going forward)
+Every new app starts from the **Omerta AI brand**: the OMERTA Design System theme
+(`design/omerta-design.json`), the logo (`design/logo/`, `gen_icons.py`), and the
+**slogan "Silence is golden."** with tagline "your offline operator brain" (both in the
+design tokens under `brand`, surfaced in `design/generated/*`, Android `strings.xml`, and
+the desktop app). Reuse these — don't invent per-app branding.
+
 ## Release & UI standard (ALL projects, going forward)
 Every app is built to a **publishable, signed** standard with a **polished, well-laid-out
 UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
@@ -38,6 +45,14 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   See `scripts/sign/README.md`. Never commit keystores/keys (git-ignored).
 - **Definition of done** for any app = design-system theme + parity check green + polished
   layout + signed installable produced (locally or in CI) + docs updated.
+
+## Personal-data safety (this repo)
+- Brain saves are atomic (tmp+rename) **and** keep a last-good `<id>.brain.bak`; loaders fall
+  back to `.bak` on corruption (Android `BrainStore`, Python `omerta_brain.load`).
+- Backup/restore all brains to one `.zip` (Brain screen: BACK UP ALL / RESTORE; desktop:
+  Backup all / Restore; Brain Studio: `pack`). 
+- The agent keeps an on-device audit log of every tool call (`data/agent/AgentLog.kt`,
+  viewable on the Brain screen). Never send it off-device.
 
 ## What this repo is
 - `android/` — native Android app **Omerta AI** (`ai.omerta.assistant`), Kotlin +

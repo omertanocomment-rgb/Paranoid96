@@ -108,6 +108,12 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
             runCatching { rt.export(uri) }.onSuccess { toast("Brain exported") }.onFailure { toast("export failed: ${it.message}") }
         }
     }
+    val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) vm.backupAllBrains(uri)
+    }
+    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.restoreAllBrains(uri)
+    }
     var modelProgress by remember { mutableStateOf<Float?>(null) }
     var modelsRefresh by remember { mutableIntStateOf(0) }
     val modelLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -202,6 +208,14 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
                 OutlinedButton(onClick = { exportLauncher.launch("${brain.id}.brain") }, colors = ghostButton(),
                     modifier = Modifier.weight(1f)) { Text("EXPORT .brain", style = MaterialTheme.typography.labelMedium) }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { backupLauncher.launch("omerta-brains-backup.zip") }, colors = ghostButton(),
+                    modifier = Modifier.weight(1f)) { Text("BACK UP ALL", style = MaterialTheme.typography.labelMedium) }
+                OutlinedButton(onClick = { restoreLauncher.launch(arrayOf("application/zip", "*/*")) }, colors = ghostButton(),
+                    modifier = Modifier.weight(1f)) { Text("RESTORE", style = MaterialTheme.typography.labelMedium) }
+            }
+            Hint("Back up every brain to one .zip; restore re-installs them all. A last-good copy of each " +
+                "brain is also kept automatically in case a file is ever corrupted.")
 
             // ------------------------------------------------ teach
             Section("TEACH")
@@ -358,6 +372,33 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
                 s.adaptivePersona) { vm.saveBrainSettings(adaptivePersona = it) }
 
             // ------------------------------------------------ danger
+            // ------------------------------------------------ agent action log
+            Section("AGENT ACTION LOG")
+            Hint("Every tool the agent runs on your device is recorded here (approved, denied, auto-run) — " +
+                "your own audit trail. Stays on-device.")
+            var logRefresh by remember { mutableIntStateOf(0) }
+            val log = remember(logRefresh) { vm.agentLog.read(200) }
+            if (log.isEmpty()) Hint("No agent actions yet.")
+            else {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(OmertaSurface).padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    log.take(60).forEach { line ->
+                        Text(line, style = MaterialTheme.typography.labelSmall,
+                            color = if ("DENIED" in line) OmertaGreen else OmertaTextSecondary)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { logRefresh++ }, colors = ghostButton(), modifier = Modifier.weight(1f)) {
+                        Text("REFRESH", style = MaterialTheme.typography.labelSmall)
+                    }
+                    OutlinedButton(onClick = { vm.agentLog.clear(); logRefresh++ }, colors = ghostButton(), modifier = Modifier.weight(1f)) {
+                        Text("CLEAR LOG", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
             Section("DANGER ZONE")
             var confirm by remember { mutableStateOf<String?>(null) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
