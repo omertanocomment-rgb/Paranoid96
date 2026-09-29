@@ -265,6 +265,47 @@ class BrainStore(private val context: Context) {
         return dst
     }
 
+    /**
+     * Download an on-device model straight into app storage over HTTPS (resumable), so the
+     * LLM works without hand-copying a file. Follows redirects; resumes a `.part` with a
+     * Range request when the server allows it.
+     */
+    fun downloadModel(url: String, onProgress: (Long, Long) -> Unit): File {
+        require(url.startsWith("https://")) { "model URL must be https" }
+        val name = safeFile(url.substringAfterLast('/').substringBefore('?')).let { n ->
+            if (MODEL_EXT.any { n.endsWith(it, true) }) n else "$n.task"
+        }
+        val dst = File(modelDir, name)
+        val tmp = File(modelDir, "$name.part")
+        val have = if (tmp.exists()) tmp.length() else 0L
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS).build()
+        val req = okhttp3.Request.Builder().url(url)
+            .apply { if (have > 0) header("Range", "bytes=$have-") }.get().build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful && resp.code != 206) error("HTTP ${resp.code}")
+            val resuming = resp.code == 206
+            val body = resp.body ?: error("empty body")
+            val total = (if (resuming) have else 0L) + body.contentLength().let { if (it > 0) it else -1L }
+            java.io.RandomAccessFile(tmp, "rw").use { raf ->
+                if (resuming) raf.seek(have) else raf.setLength(0)
+                body.byteStream().use { input ->
+                    val buf = ByteArray(1 shl 20)
+                    var done = if (resuming) have else 0L
+                    while (true) {
+                        val n = input.read(buf); if (n < 0) break
+                        raf.write(buf, 0, n); done += n
+                        onProgress(done, total)
+                    }
+                }
+            }
+        }
+        if (dst.exists()) dst.delete()
+        tmp.renameTo(dst)
+        return dst
+    }
+
     fun deleteModel(name: String) { File(modelDir, safeFile(name)).delete() }
 
     private fun displayName(uri: Uri): String {

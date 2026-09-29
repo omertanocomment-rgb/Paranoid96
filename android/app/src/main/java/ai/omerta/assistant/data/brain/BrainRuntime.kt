@@ -218,6 +218,10 @@ class BrainRuntime private constructor(context: Context) {
         store.importModel(uri, onProgress)
     }
 
+    suspend fun downloadModel(url: String, onProgress: (Long, Long) -> Unit): File = withContext(Dispatchers.IO) {
+        store.downloadModel(url.trim(), onProgress)
+    }
+
     fun deleteModel(name: String) {
         if (llm.loadedModel == name) llm.unload()
         store.deleteModel(name)

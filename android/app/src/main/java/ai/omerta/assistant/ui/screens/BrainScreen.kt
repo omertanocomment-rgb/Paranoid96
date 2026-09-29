@@ -436,6 +436,28 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(), enabled = modelProgress == null) {
                 Text("ADD MODEL FILE (.task / .bin)", style = MaterialTheme.typography.labelMedium)
             }
+            var modelUrl by remember { mutableStateOf("") }
+            OutlinedTextField(modelUrl, { modelUrl = it }, label = { Text("…or paste a model URL (https)") },
+                singleLine = true, modifier = Modifier.fillMaxWidth(), colors = fieldColors,
+                textStyle = MaterialTheme.typography.bodySmall)
+            OutlinedButton(
+                onClick = {
+                    val u = modelUrl.trim()
+                    if (!u.startsWith("https://")) { toast("enter an https model URL"); return@OutlinedButton }
+                    scope.launch {
+                        modelProgress = 0f
+                        runCatching {
+                            rt.downloadModel(u) { done, total -> modelProgress = if (total > 0) done.toFloat() / total else -1f }
+                        }.onSuccess { f -> vm.saveBrainSettings(model = f.name); toast("Downloaded ${f.name}") }
+                            .onFailure { toast("download failed: ${it.message}") }
+                        modelProgress = null; modelsRefresh++
+                    }
+                },
+                colors = ghostButton(), modifier = Modifier.fillMaxWidth(), enabled = modelProgress == null) {
+                Text("DOWNLOAD MODEL FROM URL", style = MaterialTheme.typography.labelMedium)
+            }
+            Hint("One-time download over Wi-Fi; after that the model runs 100% offline. Get a MediaPipe " +
+                "`.task` model from huggingface.co/litert-community or Kaggle and paste its direct download link.")
             if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.labelSmall,
                 color = if (status.startsWith("on-device")) OmertaGreen else OmertaTextSecondary)
             SubLabel("WHEN THE MODEL SPEAKS")

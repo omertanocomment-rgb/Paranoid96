@@ -86,6 +86,9 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   the UI (Brain header, personality editor accent chips). The UI base stays amber.
 - First-run onboarding: a one-time dialog (SettingsStore `onboarded` flag) points to going
   offline, teaching, the Brain screen, and encrypted keys.
+- On-device LLM model install: `BrainStore.importModel` (pick a file) **or**
+  `BrainStore.downloadModel` (paste an https URL, resumable) drop a MediaPipe `.task`/`.bin`
+  into the model dir; `OnDeviceLlm` then answers grounded in the brain (ASSIST/ALWAYS).
 - Auto-backup: pick a SAF folder once (Brain → AUTO-BACKUP, persisted uri permission);
   `BrainStore.backupAllToTree` writes a timestamped `.zip` of every brain there, keeping the
   latest 10. Runs on launch when due (`ChatViewModel.maybeAutoBackup`, OFF/DAILY/WEEKLY) or
