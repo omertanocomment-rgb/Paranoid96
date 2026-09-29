@@ -41,3 +41,7 @@ ios/OmertaAI.xcodeproj/
 ios/*.ipa
 ios/Payload/
 engine/omerta.spec
+
+# ---- Desktop app build artifacts ----
+desktop/build/
+desktop/dist/

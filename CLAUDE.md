@@ -5,11 +5,26 @@ This encodes the OMERTA ground rules: **take every task to a working, packaged
 artifact — never hand back a fragment or a TODO. If a step is blocked, build the
 workaround immediately.**
 
+## Distribution principle (ALL projects, going forward)
+**Everything ships inside the installable executable. No separate web app, and no
+terminal/server backend to run.** The engine, data, personality and UI live in the
+artifact, and it must work offline. This is the EMBEDDED philosophy applied everywhere:
+- Android → the app calls providers in-process, or runs the fully offline on-device brain.
+- Desktop (`desktop/`) → a native Tk app (no browser/web view, no server) packaged as a
+  `.deb` (Linux Mint/Ubuntu/Debian) and a self-contained PyInstaller binary / AppImage.
+- New targets → prefer a native, self-contained installable over anything that needs a
+  server or a browser tab. A REMOTE/server mode may exist as an *option*, never a
+  requirement to use the product.
+
 ## What this repo is
 - `android/` — native Android app **Omerta AI** (`ai.omerta.assistant`), Kotlin +
   Jetpack Compose. Dark operator-console theme, amber accent (`#FFB300`), JetBrains
   Mono for all typography.
-- `backend/` — Node/Express gateway to the Anthropic Messages API (SSE streaming).
+- `backend/` — Node/Express gateway to the Anthropic Messages API (SSE streaming). Optional
+  (REMOTE mode only) — never required to use the app.
+- `desktop/` — **native Linux desktop app** (Tkinter, no browser/server) for the offline
+  brain; shares the engine with `brain/omerta_brain.py`. Packaged as `.deb` + AppImage.
+  Build: `bash desktop/packaging/build-deb.sh`. Tests: `python3 -m unittest desktop/test_desktop.py`.
 
 ## Engine modes (how the app reaches Claude)
 The app has a compiled-in engine and picks one at runtime (`EngineMode` in

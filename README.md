@@ -11,7 +11,11 @@ Two parts of one project:
 2. **Omerta AI Consoles** — mobile front-ends: **Android `.apk`** (`android/`) and
    **iOS `.ipa`** (`ios/`). Each runs EMBEDDED (calls Claude directly) or REMOTE
    (talks to the engine / Node backend over the same API).
-3. **Omerta Brain** (`brain/` + `android/.../data/brain/`) — a **fully offline, teachable AI
+3. **Omerta AI Desktop** (`desktop/`) — a **native Linux desktop app** (Tkinter, no
+   browser, no server) for the offline brain, installable on **Linux Mint**/Ubuntu/Debian
+   as a `.deb` (plus a self-contained PyInstaller binary / AppImage). Everything is in the
+   executable — no web app, no terminal backend. See [`desktop/README.md`](desktop/README.md).
+4. **Omerta Brain** (`brain/` + `android/.../data/brain/`) — a **fully offline, teachable AI
    with a personality** that runs inside the Android app with no network, no key and no
    server. Teach it by chatting ("remember that…", "when I say X, say Y", "wrong, it's…"),
    give it a personality, feed it documents, add an optional on-device LLM (Gemma via
