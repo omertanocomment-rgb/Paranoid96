@@ -16,6 +16,20 @@ Then put all three in one zip with the manual, the guide, the changelog and a
 Do not ship one and describe the others. Do not ship an APK for a single ABI:
 that shipped for eight versions and would not install on a 32-bit phone.
 
+## Always hand over one block of install code
+
+Standing rule. Whatever is delivered, the reply carries ONE fenced block that
+does the whole job end to end — rejoin the parts, verify the checksum, unpack,
+install — with nothing to edit and no steps to follow in prose.
+
+Never mix prose into the block: it gets pasted whole, and the explanation runs
+as commands. That happened once; every line the owner did not need to run
+produced an error. Notes go after the block, under a line saying not to paste
+them, or in a separate file.
+
+The block verifies before it installs and refuses on a mismatch, so a truncated
+download fails loudly instead of becoming a "parse error" at the installer.
+
 ## Do not build a web app
 
 The Android app is Jetpack Compose — real widgets, no WebView, no HTML, no
