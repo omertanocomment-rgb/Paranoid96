@@ -520,12 +520,12 @@ class BrainEngine(
     private fun knowledge(input: String): BrainReply? {
         val query = stripQuestion(input)
         val hits = index.search(query, 6)
-        val top = hits.firstOrNull() ?: return null
+        val top = hits.firstOrNull() ?: return fuzzyKnowledge(query)
         val qTokens = TextKit.tokens(query)
         val minCoverage = if (qTokens.size <= 2) 0.5 else 0.34
-        if (top.coverage < minCoverage) return null
+        if (top.coverage < minCoverage) return fuzzyKnowledge(query)
         // A single matched, very common term is not enough evidence.
-        if (qTokens.size >= 3 && top.coverage < 0.5 && top.score < 1.2) return null
+        if (qTokens.size >= 3 && top.coverage < 0.5 && top.score < 1.2) return fuzzyKnowledge(query)
 
         lastQuery = query
         shownForQuery.clear()
@@ -536,6 +536,22 @@ class BrainEngine(
         val body = if (brain.persona.verbosity == "short") bestSentence(chosen.first().item, query)
             else chosen.joinToString("\n\n") { render(it.item) }
         return BrainReply(style(body), BrainReply.Kind.KNOWLEDGE, sources = chosen.map { it.item.id })
+    }
+
+    /**
+     * When keyword (BM25) retrieval finds nothing solid, fall back to fuzzy similarity
+     * (token + character-trigram) so paraphrases and typos still find what you taught —
+     * a lightweight, model-free stand-in for semantic recall.
+     */
+    private fun fuzzyKnowledge(query: String): BrainReply? {
+        if (TextKit.tokens(query).isEmpty() || brain.knowledge.isEmpty()) return null
+        val best = brain.knowledge
+            .map { it to TextKit.fuzzySimilarity(query, it.topic + " " + it.text) * it.weight }
+            .maxByOrNull { it.second } ?: return null
+        if (best.second < 0.28) return null
+        lastQuery = query
+        shownForQuery.clear(); shownForQuery += best.first.id
+        return BrainReply(style(render(best.first)), BrainReply.Kind.KNOWLEDGE, sources = listOf(best.first.id))
     }
 
     private fun stripQuestion(s: String): String = s.trim()

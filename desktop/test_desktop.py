@@ -70,3 +70,26 @@ class BackupRestoreTest(unittest.TestCase):
             f.write("{ this is corrupt json ]")
         b = ob.load(p)                                  # should recover from .bak
         self.assertEqual(b["format"], "omerta-brain/1")
+
+
+class VersionAndRecallTest(unittest.TestCase):
+    def test_version_history_restore(self):
+        import tempfile
+        lib = d.BrainLibrary(tempfile.mkdtemp())
+        lib.create("Test")
+        lib.respond("remember that the code is 111")
+        lib.respond("remember that the code is 222")
+        vers = lib.versions()
+        self.assertGreaterEqual(len(vers), 1)
+        # roll back to the oldest snapshot
+        ok = lib.restore_version(vers[-1][0])
+        self.assertTrue(ok)
+
+    def test_fuzzy_recall_paraphrase(self):
+        import tempfile
+        lib = d.BrainLibrary(tempfile.mkdtemp())
+        lib.create("Test")
+        lib.respond("remember that the router admin password is bluefish42")
+        # paraphrase / different words → BM25 alone might miss; fuzzy should still find it
+        ans = lib.respond("what's the wifi router admin pass")
+        self.assertIn("bluefish42", ans)

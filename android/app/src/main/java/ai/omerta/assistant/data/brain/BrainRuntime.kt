@@ -183,6 +183,30 @@ class BrainRuntime private constructor(context: Context) {
 
     suspend fun export(uri: Uri) = withContext(Dispatchers.IO) { store.export(engine.brain, uri) }
 
+    suspend fun exportEncrypted(uri: Uri, password: String) =
+        withContext(Dispatchers.IO) { store.exportEncrypted(engine.brain, uri, password) }
+
+    /** Import a plain or password-encrypted brain and activate it. */
+    suspend fun importMaybeEncrypted(uri: Uri, password: String?): String = withContext(Dispatchers.IO) {
+        val installed = if (store.isEncryptedFile(uri)) {
+            require(!password.isNullOrEmpty()) { "password required" }
+            store.importEncrypted(uri, password)
+        } else {
+            (store.readImport(uri).filterIsInstance<BrainStore.Imported.Brain>().firstOrNull()
+                ?: error("no brain in that file")).brain.let { store.install(it) }
+        }
+        switchTo(installed.id); installed.name
+    }
+
+    fun versions(): List<BrainStore.Version> = store.versions(engine.brain.id)
+
+    suspend fun restoreVersion(timestamp: Long): Boolean = withContext(Dispatchers.IO) {
+        lock.withLock {
+            val restored = store.restoreVersion(engine.brain.id, timestamp) ?: return@withLock false
+            engine.replace(restored); _brain.value = restored; true
+        }
+    }
+
     /** Restore every brain from a .zip/.brain backup, then activate the first one. */
     suspend fun importAll(uri: Uri): Int = withContext(Dispatchers.IO) {
         val n = store.restoreAll(uri)

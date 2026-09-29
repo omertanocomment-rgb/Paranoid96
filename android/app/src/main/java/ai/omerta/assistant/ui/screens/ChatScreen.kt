@@ -52,6 +52,7 @@ private val suggestions = listOf(
 fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit, onBrain: () -> Unit) {
     val state by vm.ui.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.content) {
         if (state.messages.isNotEmpty()) {
@@ -109,6 +110,18 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit, onBrain: () -> Unit) {
                 serverModel = state.serverModel,
                 onSettings = onSettings,
                 onBrain = onBrain,
+                onShare = {
+                    val text = vm.transcriptMarkdown()
+                    if (state.messages.isNotEmpty()) {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, text)
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Omerta conversation")
+                        }
+                        ctx.startActivity(android.content.Intent.createChooser(send, "Share conversation")
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                },
                 onClear = vm::clearChat,
             )
         },

@@ -69,6 +69,17 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   Keystore key (`data/local/KeyVault.kt`, AES-256-GCM); SettingsStore encrypts on write and
   decrypts on read. It degrades to plaintext only if the Keystore is unavailable — never
   log decrypted secrets.
+- Encrypted portable export: `data/brain/BrainCrypto.kt` (password AES-256-GCM, PBKDF2) —
+  `.brain.enc` files openable on any device with the password (distinct from device-bound
+  KeyVault). Desktop/Python encrypted export is not yet implemented (would need a real AES
+  lib; don't ship homegrown crypto).
+- Version history / undo: `BrainStore` keeps up to 20 timestamped snapshots per brain under
+  `.versions/<id>/` and can roll back (the desktop library mirrors this). Restores are
+  themselves snapshotted, so a rollback is undoable.
+- Fuzzy recall: when BM25 finds nothing solid, `BrainEngine.fuzzyKnowledge` /
+  `Engine._fuzzy` re-search with token+char-trigram similarity (`TextKit.fuzzySimilarity`)
+  so paraphrases/typos still hit — a model-free stand-in for semantic recall.
+- Conversation export: `ChatViewModel.transcriptMarkdown` + the top-bar share action.
 
 ## What this repo is
 - `android/` — native Android app **Omerta AI** (`ai.omerta.assistant`), Kotlin +

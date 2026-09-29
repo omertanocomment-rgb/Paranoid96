@@ -105,6 +105,20 @@ object TextKit {
         flush()
         return out
     }
+
+    /** Character trigrams (over the normalized string) for fuzzy/paraphrase matching. */
+    fun trigrams(s: String): Set<String> {
+        val n = " " + normalize(s) + " "
+        if (n.length < 3) return setOf(n)
+        return (0..n.length - 3).map { n.substring(it, it + 3) }.toSet()
+    }
+
+    /** 0..1 similarity blending token Jaccard and character-trigram Jaccard (typo/paraphrase tolerant). */
+    fun fuzzySimilarity(a: String, b: String): Double {
+        val tok = jaccard(tokens(a), tokens(b))
+        val tri = jaccard(trigrams(a), trigrams(b))
+        return 0.55 * tok + 0.45 * tri
+    }
 }
 
 /** Okapi BM25 over the brain's knowledge. Topic and tags are weighted above body text. */

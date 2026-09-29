@@ -405,6 +405,17 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** The current conversation as shareable Markdown (for export / share sheet). */
+    fun transcriptMarkdown(): String {
+        val b = brain.brain.value
+        val sb = StringBuilder("# ${b.persona.name} — conversation\n\n")
+        _ui.value.messages.forEach { m ->
+            val who = if (m.role == Role.USER) "**You**" else "**${b.persona.name}**"
+            sb.append(who).append(": ").append(m.content.trim()).append("\n\n")
+        }
+        return sb.toString().trim() + "\n"
+    }
+
     /** Files opened with / shared to the app: install brains, learn documents. */
     fun importIncoming(uris: List<android.net.Uri>) {
         viewModelScope.launch {

@@ -217,6 +217,72 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
             Hint("Back up every brain to one .zip; restore re-installs them all. A last-good copy of each " +
                 "brain is also kept automatically in case a file is ever corrupted.")
 
+            // password-protected export / import
+            var pwPrompt by remember { mutableStateOf<Pair<String, (String) -> Unit>?>(null) }
+            var pendingExportUri by remember { mutableStateOf<android.net.Uri?>(null) }
+            var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
+            val encExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+                if (uri != null) { pendingExportUri = uri
+                    pwPrompt = "Set a password for this encrypted brain" to { pw ->
+                        scope.launch { runCatching { rt.exportEncrypted(uri, pw) }
+                            .onSuccess { toast("Encrypted brain exported") }.onFailure { toast("failed: ${it.message}") } }
+                    }
+                }
+            }
+            val encImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) { pendingImportUri = uri
+                    pwPrompt = "Password to open this brain" to { pw ->
+                        scope.launch { runCatching { rt.importMaybeEncrypted(uri, pw) }
+                            .onSuccess { toast("Imported \"$it\"") }.onFailure { toast("wrong password or bad file") } }
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { encExportLauncher.launch("${brain.id}.brain.enc") }, colors = ghostButton(),
+                    modifier = Modifier.weight(1f)) { Text("EXPORT ENCRYPTED", style = MaterialTheme.typography.labelSmall) }
+                OutlinedButton(onClick = { encImportLauncher.launch(arrayOf("*/*")) }, colors = ghostButton(),
+                    modifier = Modifier.weight(1f)) { Text("IMPORT ENCRYPTED", style = MaterialTheme.typography.labelSmall) }
+            }
+            Hint("Password-encrypted (AES-256-GCM) so a backup in the cloud stays private. The password is " +
+                "never stored — if you lose it the file can't be opened.")
+            pwPrompt?.let { (label, onOk) ->
+                var pw by remember { mutableStateOf("") }
+                AlertDialog(
+                    onDismissRequest = { pwPrompt = null },
+                    containerColor = OmertaSurface,
+                    title = { Text(label, color = OmertaAmber, style = MaterialTheme.typography.titleSmall) },
+                    text = {
+                        OutlinedTextField(pw, { pw = it }, singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            label = { Text("Password") }, colors = fieldColors, modifier = Modifier.fillMaxWidth())
+                    },
+                    confirmButton = { TextButton(onClick = { if (pw.isNotEmpty()) { onOk(pw); pwPrompt = null } }) {
+                        Text("OK", color = OmertaAmber) } },
+                    dismissButton = { TextButton(onClick = { pwPrompt = null }) {
+                        Text("CANCEL", color = OmertaTextSecondary) } },
+                )
+            }
+
+            // version history / undo
+            SubLabel("VERSION HISTORY")
+            var verRefresh by remember { mutableIntStateOf(0) }
+            val versions = remember(verRefresh, brain.updated) { rt.versions() }
+            if (versions.isEmpty()) Hint("No earlier versions yet — snapshots are kept each time the brain changes.")
+            else {
+                Hint("Tap a snapshot to roll back (your current state is snapshotted first, so this is undoable).")
+                versions.take(12).forEach { v ->
+                    val ts = remember(v.timestamp) {
+                        java.text.SimpleDateFormat("MMM d, HH:mm:ss", java.util.Locale.getDefault())
+                            .format(java.util.Date(v.timestamp))
+                    }
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(OmertaSurface)
+                        .clickable { scope.launch { if (rt.restoreVersion(v.timestamp)) { toast("Rolled back to $ts"); verRefresh++ } } }
+                        .padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("↺ $ts", style = MaterialTheme.typography.bodySmall, color = OmertaTextPrimary)
+                    }
+                }
+            }
+
             // ------------------------------------------------ teach
             Section("TEACH")
             Hint("Or just talk to it in chat: \"remember that…\", \"when I say X, say Y\", \"Q: … | A: …\", " +

@@ -112,7 +112,46 @@ class BrainLibrary:
 
     def save(self, brain: dict | None = None):
         b = brain or self.brain
-        ob.save(b, self.path_for(b["id"]))
+        path = self.path_for(b["id"])
+        if os.path.exists(path):
+            self._snapshot(b["id"], path)
+        ob.save(b, path)
+
+    def _versions_dir(self, brain_id: str) -> str:
+        import re as _re
+        safe = _re.sub(r"[^A-Za-z0-9_-]", "_", brain_id)[:64] or "brain"
+        d = os.path.join(self.dir, ".versions", safe)
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _snapshot(self, brain_id: str, current_path: str, keep: int = 20):
+        import shutil
+        d = self._versions_dir(brain_id)
+        shutil.copy2(current_path, os.path.join(d, f"{ob.now_ms()}.brain"))
+        snaps = sorted(f for f in os.listdir(d) if f.endswith(".brain"))
+        for old in snaps[:-keep]:
+            os.remove(os.path.join(d, old))
+
+    def versions(self, brain_id: str | None = None):
+        bid = brain_id or self.brain["id"]
+        d = self._versions_dir(bid)
+        out = []
+        for f in os.listdir(d):
+            if f.endswith(".brain") and f[:-6].isdigit():
+                out.append((int(f[:-6]), os.path.join(d, f)))
+        return sorted(out, key=lambda x: -x[0])
+
+    def restore_version(self, timestamp: int, brain_id: str | None = None) -> bool:
+        bid = brain_id or self.brain["id"]
+        snap = os.path.join(self._versions_dir(bid), f"{timestamp}.brain")
+        if not os.path.exists(snap):
+            return False
+        b = ob.load(snap)
+        self.save(b)
+        if bid == self.brain["id"]:
+            self.brain = b
+            self.engine = ob.Engine(self.brain)
+        return True
 
     def commit(self):
         self.save(self.brain)

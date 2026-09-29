@@ -81,6 +81,26 @@ def sentences(text: str) -> List[str]:
     return [p.strip() for p in re.split(r"(?<=[.!?])\s+|\n+", text) if p.strip()]
 
 
+def jaccard(a: set, b: set) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def trigrams(s: str) -> set:
+    n = " " + normalize(s) + " "
+    if len(n) < 3:
+        return {n}
+    return {n[i:i + 3] for i in range(len(n) - 2)}
+
+
+def fuzzy_similarity(a: str, b: str) -> float:
+    """Model-free paraphrase/typo-tolerant similarity (token + char-trigram Jaccard)."""
+    tok = jaccard(set(tokens(a)), set(tokens(b)))
+    tri = jaccard(trigrams(a), trigrams(b))
+    return 0.55 * tok + 0.45 * tri
+
+
 def chunk(text: str, max_chars: int = 700) -> List[str]:
     paras = [p.strip() for p in re.split(r"\n\s*\n", text.replace("\r", "")) if p.strip()]
     out, cur = [], ""
@@ -371,12 +391,26 @@ class Engine:
         q = re.sub(r"^(?:tell me about|what do you know about|what is|what's|who is|define|explain)\s+", "", t, flags=re.I).rstrip("?.!")
         hits = self.search(q)
         self.last_input = t
+        d = None
         if hits and hits[0][1] >= (0.5 if len(tokens(q)) <= 2 else 0.34):
             d = hits[0][2]
+        else:
+            d = self._fuzzy(q)   # paraphrase/typo-tolerant fallback (model-free semantic recall)
+        if d is not None:
             out = flip(d["text"]) if d.get("source") == "taught" else d["text"]
             return (out[:1].upper() + out[1:])[:900]
         fb = p.get("fallbacks") or ["I don't know that yet."]
         return random.choice(fb) + " Teach me: \"remember that …\""
+
+    def _fuzzy(self, q: str):
+        if not tokens(q) or not self.docs:
+            return None
+        best, score = None, 0.0
+        for d in self.docs:
+            s = fuzzy_similarity(q, d.get("topic", "") + " " + d["text"]) * d.get("weight", 1.0)
+            if s > score:
+                best, score = d, s
+        return best if score >= 0.28 else None
 
 
 # ----------------------------------------------------------------------------- commands

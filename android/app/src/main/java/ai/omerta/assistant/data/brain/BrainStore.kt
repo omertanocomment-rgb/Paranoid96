@@ -50,12 +50,42 @@ class BrainStore(private val context: Context) {
             ?.let { runCatching { BrainFile.parse(it.readText()) }.getOrNull() }
     }
 
+    private val versionsDir = File(brainDir, ".versions").apply { mkdirs() }
+    private val maxVersions = 20
+
     fun save(b: BrainFile) {
         val f = File(brainDir, "${safe(b.id)}.brain")
         val tmp = File(brainDir, "${safe(b.id)}.brain.tmp")
-        // Keep the previous good copy as .bak before replacing (crash/corruption safety).
-        if (f.exists()) runCatching { f.copyTo(File(brainDir, "${safe(b.id)}.brain.bak"), overwrite = true) }
+        // Keep the previous good copy as .bak (corruption safety) and a timestamped snapshot (undo).
+        if (f.exists()) {
+            runCatching { f.copyTo(File(brainDir, "${safe(b.id)}.brain.bak"), overwrite = true) }
+            runCatching { snapshot(b.id, f) }
+        }
         tmp.writeText(b.encode()); tmp.renameTo(f)
+    }
+
+    private fun snapshot(id: String, current: File) {
+        val dir = File(versionsDir, safe(id)).apply { mkdirs() }
+        current.copyTo(File(dir, "${System.currentTimeMillis()}.brain"), overwrite = true)
+        val snaps = dir.listFiles { f -> f.name.endsWith(".brain") }?.sortedBy { it.name }.orEmpty()
+        if (snaps.size > maxVersions) snaps.take(snaps.size - maxVersions).forEach { it.delete() }
+    }
+
+    data class Version(val timestamp: Long, val file: File)
+
+    /** Timestamped snapshots for a brain, newest first (undo / version history). */
+    fun versions(id: String): List<Version> =
+        File(versionsDir, safe(id)).listFiles { f -> f.name.endsWith(".brain") }
+            .orEmpty().mapNotNull { f -> f.name.removeSuffix(".brain").toLongOrNull()?.let { Version(it, f) } }
+            .sortedByDescending { it.timestamp }
+
+    /** Restore a brain to a snapshot (the current state is snapshotted first, so it's undoable too). */
+    fun restoreVersion(id: String, timestamp: Long): BrainFile? {
+        val snap = File(File(versionsDir, safe(id)), "$timestamp.brain")
+        val b = snap.takeIf { it.exists() }?.let { runCatching { BrainFile.parse(it.readText()) }.getOrNull() }
+            ?: return null
+        save(b)
+        return b
     }
 
     /** Back up every brain to a single .zip at [uri]. Returns the count. */
@@ -154,6 +184,28 @@ class BrainStore(private val context: Context) {
         context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(b.encode().toByteArray()) }
             ?: error("cannot write export")
     }
+
+    /** Password-encrypted portable export (AES-256-GCM). */
+    fun exportEncrypted(b: BrainFile, uri: Uri, password: String) {
+        val blob = BrainCrypto.encrypt(b.encode(), password)
+        context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(blob.toByteArray()) }
+            ?: error("cannot write export")
+    }
+
+    /** Import a password-encrypted brain; installs and returns it. Throws on wrong password. */
+    fun importEncrypted(uri: Uri, password: String): BrainFile {
+        val blob = context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+            ?: error("cannot open file")
+        val b = BrainFile.parse(BrainCrypto.decrypt(blob, password))
+        return install(b)
+    }
+
+    /** True if the picked file is a password-encrypted Omerta brain. */
+    fun isEncryptedFile(uri: Uri): Boolean = runCatching {
+        context.contentResolver.openInputStream(uri)?.use {
+            BrainCrypto.isEncrypted(String(it.readNBytes(32), Charsets.UTF_8))
+        } ?: false
+    }.getOrDefault(false)
 
     // ------------------------------------------------------------- model files
 
