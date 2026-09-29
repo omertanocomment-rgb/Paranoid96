@@ -3,4 +3,7 @@ plugins {
     // Chaquopy embeds a full CPython + our pip deps into the APK, so the agent
     // backend runs in-process — no Termux, no external runtime to install.
     id 'com.chaquo.python' version '16.0.0' apply false
+    // The interface is Jetpack Compose -- real Android widgets, no WebView.
+    id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
+    id 'org.jetbrains.kotlin.plugin.compose' version '2.0.21' apply false
 }

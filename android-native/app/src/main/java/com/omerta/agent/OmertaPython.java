@@ -15,11 +15,10 @@ import java.io.StringWriter;
 /**
  * Owns the embedded Python interpreter and the in-process agent backend.
  *
- * Chaquopy boots a full CPython inside this app. We extract the agent payload,
- * start `core.httpd` on a loopback port via the omerta_boot module, and cache
- * the port so the WebView can point at http://127.0.0.1:<port>/. Loopback is
- * exempt from the token gate, so the UI needs no credential to talk to its own
- * backend; other devices on the LAN still need the token.
+ * Chaquopy boots a full CPython inside this app and the Compose UI calls it
+ * directly through OmertaClient. Nothing listens on a socket: there is no
+ * server, no port and no loopback URL. `start()` extracts the payload,
+ * installs the bundled toolset and brings core/api up.
  *
  * When the backend fails to start we keep the reason. An earlier version only
  * logged it, which meant a one-line signature mismatch presented to the user
@@ -164,5 +163,4 @@ final class OmertaPython {
 
     static int port() { return port; }
 
-    static String baseUrl() { return "http://127.0.0.1:" + port + "/"; }
 }

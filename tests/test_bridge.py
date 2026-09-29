@@ -147,10 +147,14 @@ for name in ("start", "put_secret"):
 check("the launch failure is retained, not only logged",
       "lastError" in jsrc and "lastError = describe(t)" in jsrc)
 check("a diagnose entry point exists", "diagnose" in boot)
-main_activity = (ROOT / "android-native/app/src/main/java/com/omerta/agent"
-                 / "MainActivity.java").read_text()
+# The interface is Compose now, so the failure screen lives in OmertaRoot.kt
+# rather than in the Activity.
+root_kt = (ROOT / "android-native/app/src/main/java/com/omerta/agent"
+           / "OmertaRoot.kt").read_text(encoding="utf-8")
 check("the failure screen shows the reason",
-      "OmertaPython.lastError()" in main_activity)
+      "OmertaPython.lastError()" in root_kt)
+check("and still offers the diagnostics report",
+      "OmertaPython.diagnostics" in root_kt)
 
 # ── 5. THE GATE MUST CATCH IT ──────────────────────────────────────────────
 # Recreate the exact 1.6.0-1.9.0 bug in a scratch copy of the tree and require
