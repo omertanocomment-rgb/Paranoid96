@@ -15,6 +15,12 @@ Two parts of one project:
    browser, no server) for the offline brain, installable on **Linux Mint**/Ubuntu/Debian
    as a `.deb` (plus a self-contained PyInstaller binary / AppImage). Everything is in the
    executable — no web app, no terminal backend. See [`desktop/README.md`](desktop/README.md).
+
+> **Design & release standard.** Every Omerta app is themed from the **OMERTA Design
+> System** ([`design/`](design/)) — the colors, JetBrains Mono type and logo of the Omerta
+> AI project itself — and ships as a **polished, signed, publishable** build. Theme parity
+> is enforced by `python3 design/gen_themes.py --check`; signing tooling is in
+> [`scripts/sign/`](scripts/sign).
 4. **Omerta Brain** (`brain/` + `android/.../data/brain/`) — a **fully offline, teachable AI
    with a personality** that runs inside the Android app with no network, no key and no
    server. Teach it by chatting ("remember that…", "when I say X, say Y", "wrong, it's…"),

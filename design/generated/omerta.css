@@ -1,0 +1,26 @@
+/* OMERTA Design System v1.0.0 — generated from omerta-design.json; do not edit. */
+:root {
+  --omerta-black: #0A0A0B;
+  --omerta-surface: #141416;
+  --omerta-surface-high: #1E1E22;
+  --omerta-border: #2A2A2E;
+  --omerta-amber: #FFB300;
+  --omerta-amber-dim: #8A6100;
+  --omerta-green: #00E676;
+  --omerta-red: #FF5252;
+  --omerta-text-primary: #ECECEC;
+  --omerta-text-secondary: #9A9AA0;
+  --omerta-user-bubble: #1F2A1A;
+  --omerta-assistant-bubble: #16161A;
+  --omerta-font: "JetBrains Mono", monospace;
+  --omerta-radius-sm: 8px;
+  --omerta-radius-md: 10px;
+  --omerta-radius-lg: 14px;
+  --omerta-radius-pill: 999px;
+  --omerta-space-xs: 4px;
+  --omerta-space-sm: 8px;
+  --omerta-space-md: 12px;
+  --omerta-space-lg: 16px;
+  --omerta-space-xl: 24px;
+}
+body { background: var(--omerta-black); color: var(--omerta-text-primary); font-family: var(--omerta-font); }

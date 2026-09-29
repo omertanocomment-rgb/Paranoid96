@@ -16,12 +16,35 @@ artifact, and it must work offline. This is the EMBEDDED philosophy applied ever
   server or a browser tab. A REMOTE/server mode may exist as an *option*, never a
   requirement to use the product.
 
+## Release & UI standard (ALL projects, going forward)
+Every app is built to a **publishable, signed** standard with a **polished, well-laid-out
+UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
+- **Theme from the design system.** Colors, JetBrains Mono type, logo, radii and spacing
+  come from `design/omerta-design.json`. Never hardcode a new palette — add a token there.
+  `python3 design/gen_themes.py --check` must pass (it verifies Android `Color.kt`, the
+  desktop palette, and `design/generated/*` all match the tokens). Amber `#FFB300` is the
+  only accent; dark operator-console look by default.
+- **Polished UI.** Consistent 16px gutters, the shared radii/spacing, real empty/loading/
+  error states, works at phone width, dark-first. No unstyled or placeholder screens.
+- **Signed, publishable artifact.** Ship the signed release build, versioned, with an app
+  icon/adaptive icon and store-ready metadata:
+  - Android → signed APK **and** AAB (`scripts/sign/make-android-keystore.sh`, then
+    `./gradlew :app:assembleRelease :app:bundleRelease`; CI signs from `RELEASE_*` secrets).
+  - Linux/desktop → signed `.deb` (`scripts/sign/sign-deb.sh`) + AppImage.
+  - Other targets → the platform's signed, installable format; never an unsigned dev build.
+  See `scripts/sign/README.md`. Never commit keystores/keys (git-ignored).
+- **Definition of done** for any app = design-system theme + parity check green + polished
+  layout + signed installable produced (locally or in CI) + docs updated.
+
 ## What this repo is
 - `android/` — native Android app **Omerta AI** (`ai.omerta.assistant`), Kotlin +
   Jetpack Compose. Dark operator-console theme, amber accent (`#FFB300`), JetBrains
   Mono for all typography.
 - `backend/` — Node/Express gateway to the Anthropic Messages API (SSE streaming). Optional
   (REMOTE mode only) — never required to use the app.
+- `design/` — **OMERTA Design System**: `omerta-design.json` (source of truth) +
+  `gen_themes.py` (generates/enforces every target's theme). All apps theme from here.
+- `scripts/sign/` — signing tooling (Android keystore, `.deb` GPG) for publishable builds.
 - `desktop/` — **native Linux desktop app** (Tkinter, no browser/server) for the offline
   brain; shares the engine with `brain/omerta_brain.py`. Packaged as `.deb` + AppImage.
   Build: `bash desktop/packaging/build-deb.sh`. Tests: `python3 -m unittest desktop/test_desktop.py`.

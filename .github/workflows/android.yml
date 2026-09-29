@@ -66,7 +66,7 @@ jobs:
           ARGS=""
           if [ -n "$BACKEND" ]; then ARGS="-PomertaBackendUrl=$BACKEND"; fi
           chmod +x ./gradlew
-          ./gradlew :app:assembleDebug :app:assembleRelease $ARGS --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug :app:assembleRelease :app:bundleRelease $ARGS --no-daemon --stacktrace
 
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon
@@ -77,11 +77,14 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk out/OmertaAI-debug.apk
           cp app/build/outputs/apk/release/app-release.apk out/OmertaAI-release.apk 2>/dev/null || \
             cp app/build/outputs/apk/release/app-release-unsigned.apk out/OmertaAI-release-unsigned.apk 2>/dev/null || true
+          cp app/build/outputs/bundle/release/app-release.aab out/OmertaAI-release.aab 2>/dev/null || true
           ls -la out
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: omerta-ai-apk
-          path: android/out/*.apk
+          path: |
+            android/out/*.apk
+            android/out/*.aab
           if-no-files-found: error

@@ -1,0 +1,21 @@
+name: OMERTA Design System
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["design/**", "android/app/src/main/java/ai/omerta/assistant/ui/theme/**",
+            "desktop/omerta_desktop.py", ".github/workflows/design.yml"]
+  pull_request:
+    paths: ["design/**", "android/**", "desktop/**"]
+  workflow_dispatch:
+
+jobs:
+  theme-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Enforce theme parity across all targets
+        run: python3 design/gen_themes.py --check

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OMERTA Design System</title>
+<link rel="stylesheet" href="generated/omerta.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; }
+  h1 { color: var(--omerta-amber); font-size: 20px; letter-spacing: .06em; margin: 0 0 4px; }
+  p.sub { color: var(--omerta-text-secondary); margin: 0 0 24px; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .sw { border: 1px solid var(--omerta-border); border-radius: var(--omerta-radius-md); overflow: hidden; }
+  .chip { height: 64px; }
+  .meta { padding: 8px 10px; font-size: 11px; background: var(--omerta-surface); }
+  .meta b { color: var(--omerta-text-primary); display: block; }
+  .meta span { color: var(--omerta-text-secondary); }
+  .card { margin-top: 24px; border: 1px solid var(--omerta-border); border-radius: var(--omerta-radius-lg);
+          background: var(--omerta-surface); padding: 16px; max-width: 520px; }
+  .btn { background: var(--omerta-amber); color: var(--omerta-black); border: none; font-family: var(--omerta-font);
+         font-weight: 700; padding: 10px 16px; border-radius: var(--omerta-radius-sm); cursor: pointer; }
+  .bubble { padding: 10px 12px; border-radius: var(--omerta-radius-md); margin: 8px 0; font-size: 13px; }
+  .u { background: var(--omerta-user-bubble); }
+  .a { background: var(--omerta-assistant-bubble); }
+</style></head>
+<body>
+  <h1>◆ OMERTA DESIGN SYSTEM</h1>
+  <p class="sub">Generated from omerta-design.json · dark operator console · amber · JetBrains Mono</p>
+  <div class="grid" id="grid"></div>
+  <div class="card">
+    <div class="bubble u">operator: remember that the vault code is 9981</div>
+    <div class="bubble a">✓ Learned. Silence is golden.</div>
+    <button class="btn">PRIMARY ACTION</button>
+  </div>
+<script>
+  const tokens = {
+    black:'#0A0A0B', surface:'#141416', surfaceHigh:'#1E1E22', border:'#2A2A2E',
+    amber:'#FFB300', amberDim:'#8A6100', green:'#00E676', red:'#FF5252',
+    textPrimary:'#ECECEC', textSecondary:'#9A9AA0', userBubble:'#1F2A1A', assistantBubble:'#16161A'
+  };
+  const g = document.getElementById('grid');
+  for (const [k,v] of Object.entries(tokens)) {
+    g.insertAdjacentHTML('beforeend',
+      `<div class="sw"><div class="chip" style="background:${v}"></div>
+       <div class="meta"><b>${k}</b><span>${v}</span></div></div>`);
+  }
+</script>
+</body></html>
