@@ -27,6 +27,10 @@ val embeddedMode: String = (project.findProperty("omertaEmbedded") as String?) ?
 val bakedApiKey: String = (project.findProperty("anthropicApiKey") as String?)
     ?: (System.getenv("ANTHROPIC_API_KEY") ?: "")
 
+// Per-app thumbnail/launcher accent (OMERTA rule: UI stays amber, only the app icon accent
+// changes per app). Override at build time:  -PappAccent=#00E5FF . Flagship default = amber.
+val appAccent: String = (project.findProperty("appAccent") as String?) ?: "#FFB300"
+
 android {
     namespace = "ai.omerta.assistant"
     compileSdk = 34
@@ -46,6 +50,8 @@ android {
         buildConfigField("String", "OMERTA_BACKEND_URL", "\"$backendUrl\"")
         buildConfigField("boolean", "EMBEDDED_MODE", embeddedMode)
         buildConfigField("String", "ANTHROPIC_API_KEY", "\"$bakedApiKey\"")
+        // Drives the adaptive launcher icon's mark color (design/logo/gen_icons.py accents).
+        resValue("color", "omerta_thumbnail_accent", appAccent)
     }
 
     signingConfigs {

@@ -133,10 +133,10 @@ class SettingsStore(private val context: Context) {
         val defaultMode = if (BuildConfig.EMBEDDED_MODE) EngineMode.EMBEDDED else EngineMode.REMOTE
         OmertaSettings(
             engineMode = p[Keys.ENGINE_MODE] ?: defaultMode,
-            anthropicApiKey = p[Keys.ANTHROPIC_KEY]?.takeIf { it.isNotBlank() }
+            anthropicApiKey = p[Keys.ANTHROPIC_KEY]?.let(KeyVault::decrypt)?.takeIf { it.isNotBlank() }
                 ?: BuildConfig.ANTHROPIC_API_KEY,
             backendUrl = p[Keys.BACKEND_URL]?.takeIf { it.isNotBlank() } ?: BuildConfig.OMERTA_BACKEND_URL,
-            appToken = p[Keys.APP_TOKEN] ?: "",
+            appToken = p[Keys.APP_TOKEN]?.let(KeyVault::decrypt) ?: "",
             model = p[Keys.MODEL] ?: DEFAULT_MODEL,
             systemPrompt = p[Keys.SYSTEM_PROMPT] ?: DEFAULT_SYSTEM,
             effort = p[Keys.EFFORT] ?: DEFAULT_EFFORT,
@@ -149,7 +149,7 @@ class SettingsStore(private val context: Context) {
             agentMode = p[Keys.AGENT_MODE] ?: false,
             autoApprove = p[Keys.AUTO_APPROVE] ?: false,
             provider = p[Keys.PROVIDER] ?: Provider.ANTHROPIC,
-            openAiKey = p[Keys.OPENAI_KEY] ?: "",
+            openAiKey = p[Keys.OPENAI_KEY]?.let(KeyVault::decrypt) ?: "",
             ollamaUrl = p[Keys.OLLAMA_URL]?.takeIf { it.isNotBlank() } ?: "http://localhost:11434",
             brainLlmMode = p[Keys.BRAIN_LLM] ?: BrainLlmMode.ASSIST,
             brainModel = p[Keys.BRAIN_MODEL] ?: "",
@@ -186,9 +186,9 @@ class SettingsStore(private val context: Context) {
     ) {
         context.dataStore.edit { p ->
             engineMode?.let { p[Keys.ENGINE_MODE] = it }
-            anthropicApiKey?.let { p[Keys.ANTHROPIC_KEY] = it.trim() }
+            anthropicApiKey?.let { p[Keys.ANTHROPIC_KEY] = KeyVault.encrypt(it.trim()) }
             backendUrl?.let { p[Keys.BACKEND_URL] = it.trim() }
-            appToken?.let { p[Keys.APP_TOKEN] = it.trim() }
+            appToken?.let { p[Keys.APP_TOKEN] = KeyVault.encrypt(it.trim()) }
             model?.let { p[Keys.MODEL] = it }
             systemPrompt?.let { p[Keys.SYSTEM_PROMPT] = it }
             effort?.let { p[Keys.EFFORT] = it }
@@ -201,7 +201,7 @@ class SettingsStore(private val context: Context) {
             agentMode?.let { p[Keys.AGENT_MODE] = it }
             autoApprove?.let { p[Keys.AUTO_APPROVE] = it }
             provider?.let { p[Keys.PROVIDER] = it }
-            openAiKey?.let { p[Keys.OPENAI_KEY] = it.trim() }
+            openAiKey?.let { p[Keys.OPENAI_KEY] = KeyVault.encrypt(it.trim()) }
             ollamaUrl?.let { p[Keys.OLLAMA_URL] = it.trim() }
         }
     }

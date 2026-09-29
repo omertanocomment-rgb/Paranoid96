@@ -30,7 +30,9 @@ the desktop app). Reuse these — don't invent per-app branding.
   `python3 design/logo/gen_icons.py --name "<App Name>" --prefix <app> --outdir <path>`
   (the accent is derived deterministically from the name; or pass `--accent "#RRGGBB"` from
   the curated `APP_ACCENTS`). **Omerta AI (flagship) stays amber** — never change it.
-  Use the generated PNGs/`.ico` as that app's launcher/desktop/exe icon.
+  Use the generated PNGs/`.ico` as that app's launcher/desktop/exe icon. On Android the
+  adaptive launcher icon's mark is tinted by `-PappAccent=#RRGGBB` at build
+  (`resValue` → `@color/omerta_thumbnail_accent`; flagship default amber).
 
 ## Release & UI standard (ALL projects, going forward)
 Every app is built to a **publishable, signed** standard with a **polished, well-laid-out
@@ -49,6 +51,8 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
     `./gradlew :app:assembleRelease :app:bundleRelease`; CI signs from `RELEASE_*` secrets).
   - Linux/desktop → signed `.deb` (`scripts/sign/sign-deb.sh`) + AppImage.
   - Windows → Authenticode-signed `.exe` (`WINDOWS_PFX_BASE64`/`WINDOWS_PFX_PASSWORD`).
+  - **One tag ships everything:** push a `v*` tag → `.github/workflows/release.yml` builds
+    the signed APK+AAB, `.deb`, AppImage and `.exe` and attaches them to a GitHub Release.
   - Other targets → the platform's signed, installable format; never an unsigned dev build.
   See `scripts/sign/README.md`. Never commit keystores/keys (git-ignored).
 - **Definition of done** for any app = design-system theme + parity check green + polished
@@ -61,6 +65,10 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   Backup all / Restore; Brain Studio: `pack`). 
 - The agent keeps an on-device audit log of every tool call (`data/agent/AgentLog.kt`,
   viewable on the Brain screen). Never send it off-device.
+- Secrets (API keys, app token) are encrypted at rest with a hardware-backed Android
+  Keystore key (`data/local/KeyVault.kt`, AES-256-GCM); SettingsStore encrypts on write and
+  decrypts on read. It degrades to plaintext only if the Keystore is unavailable — never
+  log decrypted secrets.
 
 ## What this repo is
 - `android/` — native Android app **Omerta AI** (`ai.omerta.assistant`), Kotlin +

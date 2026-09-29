@@ -1,0 +1,103 @@
+name: Release (all signed installers)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      appAccent:
+        description: "Per-app thumbnail accent hex (blank = amber)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: android } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: android-actions/setup-android@v3
+      - name: Decode release keystore (optional)
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        env:
+          KS: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          echo "$KS" | base64 -d > omerta-release.jks
+          cat > keystore.properties <<PROPS
+          storeFile=omerta-release.jks
+          storePassword=$STORE_PASS
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASS
+          PROPS
+      - name: Build signed APK + AAB
+        run: |
+          ACC="${{ github.event.inputs.appAccent }}"
+          ARGS=""; if [ -n "$ACC" ]; then ARGS="-PappAccent=$ACC"; fi
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease :app:bundleRelease $ARGS --no-daemon --stacktrace
+          mkdir -p ../out
+          cp app/build/outputs/apk/release/app-release.apk ../out/OmertaAI.apk 2>/dev/null || \
+            cp app/build/outputs/apk/release/app-release-unsigned.apk ../out/OmertaAI-unsigned.apk || true
+          cp app/build/outputs/bundle/release/app-release.aab ../out/OmertaAI.aab 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: out/* }
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Tests
+        run: |
+          python3 -m unittest brain/test_omerta_brain.py desktop/test_desktop.py
+          python3 design/gen_themes.py --check
+      - name: Build .deb + AppImage
+        run: |
+          sudo apt-get update && sudo apt-get install -y python3-tk
+          pip install pyinstaller
+          python3 design/logo/gen_icons.py
+          bash desktop/packaging/build-deb.sh
+          bash desktop/packaging/build-appimage.sh || bash desktop/packaging/build-binary.sh
+          mkdir -p out && cp desktop/dist/* out/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        with: { name: linux, path: out/* }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build signed .exe
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        shell: pwsh
+        run: |
+          pip install pyinstaller
+          python3 design/logo/gen_icons.py
+          ./desktop/packaging/build-exe.ps1
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: desktop/dist/OmertaAI.exe }
+
+  release:
+    needs: [android, linux, windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Publish GitHub Release with all installers
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
