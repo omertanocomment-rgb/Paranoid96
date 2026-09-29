@@ -21,6 +21,8 @@ jobs:
           python3 -m unittest brain/test_omerta_brain.py
           python3 -m unittest desktop/test_desktop.py
           python3 desktop/omerta_desktop.py --selftest
+      - name: Generate brand icons
+        run: python3 design/logo/gen_icons.py
       - name: Build .deb (native, installs on Linux Mint/Ubuntu)
         run: bash desktop/packaging/build-deb.sh
       - name: Build self-contained binary + AppImage
@@ -35,3 +37,29 @@ jobs:
             desktop/dist/*.deb
             desktop/dist/*.AppImage
             desktop/dist/omerta-ai
+
+  windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Headless tests
+        run: |
+          python3 -m unittest desktop/test_desktop.py
+          python3 desktop/omerta_desktop.py --selftest
+      - name: Generate brand icons
+        run: python3 design/logo/gen_icons.py
+      - name: Build self-contained .exe (signed if a cert is provided)
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        shell: pwsh
+        run: |
+          pip install pyinstaller
+          ./desktop/packaging/build-exe.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omerta-ai-desktop-windows
+          path: desktop/dist/OmertaAI.exe

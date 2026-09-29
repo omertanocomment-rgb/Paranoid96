@@ -11,7 +11,8 @@ terminal/server backend to run.** The engine, data, personality and UI live in t
 artifact, and it must work offline. This is the EMBEDDED philosophy applied everywhere:
 - Android → the app calls providers in-process, or runs the fully offline on-device brain.
 - Desktop (`desktop/`) → a native Tk app (no browser/web view, no server) packaged as a
-  `.deb` (Linux Mint/Ubuntu/Debian) and a self-contained PyInstaller binary / AppImage.
+  `.deb` (Linux Mint/Ubuntu/Debian), a Linux PyInstaller binary / AppImage, and a
+  self-contained Windows `.exe` (`packaging/build-exe.ps1`, CI on windows-latest).
 - New targets → prefer a native, self-contained installable over anything that needs a
   server or a browser tab. A REMOTE/server mode may exist as an *option*, never a
   requirement to use the product.
@@ -21,7 +22,8 @@ Every app is built to a **publishable, signed** standard with a **polished, well
 UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
 - **Theme from the design system.** Colors, JetBrains Mono type, logo, radii and spacing
   come from `design/omerta-design.json`. Never hardcode a new palette — add a token there.
-  `python3 design/gen_themes.py --check` must pass (it verifies Android `Color.kt`, the
+  `python3 design/gen_themes.py --check` must pass, and app icons come from
+  `design/logo/gen_icons.py` (the OMERTA mark), (it verifies Android `Color.kt`, the
   desktop palette, and `design/generated/*` all match the tokens). Amber `#FFB300` is the
   only accent; dark operator-console look by default.
 - **Polished UI.** Consistent 16px gutters, the shared radii/spacing, real empty/loading/
@@ -31,6 +33,7 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   - Android → signed APK **and** AAB (`scripts/sign/make-android-keystore.sh`, then
     `./gradlew :app:assembleRelease :app:bundleRelease`; CI signs from `RELEASE_*` secrets).
   - Linux/desktop → signed `.deb` (`scripts/sign/sign-deb.sh`) + AppImage.
+  - Windows → Authenticode-signed `.exe` (`WINDOWS_PFX_BASE64`/`WINDOWS_PFX_PASSWORD`).
   - Other targets → the platform's signed, installable format; never an unsigned dev build.
   See `scripts/sign/README.md`. Never commit keystores/keys (git-ignored).
 - **Definition of done** for any app = design-system theme + parity check green + polished

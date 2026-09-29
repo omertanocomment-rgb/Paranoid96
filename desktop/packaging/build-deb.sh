@@ -24,6 +24,13 @@ if [ -f ../brain/brains/omerta.brain ]; then
   install -m0644 ../brain/brains/omerta.brain "$BUILD${APPDIR}/omerta.brain"
 fi
 install -m0644 assets/omerta-ai.svg "$BUILD/usr/share/icons/hicolor/scalable/apps/omerta-ai.svg"
+[ -f ../design/logo/omerta-256.png ] && install -m0644 ../design/logo/omerta-256.png "$BUILD${APPDIR}/omerta-256.png" || true
+for sz in 16 32 64 256; do
+  if [ -f "../design/logo/omerta-$sz.png" ]; then
+    mkdir -p "$BUILD/usr/share/icons/hicolor/${sz}x${sz}/apps"
+    install -m0644 "../design/logo/omerta-$sz.png" "$BUILD/usr/share/icons/hicolor/${sz}x${sz}/apps/omerta-ai.png"
+  fi
+done
 
 # Launcher.
 cat > "$BUILD/usr/bin/omerta-ai" <<'LAUNCH'

@@ -7,9 +7,11 @@ cd "$(dirname "$0")/.."
 mkdir -p build/bundle
 cp omerta_desktop.py ../brain/omerta_brain.py build/bundle/
 [ -f ../brain/brains/omerta.brain ] && cp ../brain/brains/omerta.brain build/bundle/ || true
+[ -f ../design/logo/omerta-256.png ] && cp ../design/logo/omerta-256.png build/bundle/ || true
 cd build/bundle
 ADD=""
-[ -f omerta.brain ] && ADD="--add-data omerta.brain:."
+[ -f omerta.brain ] && ADD="$ADD --add-data omerta.brain:."
+[ -f omerta-256.png ] && ADD="$ADD --add-data omerta-256.png:."
 pyinstaller --onefile --name omerta-ai --windowed \
   --hidden-import tkinter $ADD omerta_desktop.py
 mkdir -p ../../dist

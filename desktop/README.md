@@ -21,6 +21,18 @@ chmod +x OmertaAI-1.1.0-x86_64.AppImage
 ./OmertaAI-1.1.0-x86_64.AppImage
 ```
 
+## Windows
+
+A self-contained `OmertaAI.exe` (bundles Python + Tk + the brain + icon — nothing to
+install) is built by CI on every push and uploaded as the **omerta-ai-desktop-windows**
+artifact. To build locally on Windows:
+```powershell
+pip install pyinstaller
+./desktop/packaging/build-exe.ps1        # → desktop/dist/OmertaAI.exe
+```
+Set `WINDOWS_PFX_BASE64` + `WINDOWS_PFX_PASSWORD` (repo secrets or env) to Authenticode-sign
+it to publishable standard.
+
 ## Use it
 - **Chat** offline in a native window. Teach it by talking: `remember that…`,
   `when I say X, say Y`, `Q: … | A: …`, `always …`, `wrong, it's …`, `forget …`.
@@ -39,6 +51,9 @@ python3 -m unittest desktop/test_desktop.py
 bash desktop/packaging/build-deb.sh          # → desktop/dist/*.deb   (native, needs only dpkg)
 bash desktop/packaging/build-binary.sh       # → desktop/dist/omerta-ai (PyInstaller onefile)
 bash desktop/packaging/build-appimage.sh     # → desktop/dist/*.AppImage (portable)
+python3 design/logo/gen_icons.py             # → design/logo/*.png + omerta.ico (brand icons)
+# Windows:
+pwsh desktop/packaging/build-exe.ps1         # → desktop/dist/OmertaAI.exe
 ```
 CI (`.github/workflows/desktop.yml`) builds the `.deb`, the binary and the AppImage on
 every push and uploads them as the `omerta-ai-desktop-linux` artifact.

@@ -186,6 +186,7 @@ def launch_gui(lib: BrainLibrary):
     root.configure(bg=BLACK)
     root.geometry("880x680")
     root.minsize(560, 480)
+    _set_window_icon(root)
 
     mono = ("JetBrains Mono", 11) if _has_font(root, "JetBrains Mono") else ("monospace", 11)
     mono_b = (mono[0], 13, "bold")
@@ -433,6 +434,35 @@ def _ask(root, title, prompt, mono):
               relief="flat", padx=12, pady=6).pack(pady=12)
     win.wait_window()
     return out.get("v")
+
+
+def _icon_path(name: str) -> str | None:
+    """Find a bundled icon (PyInstaller _MEIPASS, install dir, or the design/ tree)."""
+    import sys as _sys
+    roots = [getattr(_sys, "_MEIPASS", None), _HERE,
+             os.path.join(_HERE, "logo"),
+             os.path.abspath(os.path.join(_HERE, "..", "design", "logo"))]
+    for r in roots:
+        if r and os.path.exists(os.path.join(r, name)):
+            return os.path.join(r, name)
+    return None
+
+
+def _set_window_icon(root):
+    import tkinter as tk
+    ico = _icon_path("omerta.ico")
+    if ico and os.name == "nt":
+        try:
+            root.iconbitmap(ico); return
+        except Exception:
+            pass
+    png = _icon_path("omerta-256.png") or _icon_path("omerta-64.png")
+    if png:
+        try:
+            root._omerta_icon = tk.PhotoImage(file=png)  # keep a ref
+            root.iconphoto(True, root._omerta_icon)
+        except Exception:
+            pass
 
 
 def _has_font(root, name: str) -> bool:
