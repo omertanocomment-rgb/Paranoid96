@@ -9,7 +9,14 @@ workaround immediately.**
 - `android/` — native Android app **Omerta AI** (`ai.omerta.assistant`), Kotlin +
   Jetpack Compose. Dark operator-console theme, amber accent (`#FFB300`), JetBrains
   Mono for all typography.
+- `desktop/` — **Omerta Tool Hub**, an Electron device-management suite (Android +
+  iOS: ADB/fastboot, ROM/bootloader tooling, Magisk/TWRP, iOS jailbreak/IPSW/SHSH,
+  forensics). Builds for Windows/Linux via `electron-builder`, and also runs
+  headless in Termux on Android itself (`desktop/termux/`) serving the same UI
+  over HTTP/WebSocket.
 - `backend/` — Node/Express gateway to the Anthropic Messages API (SSE streaming).
+- `engine/` — OMERTA AI engine: a CLI/web coding + firmware agent (Python,
+  stdlib-only core). See `engine/README.md` and `docs/OMERTA_AI_SPEC.md`.
 
 ## Engine modes (how the app reaches Claude)
 The app has a compiled-in engine and picks one at runtime (`EngineMode` in
@@ -56,6 +63,21 @@ cp .env.example .env    # ANTHROPIC_API_KEY required
 npm install && npm start
 npm test                # node:test unit tests
 ```
+### Desktop (Omerta Tool Hub)
+```bash
+cd desktop
+npm install
+npm run dev                 # Electron app, dev mode
+npx electron-vite build     # build main/preload/renderer -> out/ (fast correctness check)
+npm run build:linux         # AppImage + deb + tar.gz -> dist/
+npm run build:win           # Windows installer + portable .exe -> dist/ (needs Windows or CI)
+npm run build:web           # build + patch renderer for headless/Termux serving
+```
+`bin/` holds downloaded native tools (adb, fastboot, scrcpy, ffmpeg, apktool.jar,
+magiskboot, libimobiledevice...) fetched by `INSTALL.sh` / `install-tools.ps1` /
+`OMERTA.sh` / `OMERTA.bat` — never commit binaries there, `desktop/bin/*` is
+git-ignored. CI (`.github/workflows/desktop.yml`) builds Linux + Windows on every
+push touching `desktop/`.
 
 ## Conventions
 - **Model IDs are complete as-is — never append date suffixes.** Default `claude-opus-5`,
@@ -64,3 +86,6 @@ npm test                # node:test unit tests
   `backend/src/routes/chat.js`.
 - Never commit: `*.jks`, `keystore.properties`, `local.properties`, `.env`.
 - UI defaults to the OMERTA look; add themes rather than hardcoding new palettes.
+- `desktop/termux/server.js`'s Origin check exists specifically to stop a remote
+  page/device from driving its ADB/fastboot/shell API without permission — never
+  weaken it "to make setup easier."

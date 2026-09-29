@@ -78,3 +78,44 @@ Anthropic Messages API directly, selected by an `EngineMode` setting:
 
 The Node `backend/` remains fully supported for REMOTE deployments. Security tradeoff of
 the embedded key (extractable from the APK) is documented in the README and Settings UI.
+
+## 8. Follow-up: Omerta Tool Hub (`desktop/`) audited and installed
+
+A user-supplied source archive (`omerta-tool-hub-source.zip`, internal folder name
+`omniforge`) was audited and integrated as `desktop/` — an Electron device-management
+suite (Android + iOS: ADB/fastboot, ROM/bootloader tooling, Magisk/TWRP, jailbreak/IPSW/
+SHSH, forensics, 90+ pages total) plus a Termux-hosted headless mode.
+
+**Audit findings:**
+- No malicious code found: no `eval`/`new Function`, no hardcoded secrets, no
+  obfuscation. All outbound URLs are legitimate tool/firmware/ROM download sources
+  (Google platform-tools, official GitHub releases, device-manufacturer/ROM sites).
+  All `child_process` invocations use `execFile`/`spawn` with argument arrays (no
+  shell-string interpolation), so device serials/paths can't inject into the host
+  shell.
+- **Fixed:** `webSecurity: false` on the main `BrowserWindow` — unnecessary (no
+  renderer code does direct cross-origin `fetch`; all network access already goes
+  through the IPC bridge to the main process) and a needless attack-surface
+  reduction opportunity. Now `true`.
+- **Fixed:** `desktop/termux/server.js` (the headless/Termux HTTP+WebSocket mode)
+  bound to `0.0.0.0` with `Access-Control-Allow-Origin: *` and no authentication —
+  any website loaded in *any* browser on the same machine, or any device on the
+  same LAN, could silently drive its ADB/fastboot/shell command API (CSRF /
+  DNS-rebinding style). Fixed by validating the `Origin` header against the
+  request's own `Host` on every HTTP and WebSocket connection: a mismatched
+  cross-origin script request is now rejected (403 / WS close 1008), while the
+  README's documented "open `http://<phone-ip>:3000` from another device's
+  browser" workflow is unaffected (that's a direct navigation, which never sends
+  a foreign `Origin`).
+- Minor/deferred: several Termux-mode handlers build ADB *device-shell* command
+  strings via template literals (e.g. `pm clear ${packageId}`) rather than
+  passing args as an array to the device's shell — low severity once the
+  unauthenticated-access issue above is closed (this endpoint now requires a
+  same-origin, hence locally-controlled, caller), but worth hardening if this
+  surface is ever exposed more broadly.
+- Housekeeping: removed a stray empty directory literally named `{main`
+  (a brace-expansion mistake baked into the source zip, e.g. from
+  `mkdir -p src/{a,b}` run under `sh` instead of `bash`); added `desktop/`-scoped
+  `.gitignore` entries (`dist/`, `bin/*`, install logs).
+- Verified: `npx electron-vite build` (main+preload+renderer) and a full
+  `electron-builder` Linux `tar.gz` package both build clean in-session.

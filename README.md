@@ -59,10 +59,27 @@ REMOTE (optional — key stays off-device):
 | Path | What |
 |------|------|
 | `android/`  | Kotlin + Jetpack Compose app (`ai.omerta.assistant`). Chat UI, streaming, settings. |
+| `desktop/`  | **Omerta Tool Hub** — Electron desktop app (Windows/Linux, + Termux-as-web-server on Android). Android/iOS device management and ROM/bootloader tooling. |
 | `backend/`  | Node/Express gateway to the Anthropic Messages API (SSE streaming, auth, health). |
-| `.github/workflows/` | CI: builds the APK (`android.yml`) and tests the backend (`backend.yml`). |
+| `engine/`   | OMERTA AI engine — CLI/web coding & firmware agent. See `engine/README.md`. |
+| `.github/workflows/` | CI: builds the APK (`android.yml`), the desktop app (`desktop.yml`), and tests the backend (`backend.yml`). |
 | `docs/AUDIT.md` | Audit of the Omerta AI / OMERTA ecosystem and how this repo fits. |
 | `scripts/` | Helper scripts (local build, run backend, adb wiring). |
+
+## Omerta Tool Hub (desktop/)
+
+A free Android + iOS device management suite — ADB/fastboot tooling, ROM building,
+ADB screen mirroring, Magisk/TWRP, iOS jailbreak/IPSW/SHSH tooling, forensics export,
+and 90+ other pages. Runs as a native Electron app on Windows/Linux, or headless in
+Termux on Android itself (open the UI from any browser). See `desktop/README.md`.
+
+```bash
+cd desktop
+npm install
+npm run dev                 # launch the Electron app
+npm run build:linux         # AppImage + deb + tar.gz -> desktop/dist/
+npm run build:win           # Windows installer + portable .exe -> desktop/dist/
+```
 
 ## Quick start (embedded — nothing to run)
 

@@ -1,0 +1,164 @@
+{
+  "name": "omerta-tool-hub",
+  "version": "1.0.0",
+  "description": "Omerta Tool Hub - Silence Is The Only Unbreakable Code. Unified Android/iOS device, security, messaging, diagnostics and creative suite",
+  "main": "out/main/index.js",
+  "author": {
+    "name": "Omerta",
+    "email": "omerta@localhost"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omertanocomment-rgb/Paranoid96.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps || true",
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "build:linux:appimage": "electron-vite build && electron-builder --linux AppImage",
+    "build:linux:deb": "electron-vite build && electron-builder --linux deb",
+    "build:web": "electron-vite build && node termux/patch-renderer.js",
+    "start:web": "electron-vite build && node termux/patch-renderer.js && node termux/server.js",
+    "serve:web": "node termux/server.js",
+    "termux:setup": "bash termux/setup.sh",
+    "termux:start": "bash termux/start.sh",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:all": "electron-vite build && electron-builder --win --linux"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.0",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0",
+    "electron-vite": "^2.3.0",
+    "vite": "^5.3.0"
+  },
+  "dependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "axios": "^1.7.0",
+    "archiver": "^7.0.0",
+    "node-stream-zip": "^1.15.0",
+    "plist": "^3.1.0",
+    "fs-extra": "^11.2.0",
+    "node-fetch": "^2.7.0",
+    "cheerio": "^1.0.0",
+    "pdf-lib": "^1.17.0",
+    "node-cron": "^3.0.3",
+    "semver": "^7.6.0",
+    "yazl": "^2.5.1",
+    "yauzl": "^3.1.0",
+    "electron-updater": "^6.3.0",
+    "electron-log": "^5.1.0",
+    "electron-store": "^8.2.0",
+    "sql.js": "^1.10.0",
+    "zustand": "^4.5.0",
+    "unzipper": "^0.10.14",
+    "ws": "^8.18.0",
+    "ssh2": "^1.15.0",
+    "ssh2-sftp-client": "^10.0.3"
+  },
+  "build": {
+    "appId": "com.omerta.toolhub",
+    "productName": "Omerta Tool Hub",
+    "copyright": "Copyright 2026 Omerta Contributors",
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sql.js/**"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/",
+        "to": "bin/",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "resources/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.ico",
+      "requestedExecutionLevel": "requireAdministrator",
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Omerta Tool Hub",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "license": "LICENSE.txt",
+      "include": "resources/installer.nsh",
+      "artifactName": "OmertaToolHub-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icons",
+      "category": "Utility",
+      "synopsis": "Silence Is The Only Unbreakable Code - unified Android/iOS device, security, messaging & creative suite",
+      "maintainer": "Omerta <omerta@localhost>",
+      "vendor": "Omerta",
+      "executableName": "omerta-tool-hub",
+      "desktop": {
+        "Name": "Omerta Tool Hub",
+        "Comment": "Silence Is The Only Unbreakable Code"
+      }
+    }
+  },
+  "productName": "Omerta Tool Hub",
+  "homepage": "https://github.com/omertanocomment-rgb/Paranoid96"
+}

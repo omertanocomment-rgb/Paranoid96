@@ -1,0 +1,74 @@
+name: Build Omerta Tool Hub (desktop)
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
+  pull_request:
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install system deps for electron-builder (fpm/rpm for .deb)
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends fakeroot rpm
+
+      - run: npm install
+
+      - name: electron-vite build (validates main/preload/renderer)
+        run: npx electron-vite build
+
+      - name: Package Linux (AppImage + deb + tar.gz)
+        run: npx electron-builder --linux AppImage deb tar.gz
+        env:
+          # No code signing configured for CI builds.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: omerta-tool-hub-linux
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+            desktop/dist/*.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npx electron-vite build
+      - name: Package Windows (nsis + portable)
+        run: npx electron-builder --win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: omerta-tool-hub-windows
+          path: |
+            desktop/dist/*.exe
+          if-no-files-found: error

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https:;">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <title>Omerta</title>
+
+  <!-- Web bridge: replaces Electron IPC when running in browser/Termux mode -->
+  <script>
+    // Only inject bridge if not running in Electron (window.ft not already set by preload)
+    if (typeof window.ft === 'undefined') {
+      // Determine server URL - default to same origin
+      window.OMERTA_SERVER = window.location.origin
+      const s = document.createElement('script')
+      // Try to load bridge from server, fallback to inline stub
+      s.onload = () => console.log('[OMERTA] Web bridge injected')
+      s.onerror = () => {
+        console.warn('[OMERTA] Could not load web bridge - some features may not work')
+        window.ft = { on: () => ()=>{}, openUrl: u => window.open(u,'_blank') }
+      }
+      s.src = '/termux/web-bridge.js'
+      document.head.appendChild(s)
+    }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="./src/main.jsx"></script>
+</body>
+</html>

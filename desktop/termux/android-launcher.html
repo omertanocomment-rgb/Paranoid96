@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0d0d0d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Omerta Launcher</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0d0d; color: #e8e8e6; font-family: 'Segoe UI', system-ui, sans-serif;
+           min-height: 100vh; display: flex; flex-direction: column; align-items: center; 
+           justify-content: center; padding: 24px; }
+    .logo { font-size: 48px; margin-bottom: 16px; }
+    h1 { font-size: 28px; font-weight: 700; color: #e8e8e6; margin-bottom: 8px; }
+    .sub { font-size: 14px; color: #888; margin-bottom: 40px; text-align: center; }
+    .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; 
+            padding: 20px; width: 100%; max-width: 400px; margin-bottom: 16px; }
+    .card h2 { font-size: 14px; font-weight: 700; color: #4ade80; letter-spacing: 0.05em; 
+               margin-bottom: 12px; }
+    .btn { display: block; width: 100%; padding: 14px; border-radius: 9px; border: none;
+           font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 10px;
+           transition: opacity 0.15s; }
+    .btn:active { opacity: 0.7; }
+    .btn-primary { background: #4ade80; color: #000; }
+    .btn-secondary { background: rgba(96,165,250,0.15); color: #60a5fa; 
+                     border: 1px solid rgba(96,165,250,0.3); }
+    .btn-amber { background: rgba(245,158,11,0.15); color: #f59e0b; 
+                 border: 1px solid rgba(245,158,11,0.3); }
+    input { width: 100%; padding: 12px; background: #0d0d0d; border: 1px solid #2a2a2a;
+            border-radius: 8px; color: #e8e8e6; font-size: 14px; font-family: monospace; }
+    .status { font-size: 12px; color: #888; margin-top: 8px; min-height: 18px; }
+    .status.ok { color: #4ade80; }
+    .status.err { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="logo">🔓</div>
+  <h1>Omerta</h1>
+  <p class="sub">Android & iOS Device Management</p>
+
+  <div class="card">
+    <h2>QUICK CONNECT</h2>
+    <input id="serverUrl" type="url" value="http://localhost:3000" 
+           placeholder="http://localhost:3000">
+    <button class="btn btn-primary" onclick="connect()">Open Omerta</button>
+    <div class="status" id="status">Enter server address and tap Open</div>
+  </div>
+
+  <div class="card">
+    <h2>COMMON ADDRESSES</h2>
+    <button class="btn btn-secondary" onclick="setUrl('http://localhost:3000')">
+      localhost:3000 (same device)
+    </button>
+    <button class="btn btn-secondary" onclick="promptCustom()">
+      Custom IP (another device on WiFi)
+    </button>
+  </div>
+
+  <div class="card">
+    <h2>SETUP INSTRUCTIONS</h2>
+    <button class="btn btn-amber" onclick="showSetup()">
+      How to install &amp; start the server
+    </button>
+    <div id="setupInstructions" style="display:none; margin-top:12px;">
+      <ol style="font-size:13px; color:#aaa; line-height:2; padding-left:16px;">
+        <li>Install Termux from F-Droid (not Google Play)</li>
+        <li>Copy freetoolz folder to phone</li>
+        <li>In Termux: <code style="color:#4ade80">bash freetoolz/termux/setup.sh</code></li>
+        <li>Start: <code style="color:#4ade80">bash freetoolz/termux/start.sh</code></li>
+        <li>Open this launcher and tap localhost:3000</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    // Remember last server URL
+    const saved = localStorage.getItem('omerta_server')
+    if (saved) document.getElementById('serverUrl').value = saved
+
+    async function connect() {
+      const url = document.getElementById('serverUrl').value.trim()
+      if (!url) { setStatus('Enter a server URL', 'err'); return }
+      localStorage.setItem('omerta_server', url)
+      setStatus('Connecting...', '')
+      try {
+        const r = await fetch(url + '/api/adb:version', { method:'POST', body:'{}',
+          headers:{'Content-Type':'application/json'}, signal: AbortSignal.timeout(5000) })
+        if (r.ok) {
+          setStatus('Connected! Opening...', 'ok')
+          setTimeout(() => { window.location.href = url }, 500)
+        } else {
+          setStatus('Server responded but returned an error', 'err')
+        }
+      } catch(e) {
+        setStatus('Cannot reach server: ' + e.message, 'err')
+      }
+    }
+
+    function setUrl(url) {
+      document.getElementById('serverUrl').value = url
+      localStorage.setItem('omerta_server', url)
+    }
+
+    function promptCustom() {
+      const ip = prompt('Enter server IP address:', '192.168.1.')
+      if (ip) setUrl('http://' + ip.trim() + ':3000')
+    }
+
+    function showSetup() {
+      const el = document.getElementById('setupInstructions')
+      el.style.display = el.style.display === 'none' ? 'block' : 'none'
+    }
+
+    function setStatus(msg, cls) {
+      const el = document.getElementById('status')
+      el.textContent = msg
+      el.className = 'status ' + (cls || '')
+    }
+
+    // Auto-connect if we already have a saved server
+    if (saved) {
+      setStatus('Tap Open to connect to ' + saved, '')
+    }
+  </script>
+</body>
+</html>

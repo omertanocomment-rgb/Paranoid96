@@ -41,3 +41,10 @@ ios/OmertaAI.xcodeproj/
 ios/*.ipa
 ios/Payload/
 engine/omerta.spec
+
+# ---- Omerta Tool Hub (desktop/) ----
+desktop/dist/
+desktop/bin/*
+!desktop/bin/.gitkeep
+desktop/install-*.log
+desktop/*.log
