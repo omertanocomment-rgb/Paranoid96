@@ -4,6 +4,52 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.13.0] — 2026-09-29
+
+Everything the web UI could do, the native app can do. Seven tabs, no HTML.
+
+### Added
+- **CHATS** — projects and saved conversations: open, rename, branch, archive,
+  delete, lock and unlock a private chat, export a bundle through the system
+  file picker and import one back. Creating a project switches to it.
+- **CODE** — the editor, on the real contract this time: browse the workspace,
+  read a file, search by text or by symbol, reindex, and save through
+  propose → diff → commit, so nothing is written until the diff is on screen
+  and confirmed. A backup is kept by the commit.
+- **LEARN** — the shelf: pick a file with the system picker (it goes over as
+  base64, so one JSON POST covers a PDF and a text file alike), learn a path,
+  forget a document, and read back what was inferred from what you approved
+  and refused, broken down by subject.
+- **TOOLS** — adb over TCP (connect, info, shell, this device's public key),
+  the scratch sandbox (create, run, changes, accept, discard), memory recall,
+  the cost meter with its own estimated/unpriced caveats, attachments, sync,
+  encrypted backup with a dry restore, the audit log, and plugin/connector
+  reload.
+- **Work modes** in chat — BUILD, PLAN, RESEARCH, BRAINSTORM, DEBATE, with the
+  backend's own description of what each one withholds.
+- **Type-ahead queue**: a message typed while a turn is running is held and
+  sent in order instead of being dropped, and **STOP** cancels the turn in
+  flight, keeping whatever was already said.
+- Tap any message to copy it.
+- **Dictation** in the chat box, through the system recogniser.
+- **Share target and PROCESS_TEXT now do something.** The manifest has
+  advertised both since the web build and the Compose rebuild left them
+  accepted and unhandled — the share sheet listed OMERTA and nothing happened.
+  Shared text lands in the chat box; shared files are learned.
+- **Settings** now renders every writable setting from the backend's own
+  description of itself, so a setting added later appears without a UI change.
+  Plus themes, on-device engine start/stop, and the launcher toggle.
+- `OMERTA_KEEP_AWAKE` and `OMERTA_HAPTICS` are honoured. Both existed and did
+  nothing in the Compose build.
+
+### Fixed
+- The client disagreed with `core/dispatch` in five places, each of which made
+  a working backend look broken: `learn/forget` takes `doc`, not `id`;
+  `ws/commit` takes the path and content, not a token that is never issued;
+  `ws/search` returns `results`, not `hits`; tree entries carry `size`, not
+  `bytes`; and a handler that refuses returns `{status: error, reason}` rather
+  than `error` — so a refusal was being reported as a success.
+
 ## [1.12.0] — 2026-09-29
 
 The Android app is native. The WebView is gone.

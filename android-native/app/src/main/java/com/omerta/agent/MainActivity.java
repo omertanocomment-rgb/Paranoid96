@@ -1,11 +1,18 @@
 package com.omerta.agent;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 
 import androidx.activity.ComponentActivity;
+
+import com.omerta.agent.ui.Intake;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * OMERTA AGENT.
@@ -28,6 +35,58 @@ public class MainActivity extends ComponentActivity {
         // shows what it is doing rather than a blank screen.
         BackendLauncher.start(this);
         OmertaRoot.install(this);
+        take(getIntent());
+    }
+
+    /** singleTask: a second share arrives here, not through onCreate. */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        take(intent);
+    }
+
+    /**
+     * Whatever another app sent us.
+     *
+     * The manifest accepts every MIME type on purpose -- the attachment store
+     * has no type rule -- so this reads the extras rather than trusting the
+     * type: a "text/plain" share can still carry a STREAM, and a file share
+     * can carry a title in EXTRA_TEXT.
+     */
+    private void take(Intent intent) {
+        if (intent == null || intent.getAction() == null) {
+            return;
+        }
+        String action = intent.getAction();
+        if (Intent.ACTION_PROCESS_TEXT.equals(action)) {
+            CharSequence sel = intent.getCharSequenceExtra(
+                    Intent.EXTRA_PROCESS_TEXT);
+            if (sel != null) {
+                Intake.INSTANCE.offerText(sel.toString());
+            }
+            return;
+        }
+        if (!Intent.ACTION_SEND.equals(action)
+                && !Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            return;
+        }
+        Intake.INSTANCE.offerText(intent.getStringExtra(Intent.EXTRA_TEXT));
+
+        List<String> uris = new ArrayList<>();
+        Uri one = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+        if (one != null) {
+            uris.add(one.toString());
+        }
+        ArrayList<Uri> many = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+        if (many != null) {
+            for (Uri u : many) {
+                if (u != null) {
+                    uris.add(u.toString());
+                }
+            }
+        }
+        Intake.INSTANCE.offerFiles(uris);
     }
 
     private void maybeAskNotifications() {

@@ -1,5 +1,8 @@
 package com.omerta.agent.ui
 
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
@@ -39,6 +44,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -53,6 +59,7 @@ fun ChatScreen(vm: ChatViewModel) {
     }
 
     Column(Modifier.fillMaxSize().background(Ink)) {
+        WorkModeBar(st, vm)
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -61,11 +68,62 @@ fun ChatScreen(vm: ChatViewModel) {
         ) {
             items(st.messages, key = { it.id }) { m -> MessageBubble(m) }
             st.pending?.let { p -> item { ApprovalCard(p, vm) } }
+            if (st.queued.isNotEmpty()) {
+                item { QueuedNote(st.queued) }
+            }
         }
         InputBar(
             busy = st.busy,
             onSend = vm::send,
+            onStop = vm::stop,
         )
+    }
+}
+
+/**
+ * How the agent is working right now.
+ *
+ * These are not personalities. PLAN and RESEARCH genuinely withhold the tools
+ * that change things, so a mode is a statement about what it is ALLOWED to
+ * do, and the blurb underneath is the backend's own description of that --
+ * not a label written here that could drift from what the mode actually does.
+ */
+@Composable
+private fun WorkModeBar(st: ChatState, vm: ChatViewModel) {
+    if (st.workModes.isEmpty()) return
+    Column(Modifier.fillMaxWidth().background(Panel).padding(
+        horizontal = 10.dp, vertical = 8.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            st.workModes.forEach { m ->
+                Chip(m.uppercase(), m == st.workMode) { vm.setWorkMode(m) }
+            }
+        }
+        if (st.workBlurb.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(st.workBlurb, style = MaterialTheme.typography.labelSmall,
+                 color = TextLo)
+        }
+    }
+}
+
+/** Messages typed while it was working. They are sent in order, not dropped. */
+@Composable
+private fun QueuedNote(queued: List<String>) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(7.dp))
+            .background(PanelHi)
+            .border(1.dp, Amber.copy(alpha = 0.5f), RoundedCornerShape(7.dp))
+            .padding(10.dp),
+    ) {
+        Text("QUEUED (${queued.size})", style = MaterialTheme.typography.labelSmall,
+             color = Amber)
+        queued.forEach {
+            Spacer(Modifier.height(4.dp))
+            Text(it, style = MaterialTheme.typography.bodySmall, color = TextLo)
+        }
     }
 }
 
@@ -73,6 +131,8 @@ fun ChatScreen(vm: ChatViewModel) {
 private fun MessageBubble(m: Message) {
     val mine = m.role == Role.YOU
     val system = m.role == Role.SYSTEM
+    val ctx = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
@@ -89,6 +149,7 @@ private fun MessageBubble(m: Message) {
                     }
                 )
                 .border(1.dp, if (system) Blood else Border, RoundedCornerShape(7.dp))
+                .clickableNoRipple { copy(ctx, m.text); copied = true }
                 .padding(horizontal = 12.dp, vertical = 9.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -103,6 +164,11 @@ private fun MessageBubble(m: Message) {
                     Spacer(Modifier.width(8.dp))
                     Text("writing…", style = MaterialTheme.typography.labelSmall,
                          color = TextLo.copy(alpha = 0.7f))
+                }
+                if (copied) {
+                    Spacer(Modifier.width(8.dp))
+                    Text("copied", style = MaterialTheme.typography.labelSmall,
+                         color = Good)
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -279,8 +345,31 @@ private fun ActionButton(
 }
 
 @Composable
-private fun InputBar(busy: Boolean, onSend: (String) -> Unit) {
+private fun InputBar(busy: Boolean, onSend: (String) -> Unit, onStop: () -> Unit) {
     var text by remember { mutableStateOf("") }
+    val ctx = LocalContext.current
+
+    // Something shared from another app lands in the box, not in the model.
+    // A share is the START of a sentence -- "summarise this", "what is wrong
+    // with this" -- and sending it straight off throws away the part the
+    // person was about to type.
+    val shared by Intake.text.collectAsStateWithLifecycleCompat()
+    LaunchedEffect(shared) {
+        val s = Intake.takeText()
+        if (!s.isNullOrBlank()) {
+            text = if (text.isBlank()) s else text.trimEnd() + "\n\n" + s
+        }
+    }
+
+    val dictation = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val heard = result.data?.getStringArrayListExtra(
+            RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (!heard.isNullOrBlank()) {
+            text = if (text.isBlank()) heard else text.trimEnd() + " " + heard
+        }
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -300,7 +389,8 @@ private fun InputBar(busy: Boolean, onSend: (String) -> Unit) {
                 .padding(horizontal = 10.dp, vertical = 11.dp),
         ) {
             if (text.isEmpty()) {
-                Text("what do you want built?",
+                Text(if (busy) "type ahead — it will be sent next"
+                     else "what do you want built?",
                      style = MaterialTheme.typography.bodyMedium, color = TextLo)
             }
             BasicTextField(
@@ -311,18 +401,56 @@ private fun InputBar(busy: Boolean, onSend: (String) -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        // Dictation goes through the system recogniser, which means the
+        // microphone is opened by that app and not by this one: a permission
+        // in the manifest is permission to ask, not a licence to listen.
         Box(
             Modifier
                 .clip(RoundedCornerShape(6.dp))
-                .background(if (busy) Border else Blood)
+                .background(PanelHi)
+                .border(1.dp, Border, RoundedCornerShape(6.dp))
                 .clickableNoRipple {
-                    if (!busy && text.isNotBlank()) { onSend(text); text = "" }
+                    val i = android.content.Intent(
+                        RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                               RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak")
+                    runCatching { dictation.launch(i) }.onFailure {
+                        android.widget.Toast.makeText(
+                            ctx, "no speech recogniser on this device",
+                            android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .padding(horizontal = 12.dp, vertical = 13.dp),
+        ) {
+            Text("🎙", style = MaterialTheme.typography.labelLarge, color = TextHi)
+        }
+        Spacer(Modifier.width(6.dp))
+        if (busy) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(PanelHi)
+                    .border(1.dp, Ember, RoundedCornerShape(6.dp))
+                    .clickableNoRipple(onStop)
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
+            ) {
+                Text("STOP", style = MaterialTheme.typography.labelLarge, color = Ember)
+            }
+            Spacer(Modifier.width(6.dp))
+        }
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(Blood)
+                .clickableNoRipple {
+                    if (text.isNotBlank()) { onSend(text); text = "" }
                 }
                 .padding(horizontal = 16.dp, vertical = 13.dp),
         ) {
-            Text(if (busy) "…" else "▶",
+            Text(if (busy) "＋" else "▶",
                  style = MaterialTheme.typography.labelLarge,
-                 color = if (busy) TextLo else androidx.compose.ui.graphics.Color.White)
+                 color = androidx.compose.ui.graphics.Color.White)
         }
     }
 }

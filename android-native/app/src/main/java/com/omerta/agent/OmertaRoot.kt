@@ -3,6 +3,7 @@ package com.omerta.agent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -37,6 +39,10 @@ import com.omerta.agent.ui.Blood
 import com.omerta.agent.ui.Border
 import com.omerta.agent.ui.ChatScreen
 import com.omerta.agent.ui.ChatViewModel
+import com.omerta.agent.ui.ChatsScreen
+import com.omerta.agent.ui.CodeScreen
+import com.omerta.agent.ui.LearnScreen
+import com.omerta.agent.ui.ToolsScreen
 import com.omerta.agent.ui.Ember
 import com.omerta.agent.ui.Ink
 import com.omerta.agent.ui.OmertaTheme
@@ -45,13 +51,15 @@ import com.omerta.agent.ui.SettingsScreen
 import com.omerta.agent.ui.TerminalScreen
 import com.omerta.agent.ui.TextHi
 import com.omerta.agent.ui.TextLo
+import android.view.WindowManager
 import com.omerta.agent.ui.clickableNoRipple
 import com.omerta.agent.ui.collectAsStateWithLifecycleCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class Tab(val label: String) {
-    CHAT("CHAT"), TERMINAL("TERMINAL"), SETTINGS("SETTINGS")
+    CHAT("CHAT"), CHATS("CHATS"), CODE("CODE"), LEARN("LEARN"),
+    TOOLS("TOOLS"), TERMINAL("TERM"), SETTINGS("SETTINGS")
 }
 
 object OmertaRoot {
@@ -104,12 +112,37 @@ private fun Console() {
 
     LaunchedEffect(Unit) { vm.boot() }
 
+    // Two settings the backend has always exposed and the Compose rebuild
+    // never read, so turning them on did nothing at all.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var keepAwake by remember { mutableStateOf(false) }
+    var haptics by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val s = OmertaClient.settings().optJSONObject("settings")
+        keepAwake = truthy(s?.optJSONObject("OMERTA_KEEP_AWAKE")?.optString("value"))
+        haptics = truthy(s?.optJSONObject("OMERTA_HAPTICS")?.optString("value"))
+    }
+    LaunchedEffect(keepAwake) {
+        val w = (ctx as? ComponentActivity)?.window ?: return@LaunchedEffect
+        if (keepAwake) w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+    // A phone face-down on a desk while a long turn runs is the whole reason
+    // this exists: the approval prompt is useless if nobody sees it.
+    LaunchedEffect(st.pending) {
+        if (st.pending != null && haptics) buzz(ctx)
+    }
+
     Column(Modifier.fillMaxSize()) {
-        Header(provider = st.provider, policy = st.policy)
+        Header(provider = st.provider, policy = st.policy, project = st.project)
         TabBar(tab) { tab = it }
         Box(Modifier.weight(1f)) {
             when (tab) {
                 Tab.CHAT -> ChatScreen(vm)
+                Tab.CHATS -> ChatsScreen(vm)
+                Tab.CODE -> CodeScreen()
+                Tab.LEARN -> LearnScreen(vm)
+                Tab.TOOLS -> ToolsScreen(vm)
                 Tab.TERMINAL -> TerminalScreen()
                 Tab.SETTINGS -> SettingsScreen(vm)
             }
@@ -118,7 +151,7 @@ private fun Console() {
 }
 
 @Composable
-private fun Header(provider: String, policy: String) {
+private fun Header(provider: String, policy: String, project: String) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -134,6 +167,7 @@ private fun Header(provider: String, policy: String) {
                  style = MaterialTheme.typography.labelSmall, color = TextLo)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (project.isNotEmpty()) Pill(project)
             if (policy.isNotEmpty()) Pill(policyLabel(policy))
             Pill(provider)
         }
@@ -162,14 +196,18 @@ private fun Pill(text: String) {
 
 @Composable
 private fun TabBar(current: Tab, onPick: (Tab) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(Ink)) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Ink)
+            .horizontalScroll(rememberScrollState()),
+    ) {
         Tab.entries.forEach { t ->
             val on = t == current
             Column(
                 Modifier
-                    .weight(1f)
                     .clickableNoRipple { onPick(t) }
-                    .padding(vertical = 11.dp),
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(t.label, style = MaterialTheme.typography.labelSmall,
@@ -177,7 +215,7 @@ private fun TabBar(current: Tab, onPick: (Tab) -> Unit) {
                 Spacer(Modifier.height(7.dp))
                 Box(
                     Modifier
-                        .fillMaxWidth()
+                        .width(44.dp)
                         .height(2.dp)
                         .background(if (on) Blood else Border.copy(alpha = 0.4f)),
                 )
@@ -292,5 +330,28 @@ private fun Splash(title: String, detail: String) {
         Spacer(Modifier.height(14.dp))
         Text(detail, style = MaterialTheme.typography.bodySmall, color = TextLo,
              textAlign = TextAlign.Center)
+    }
+}
+
+
+private fun truthy(v: String?) =
+    v == "1" || v.equals("true", ignoreCase = true) || v.equals("yes", ignoreCase = true)
+
+/** One short pulse. Deliberately not a pattern: this is a notice, not an alarm. */
+private fun buzz(ctx: android.content.Context) {
+    val vib = if (android.os.Build.VERSION.SDK_INT >= 31) {
+        (ctx.getSystemService(android.os.VibratorManager::class.java))?.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        ctx.getSystemService(android.os.Vibrator::class.java)
+    }
+    runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            vib?.vibrate(android.os.VibrationEffect.createOneShot(
+                40, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vib?.vibrate(40)
+        }
     }
 }
