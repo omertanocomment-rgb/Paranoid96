@@ -211,7 +211,8 @@ private fun EmptyState(needsKey: Boolean, onSettings: () -> Unit, onOffline: () 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("OMERTA AI", style = MaterialTheme.typography.displaySmall, color = OmertaAmber)
+        Text("OMERTA PERSONAL AI", style = MaterialTheme.typography.displaySmall, color = OmertaAmber,
+            textAlign = TextAlign.Center)
         Text(
             "operator-grade assistant · Claude built in",
             style = MaterialTheme.typography.bodySmall,

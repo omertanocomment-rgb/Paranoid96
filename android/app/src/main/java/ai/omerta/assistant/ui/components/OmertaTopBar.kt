@@ -64,7 +64,7 @@ fun OmertaTopBar(
                         colorFilter = ColorFilter.tint(OmertaAmber),
                         modifier = Modifier.size(22.dp).padding(end = 6.dp),
                     )
-                    Text("OMERTA AI", style = MaterialTheme.typography.titleMedium, color = OmertaAmber)
+                    Text("OMERTA PERSONAL AI", style = MaterialTheme.typography.titleMedium, color = OmertaAmber)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatusDot(connection)
