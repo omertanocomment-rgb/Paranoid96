@@ -36,17 +36,36 @@ ASSETS = ROOT / "assets"
 RES = ROOT / "android-native/app/src/main/res"
 SOURCE = ASSETS / "omerta-mark-source.jpg"
 
-# Two ramps. The DEFAULT is the artwork as it was drawn: a black plate in
-# pewter and bone. The red ramp was mine, and it was wrong -- pushing a
-# detailed greyscale engraving through black -> red -> bright red flattens it,
-# and at 48px the skull stopped reading as a skull at all. The artwork already
-# has its own shading; the job is to keep it legible when shrunk, not to
-# recolour it.
-BG = (10, 5, 6)         # near-black, the app's background
-MONO_MID = (96, 94, 96)  # pewter -- the plate's own metal
-MONO_HI = (226, 223, 216)  # bone -- the lettering and the skull
-RED_MID = (150, 16, 24)
-RED_HI = (214, 44, 52)
+# The house style, and the ONE thing a different app may change.
+#
+# Standing rule from the owner: the plate, the layout, the type and the
+# palette structure are the official identity and do not get redesigned per
+# app. A sibling app takes the same mark and changes its TINT -- nothing else.
+# So the ramps live here as a table rather than as two hard-coded constants,
+# and adding an app is adding a row.
+#
+# Each entry is (midtone, highlight) for the colorize ramp. The midtone is the
+# plate's metal, the highlight is the lettering and the skull. `black` is
+# OMERTA's own and is the artwork as it was drawn: pewter and bone.
+#
+# Why not simply recolour the whole thing: this is a detailed greyscale
+# engraving. Pushing it through a saturated ramp (black -> red -> bright red
+# was the first attempt) flattens its midtones, and at 48px the skull stops
+# reading as a skull. So every tint here keeps a wide, desaturated midtone and
+# only carries colour into the highlight.
+BG = (10, 5, 6)         # near-black. Shared by every tint: the plate is black.
+
+TINTS = {
+    "black":  ((96, 94, 96),   (226, 223, 216)),   # OMERTA — pewter and bone
+    "red":    ((120, 52, 56),  (226, 96, 100)),
+    "amber":  ((116, 92, 48),  (232, 176, 84)),
+    "green":  ((72, 108, 82),  (150, 224, 172)),
+    "cyan":   ((66, 106, 112), (140, 220, 228)),
+    "blue":   ((72, 92, 128),  (144, 176, 240)),
+    "violet": ((100, 80, 128), (190, 160, 240)),
+    "bone":   ((110, 106, 100), (238, 234, 226)),
+}
+DEFAULT_TINT = "black"
 
 MIPMAPS = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 PNG_SIZES = [16, 24, 32, 48, 64, 128, 256, 512, 1024]
@@ -62,8 +81,8 @@ def square(im):
     return im.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s))
 
 
-def render(size, contrast=1.35, invert=False, red=False):
-    """The artwork at `size` px: black and bone by default, red on request."""
+def render(size, contrast=1.35, invert=False, tint=DEFAULT_TINT):
+    """The artwork at `size` px in the named tint. Same plate, every time."""
     if not SOURCE.exists():
         sys.exit(f"missing artwork: {SOURCE}")
     im = square(Image.open(SOURCE).convert("RGB"))
@@ -87,10 +106,10 @@ def render(size, contrast=1.35, invert=False, red=False):
     if small:
         g = ImageEnhance.Brightness(g).enhance(1.0 + 0.30 * small)
 
-    mid, hi = (RED_MID, RED_HI) if red else (MONO_MID, MONO_HI)
-    if small and not red:
-        # Lift the pewter toward bone as well: colorize maps the midtone, and
-        # a dark midtone is exactly what disappears first.
+    mid, hi = TINTS[tint]
+    if small:
+        # Lift the midtone toward the highlight as well: colorize maps the
+        # midtone, and a dark midtone is exactly what disappears first.
         mid = tuple(int(m + (h - m) * 0.45 * small) for m, h in zip(mid, hi))
     out = ImageOps.colorize(g, BG, hi, mid=mid).convert("RGBA")
 
@@ -99,11 +118,12 @@ def render(size, contrast=1.35, invert=False, red=False):
     return out.resize((size, size), Image.LANCZOS)
 
 
-def adaptive_foreground(px, safe=0.72, contrast=1.35, invert=False, red=False):
+def adaptive_foreground(px, safe=0.72, contrast=1.35, invert=False,
+                        tint=DEFAULT_TINT):
     """The plate scaled into Android's safe zone, on transparency."""
     n = px * 2                       # 108dp canvas, rendered generously
     inner = int(n * safe)
-    art = render(inner, contrast, invert, red)
+    art = render(inner, contrast, invert, tint)
 
     # keep only the plate: the source's corners are background, and carrying
     # them into the foreground layer would draw a square behind the mask
@@ -122,30 +142,37 @@ def main():
     ap.add_argument("--invert", action="store_true",
                     help="flip polarity (dark plate, light lettering)")
     ap.add_argument("--contrast", type=float, default=1.35)
-    ap.add_argument("--red", action="store_true",
-                    help="the old red ramp; the default is the black plate "
-                         "as the artwork was drawn")
+    ap.add_argument("--tint", default=DEFAULT_TINT, choices=sorted(TINTS),
+                    help="the ONE thing a sibling app changes. Default "
+                         f"{DEFAULT_TINT!r}: the plate as it was drawn.")
+    ap.add_argument("--out", default=None,
+                    help="write the mipmaps under this res/ directory instead "
+                         "of this repo's, for building a sibling app's icons")
     args = ap.parse_args()
+
+    global RES
+    if args.out:
+        RES = Path(args.out)
 
     ASSETS.mkdir(exist_ok=True)
     for s in PNG_SIZES:
-        render(s, args.contrast, args.invert, args.red).save(ASSETS / f"icon_{s}.png")
-    render(512, args.contrast, args.invert, args.red).save(ASSETS / "icon.png")
-    render(256, args.contrast, args.invert, args.red).save(
+        render(s, args.contrast, args.invert, args.tint).save(ASSETS / f"icon_{s}.png")
+    render(512, args.contrast, args.invert, args.tint).save(ASSETS / "icon.png")
+    render(256, args.contrast, args.invert, args.tint).save(
         ASSETS / "icon.ico", format="ICO",
         sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    render(64, args.contrast, args.invert, args.red).save(
+    render(64, args.contrast, args.invert, args.tint).save(
         ASSETS / "favicon.ico", format="ICO",
         sizes=[(16, 16), (24, 24), (32, 32), (48, 48)])
 
     for bucket, px in MIPMAPS.items():
         out = RES / f"mipmap-{bucket}"
         out.mkdir(parents=True, exist_ok=True)
-        icon = render(px, args.contrast, args.invert, args.red)
+        icon = render(px, args.contrast, args.invert, args.tint)
         icon.save(out / "ic_launcher.png")
         icon.save(out / "ic_launcher_round.png")
         adaptive_foreground(px, 0.72, args.contrast, args.invert,
-                            args.red).save(out / "ic_launcher_foreground.png")
+                            args.tint).save(out / "ic_launcher_foreground.png")
 
     (RES / "mipmap-anydpi-v26").mkdir(parents=True, exist_ok=True)
     for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
@@ -158,7 +185,7 @@ def main():
             '</adaptive-icon>\n')
 
     print(f"icons written from {SOURCE.name} "
-          f"({'red' if args.red else 'black plate'})"
+          f"({args.tint})"
           f"{' (inverted)' if args.invert else ''}")
     print(f"  assets/     {len(PNG_SIZES)} png + icon.ico + favicon.ico")
     print(f"  mipmap-*/   {len(MIPMAPS)} densities, launcher + round + adaptive")

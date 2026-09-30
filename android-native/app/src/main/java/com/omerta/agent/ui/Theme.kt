@@ -13,6 +13,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.omerta.agent.R
 
+// THE ONE KNOB. A sibling app changes these four values and its icon tint
+// (scripts/gen_omerta_icon.py --tint NAME) and nothing else: the mark, the
+// layout, the type and the structure of this palette are the house identity
+// and are not redesigned per app. See CLAUDE.md.
+//
 // The owner's palette: red on black, from res/values/colors.xml.
 //
 // Ink, Panel, Blood and Ember are those four tokens exactly -- the Compose

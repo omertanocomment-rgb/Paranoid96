@@ -38,6 +38,40 @@ that was perfectly good, which reads as a corrupt file and is not. Prefer the
 `SHA256SUMS` that ships inside the zip: the block reads it, so nothing has to
 be transcribed at all.
 
+## The house identity is fixed; only the tint changes
+
+Standing rule, set by the owner. The OMERTA plate — the black skull, the
+barbed wire, the blackletter — is the official identity for this project and
+every app that follows it. The mark, the layout, the type and the structure of
+the palette do not get redesigned per app.
+
+A sibling app changes exactly one thing: **the tint**.
+
+| | |
+|---|---|
+| Artwork | `assets/omerta-mark-source.jpg`. Never redrawn, never replaced. |
+| Icon set | `python3 scripts/gen_omerta_icon.py --tint NAME [--out <res dir>]` |
+| Tints | black (OMERTA's own), red, amber, green, cyan, blue, violet, bone |
+| UI palette | `res/values/colors.xml` — four tokens; `ui/Theme.kt` derives the rest |
+| Wordmark | UnifrakturMaguntia, bundled under the OFL. The name only. |
+
+The artwork is drawn dark-on-light: a black mark on a pale plate. The tint
+colours the PLATE, not the mark, so the skull stays black in every app and the
+tile is what tells them apart. That is the whole system — do not invert it,
+do not recolour the skull, and do not add a second typeface.
+
+Two things learned the hard way, both of which produced a shipped build:
+
+- **Do not push the artwork through a saturated ramp.** It is a detailed
+  greyscale engraving. Black → red → bright red flattened its midtones, and at
+  48px — the size a launcher actually draws — the skull stopped reading as a
+  skull. Every tint keeps a wide desaturated midtone and carries colour only
+  into the highlight, and the generator hardens contrast as the target shrinks.
+- **Do not invent a palette in the UI layer.** The Compose rebuild introduced a
+  warmer bone-and-ember scheme that existed nowhere else, so the phone quietly
+  stopped matching the desktop and the web surface. `Theme.kt` takes its four
+  colours from `colors.xml` and derives everything else from them.
+
 ## Do not build a web app
 
 The Android app is Jetpack Compose — real widgets, no WebView, no HTML, no
