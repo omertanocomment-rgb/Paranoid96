@@ -1,5 +1,9 @@
 # Instructions for Claude in this repository
 
+New to this project? `docs/HANDOVER.md` is where it stands, what was decided
+on purpose, and what has never been verified. A conversation does not travel
+between sessions; that file is what does. These rules outrank it.
+
 ## Every release ships three executables
 
 Standing rule, set by the owner. Any build, any version, no exceptions:
