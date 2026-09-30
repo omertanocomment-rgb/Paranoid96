@@ -132,6 +132,8 @@ fun ChatScreen(vm: ChatViewModel, onSettings: () -> Unit, onBrain: () -> Unit) {
             OmertaTopBar(
                 connection = state.connection,
                 serverModel = state.serverModel,
+                online = settings?.let { vm.isOnline(it) } ?: false,
+                onToggleMode = vm::toggleOnlineMode,
                 onSettings = onSettings,
                 onBrain = onBrain,
                 onShare = {

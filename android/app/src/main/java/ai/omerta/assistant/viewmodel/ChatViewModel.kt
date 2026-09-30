@@ -484,6 +484,32 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * True when the app can reach the internet for an answer: an online provider is active,
+     * or the offline brain has web search enabled.
+     */
+    fun isOnline(s: OmertaSettings): Boolean =
+        !s.embedded || s.provider != Provider.BRAIN || s.brainWebSearch
+
+    /**
+     * One-tap ONLINE ⇄ OFFLINE. Going offline forces the local brain and disables web
+     * lookups (nothing leaves the device). Going online lets the brain search the web.
+     */
+    fun toggleOnlineMode() {
+        viewModelScope.launch {
+            val s = settingsStore.settings.first()
+            if (isOnline(s)) {
+                settingsStore.update(engineMode = EngineMode.EMBEDDED, provider = Provider.BRAIN)
+                settingsStore.updateBrain(webSearch = false)
+                appendAssistant("○ OFFLINE — local brain only. Nothing leaves this device.")
+            } else {
+                settingsStore.updateBrain(webSearch = true)
+                appendAssistant("● ONLINE — I'll look things up on the web when I don't know.")
+            }
+            checkConnection()
+        }
+    }
+
     /** One tap to fully offline: embedded engine + the on-device brain. */
     fun useBrain() {
         viewModelScope.launch {

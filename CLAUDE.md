@@ -93,6 +93,10 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   (Python) look up unknown questions via DuckDuckGo Instant Answer + Wikipedia (no key) and
   remember the answer. Gated by `brainWebSearch` / `BrainLibrary.web_search`; only fires on
   a brain fallback, so the offline promise holds unless the operator enables it.
+- Online/Offline mode: a one-tap top-bar chip (`ChatViewModel.toggleOnlineMode`,
+  `OmertaTopBar` ONLINE/OFFLINE). OFFLINE forces provider=BRAIN + web search off (nothing
+  leaves the device); ONLINE enables the brain's web search. `isOnline(settings)` derives
+  the current state (online provider active, or brainWebSearch on).
 - On-device LLM model install: `BrainStore.importModel` (pick a file) **or**
   `BrainStore.downloadModel` (paste an https URL, resumable) drop a MediaPipe `.task`/`.bin`
   into the model dir; `OnDeviceLlm` then answers grounded in the brain (ASSIST/ALWAYS).

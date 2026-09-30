@@ -1,10 +1,15 @@
 package ai.omerta.assistant.ui.components
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Psychology
@@ -26,6 +31,10 @@ import androidx.compose.ui.unit.dp
 import ai.omerta.assistant.R
 import ai.omerta.assistant.ui.theme.OmertaAmber
 import ai.omerta.assistant.ui.theme.OmertaBlack
+import ai.omerta.assistant.ui.theme.OmertaBorder
+import ai.omerta.assistant.ui.theme.OmertaGreen
+import ai.omerta.assistant.ui.theme.OmertaSurface
+import ai.omerta.assistant.ui.theme.OmertaTextSecondary
 import ai.omerta.assistant.ui.theme.OmertaTextPrimary
 import ai.omerta.assistant.viewmodel.ConnectionState
 
@@ -34,6 +43,8 @@ import ai.omerta.assistant.viewmodel.ConnectionState
 fun OmertaTopBar(
     connection: ConnectionState,
     serverModel: String?,
+    online: Boolean,
+    onToggleMode: () -> Unit,
     onSettings: () -> Unit,
     onBrain: () -> Unit,
     onShare: () -> Unit,
@@ -55,7 +66,21 @@ fun OmertaTopBar(
                     )
                     Text("OMERTA AI", style = MaterialTheme.typography.titleMedium, color = OmertaAmber)
                 }
-                StatusDot(connection)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusDot(connection)
+                    Text(
+                        text = if (online) "● ONLINE" else "○ OFFLINE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (online) OmertaGreen else OmertaTextSecondary,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(OmertaSurface)
+                            .border(1.dp, if (online) OmertaGreen else OmertaBorder, RoundedCornerShape(6.dp))
+                            .clickable { onToggleMode() }
+                            .padding(horizontal = 6.dp, vertical = 1.dp),
+                    )
+                }
             }
         },
         navigationIcon = {
