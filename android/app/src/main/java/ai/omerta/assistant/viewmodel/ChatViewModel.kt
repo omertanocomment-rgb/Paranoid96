@@ -499,12 +499,26 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val s = settingsStore.settings.first()
             if (isOnline(s)) {
+                // Go dark: local brain only, no web lookups — nothing leaves the device.
                 settingsStore.update(engineMode = EngineMode.EMBEDDED, provider = Provider.BRAIN)
                 settingsStore.updateBrain(webSearch = false)
                 appendAssistant("○ OFFLINE — local brain only. Nothing leaves this device.")
             } else {
+                // Go online: prefer a configured cloud provider (full conversation), else the
+                // local brain with web lookup.
+                val msg = when {
+                    s.anthropicApiKey.isNotBlank() -> {
+                        settingsStore.update(engineMode = EngineMode.EMBEDDED, provider = Provider.ANTHROPIC)
+                        "● ONLINE — using Claude (${s.model})."
+                    }
+                    s.openAiKey.isNotBlank() -> {
+                        settingsStore.update(engineMode = EngineMode.EMBEDDED, provider = Provider.OPENAI)
+                        "● ONLINE — using OpenAI (${s.model})."
+                    }
+                    else -> "● ONLINE — the brain will look things up on the web. Add a key in Settings to use Claude."
+                }
                 settingsStore.updateBrain(webSearch = true)
-                appendAssistant("● ONLINE — I'll look things up on the web when I don't know.")
+                appendAssistant(msg)
             }
             checkConnection()
         }
