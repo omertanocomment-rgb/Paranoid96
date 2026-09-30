@@ -36,9 +36,17 @@ ASSETS = ROOT / "assets"
 RES = ROOT / "android-native/app/src/main/res"
 SOURCE = ASSETS / "omerta-mark-source.jpg"
 
-BG = (7, 3, 4)          # near-black, matches the app's --bg
-DRED = (150, 16, 24)    # dark red midtone
-HI = (214, 44, 52)      # highlight
+# Two ramps. The DEFAULT is the artwork as it was drawn: a black plate in
+# pewter and bone. The red ramp was mine, and it was wrong -- pushing a
+# detailed greyscale engraving through black -> red -> bright red flattens it,
+# and at 48px the skull stopped reading as a skull at all. The artwork already
+# has its own shading; the job is to keep it legible when shrunk, not to
+# recolour it.
+BG = (10, 5, 6)         # near-black, the app's background
+MONO_MID = (96, 94, 96)  # pewter -- the plate's own metal
+MONO_HI = (226, 223, 216)  # bone -- the lettering and the skull
+RED_MID = (150, 16, 24)
+RED_HI = (214, 44, 52)
 
 MIPMAPS = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 PNG_SIZES = [16, 24, 32, 48, 64, 128, 256, 512, 1024]
@@ -54,8 +62,8 @@ def square(im):
     return im.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s))
 
 
-def render(size, contrast=1.35, invert=False):
-    """The artwork, in the app's palette, at `size` px."""
+def render(size, contrast=1.35, invert=False, red=False):
+    """The artwork at `size` px: black and bone by default, red on request."""
     if not SOURCE.exists():
         sys.exit(f"missing artwork: {SOURCE}")
     im = square(Image.open(SOURCE).convert("RGB"))
@@ -67,19 +75,35 @@ def render(size, contrast=1.35, invert=False):
     g = ImageOps.autocontrast(ImageOps.grayscale(im), cutoff=1)
     if invert:
         g = ImageOps.invert(g)
-    g = ImageEnhance.Contrast(g).enhance(contrast)
-    out = ImageOps.colorize(g, BG, HI, mid=DRED).convert("RGBA")
+
+    # A launcher icon is 48px. This artwork is a detailed engraving, and at
+    # that size its midtones collapse into one dark smear — the skull stops
+    # reading as a skull, which is the whole point of it. So the smaller the
+    # target, the harder the contrast and the further the midtone is lifted:
+    # detail that cannot survive the downsample is traded away deliberately in
+    # favour of the silhouette that can.
+    small = max(0.0, min(1.0, (128 - size) / 96.0))
+    g = ImageEnhance.Contrast(g).enhance(contrast + 0.75 * small)
+    if small:
+        g = ImageEnhance.Brightness(g).enhance(1.0 + 0.30 * small)
+
+    mid, hi = (RED_MID, RED_HI) if red else (MONO_MID, MONO_HI)
+    if small and not red:
+        # Lift the pewter toward bone as well: colorize maps the midtone, and
+        # a dark midtone is exactly what disappears first.
+        mid = tuple(int(m + (h - m) * 0.45 * small) for m, h in zip(mid, hi))
+    out = ImageOps.colorize(g, BG, hi, mid=mid).convert("RGBA")
 
     # Render from the full-resolution source every time and downsample once —
     # resizing an already-resized image compounds the softening.
     return out.resize((size, size), Image.LANCZOS)
 
 
-def adaptive_foreground(px, safe=0.72):
+def adaptive_foreground(px, safe=0.72, contrast=1.35, invert=False, red=False):
     """The plate scaled into Android's safe zone, on transparency."""
     n = px * 2                       # 108dp canvas, rendered generously
     inner = int(n * safe)
-    art = render(inner)
+    art = render(inner, contrast, invert, red)
 
     # keep only the plate: the source's corners are background, and carrying
     # them into the foreground layer would draw a square behind the mask
@@ -98,26 +122,30 @@ def main():
     ap.add_argument("--invert", action="store_true",
                     help="flip polarity (dark plate, light lettering)")
     ap.add_argument("--contrast", type=float, default=1.35)
+    ap.add_argument("--red", action="store_true",
+                    help="the old red ramp; the default is the black plate "
+                         "as the artwork was drawn")
     args = ap.parse_args()
 
     ASSETS.mkdir(exist_ok=True)
     for s in PNG_SIZES:
-        render(s, args.contrast, args.invert).save(ASSETS / f"icon_{s}.png")
-    render(512, args.contrast, args.invert).save(ASSETS / "icon.png")
-    render(256, args.contrast, args.invert).save(
+        render(s, args.contrast, args.invert, args.red).save(ASSETS / f"icon_{s}.png")
+    render(512, args.contrast, args.invert, args.red).save(ASSETS / "icon.png")
+    render(256, args.contrast, args.invert, args.red).save(
         ASSETS / "icon.ico", format="ICO",
         sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    render(64, args.contrast, args.invert).save(
+    render(64, args.contrast, args.invert, args.red).save(
         ASSETS / "favicon.ico", format="ICO",
         sizes=[(16, 16), (24, 24), (32, 32), (48, 48)])
 
     for bucket, px in MIPMAPS.items():
         out = RES / f"mipmap-{bucket}"
         out.mkdir(parents=True, exist_ok=True)
-        icon = render(px, args.contrast, args.invert)
+        icon = render(px, args.contrast, args.invert, args.red)
         icon.save(out / "ic_launcher.png")
         icon.save(out / "ic_launcher_round.png")
-        adaptive_foreground(px).save(out / "ic_launcher_foreground.png")
+        adaptive_foreground(px, 0.72, args.contrast, args.invert,
+                            args.red).save(out / "ic_launcher_foreground.png")
 
     (RES / "mipmap-anydpi-v26").mkdir(parents=True, exist_ok=True)
     for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
@@ -129,7 +157,8 @@ def main():
             '    <monochrome android:drawable="@mipmap/ic_launcher_foreground"/>\n'
             '</adaptive-icon>\n')
 
-    print(f"icons written from {SOURCE.name}"
+    print(f"icons written from {SOURCE.name} "
+          f"({'red' if args.red else 'black plate'})"
           f"{' (inverted)' if args.invert else ''}")
     print(f"  assets/     {len(PNG_SIZES)} png + icon.ico + favicon.ico")
     print(f"  mipmap-*/   {len(MIPMAPS)} densities, launcher + round + adaptive")

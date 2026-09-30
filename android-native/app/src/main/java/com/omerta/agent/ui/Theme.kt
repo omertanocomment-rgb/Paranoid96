@@ -7,21 +7,29 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.omerta.agent.R
 
-// The agent's identity: near-black, blood red, monospace. Kept as plain values
-// rather than pulled from the web UI's CSS -- this app no longer renders HTML.
-val Ink = Color(0xFF0B0A08)
-val Panel = Color(0xFF141210)
-val PanelHi = Color(0xFF1C1917)
-val Border = Color(0xFF2A2724)
-val Blood = Color(0xFFB2131B)
-val Ember = Color(0xFFE4453C)
-val Amber = Color(0xFFFFB020)
-val TextHi = Color(0xFFE8DDC8)
-val TextLo = Color(0xFF8A8272)
+// The owner's palette: red on black, from res/values/colors.xml.
+//
+// Ink, Panel, Blood and Ember are those four tokens exactly -- the Compose
+// rebuild invented a warmer bone-and-ember scheme of mine instead, and the
+// app stopped looking like the thing it is named after. Everything else here
+// is derived from them so the two never drift apart again: change colors.xml
+// and change these four, and the rest follows.
+val Ink = Color(0xFF0A0506)        // omerta_bg
+val Panel = Color(0xFF140B0D)      // omerta_panel
+val Blood = Color(0xFFC81E28)      // omerta_red
+val Ember = Color(0xFFFF2D3C)      // omerta_red_bright
+
+val PanelHi = Color(0xFF1C1014)    // one step up from Panel
+val Border = Color(0xFF2E1A1E)     // a hairline with red in it, not grey
+val Amber = Color(0xFFE0A02A)
+val TextHi = Color(0xFFE9E2E2)     // near-white, the plate's bone
+val TextLo = Color(0xFF8C7A7D)     // muted, still warm
 val Good = Color(0xFF4FAF6D)
 val Warn = Color(0xFFD98B2B)
 
@@ -41,6 +49,16 @@ private val scheme = darkColorScheme(
 
 private val mono = FontFamily.Monospace
 
+/**
+ * The blackletter on the plate, for the name and nothing else.
+ *
+ * UnifrakturMaguntia, bundled under the OFL (see assets/FONT-LICENSE.txt), so
+ * the banner renders with no network access. Used ONLY for the wordmark: it is
+ * unreadable at body size and on a status line, and an interface set in
+ * blackletter is a poster, not a console.
+ */
+val Display = FontFamily(Font(R.font.unifraktur_maguntia))
+
 private val type = Typography(
     bodyLarge = TextStyle(fontFamily = mono, fontSize = 14.sp, lineHeight = 21.sp),
     bodyMedium = TextStyle(fontFamily = mono, fontSize = 13.sp, lineHeight = 19.sp),
@@ -50,6 +68,10 @@ private val type = Typography(
     labelLarge = TextStyle(fontFamily = mono, fontSize = 12.sp,
                            fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
     labelSmall = TextStyle(fontFamily = mono, fontSize = 10.sp, letterSpacing = 0.8.sp),
+    // The wordmark. Blackletter, larger, no letter-spacing -- the face already
+    // has its own rhythm and tracking it out just breaks the ligatures.
+    headlineSmall = TextStyle(fontFamily = Display, fontSize = 26.sp,
+                              letterSpacing = 0.sp),
 )
 
 @Composable

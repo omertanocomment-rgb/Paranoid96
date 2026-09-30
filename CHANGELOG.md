@@ -4,7 +4,31 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.15.0] — 2026-09-29
+## [1.16.0] — 2026-09-30
+
+The owner's artwork and palette, put back.
+
+### Changed
+- **The launcher icon is the black plate again.** The icon generator was
+  pushing the supplied greyscale engraving through a black → dark red → bright
+  red ramp, which flattened it: at 48px the skull stopped reading as a skull,
+  which is the one thing the mark is for. The black-and-bone ramp is now the
+  default and `--red` keeps the old behaviour. The generator also hardens
+  contrast and lifts the midtone as the target gets smaller, trading detail
+  that cannot survive the downsample for the silhouette that can.
+- **The interface is red on black again.** `Ink`, `Panel`, `Blood` and `Ember`
+  are now exactly the four tokens in `res/values/colors.xml` — the same ones
+  the desktop surface uses — instead of the warmer bone-and-ember scheme the
+  Compose rebuild invented. Everything else in the theme is derived from those
+  four so the two cannot drift apart again.
+- **The wordmark is blackletter**, in the same face as the plate
+  (UnifrakturMaguntia, bundled under the OFL). Used only for the name: it is
+  unreadable at body size, and an interface set in blackletter is a poster
+  rather than a console.
+- The plate appears on the splash and on the failure screen, drawn from the
+  same mipmap as the launcher icon so it cannot drift from it.
+
+
 
 The rest of the list, and the manual caught up with it.
 

@@ -96,7 +96,7 @@ private fun Root() {
         when {
             failure != null -> FailureScreen(failure!!)
             !ready -> Splash(
-                title = "OMERTA AI",
+                title = "Omerta",
                 detail = if (unpacking)
                     "unpacking Python… $files files\n(one-time step, it does not repeat)"
                 else "starting agent… ${seconds / 2}s",
@@ -210,7 +210,8 @@ private fun Header(provider: String, policy: String, project: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column {
-            Text("OMERTA AI", style = MaterialTheme.typography.titleMedium, color = Ember)
+            Text("Omerta", style = MaterialTheme.typography.headlineSmall,
+                 color = Ember)
             Text("SILENCE IS THE ONLY UNBREAKABLE CODE",
                  style = MaterialTheme.typography.labelSmall, color = TextLo)
         }
@@ -291,6 +292,8 @@ private fun FailureScreen(reason: String) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Mark(72.dp)
+        Spacer(Modifier.height(14.dp))
         Text("Backend didn't start", style = MaterialTheme.typography.titleMedium,
              color = Ember)
         Spacer(Modifier.height(12.dp))
@@ -367,6 +370,22 @@ private fun SmallAction(label: String, onClick: () -> Unit) {
     }
 }
 
+/**
+ * The plate itself.
+ *
+ * The launcher icon is the artwork; showing it on the way in means the app the
+ * owner tapped and the app that opens are visibly the same thing. Drawn from
+ * the same mipmap rather than a second copy, so it cannot drift from the icon.
+ */
+@Composable
+private fun Mark(size: androidx.compose.ui.unit.Dp) {
+    androidx.compose.foundation.Image(
+        painter = androidx.compose.ui.res.painterResource(R.mipmap.ic_launcher),
+        contentDescription = null,
+        modifier = Modifier.width(size).height(size).clip(RoundedCornerShape(12.dp)),
+    )
+}
+
 @Composable
 private fun Splash(title: String, detail: String) {
     Column(
@@ -374,7 +393,9 @@ private fun Splash(title: String, detail: String) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = Ember)
+        Mark(96.dp)
+        Spacer(Modifier.height(16.dp))
+        Text(title, style = MaterialTheme.typography.headlineSmall, color = Ember)
         Spacer(Modifier.height(14.dp))
         Text(detail, style = MaterialTheme.typography.bodySmall, color = TextLo,
              textAlign = TextAlign.Center)
