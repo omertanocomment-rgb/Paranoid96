@@ -82,6 +82,11 @@ python3 scripts/gen_manual.py >/dev/null || true
 python3 scripts/gen_pdf.py >/dev/null || true
 cp docs/OMERTA_AI_Owners_Manual.pdf docs/OMERTA_AGENT_Guide.pdf "$OUT/docs/" 2>/dev/null || true
 cp CHANGELOG.md "$OUT/docs/"
+# The project brief travels with the build. A conversation does not survive
+# between sessions and neither does a chat transcript in a zip; these two files
+# are what lets anyone -- or any agent -- pick the project up cold.
+python3 scripts/gen_project_doc.py >/dev/null || true
+cp docs/PROJECT.md docs/HANDOVER.md CLAUDE.md OMERTA.md "$OUT/docs/" 2>/dev/null || true
 
 # ── the zip ─────────────────────────────────────────────────────────────────
 say "packaging"

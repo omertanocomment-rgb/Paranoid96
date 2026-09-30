@@ -4,7 +4,27 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.16.0] — 2026-09-30
+## [1.16.1] — 2026-09-30
+
+Documentation the gate keeps honest. No change to the app itself.
+
+### Added
+- **`docs/PROJECT.md`** — the whole project for a session that never saw the
+  conversation: architecture, every module, the full API surface with the
+  local-only routes marked, the approval model, the providers, the decisions
+  that look like gaps and are not, what has never been verified, and the seven
+  bugs that shipped and what each one changed.
+  It is **generated** by `scripts/gen_project_doc.py`: the module map comes
+  from each module's own docstring, the routes from `core/dispatch`, the tiers
+  from `core/policy` and `core/sandbox`, the providers from `core/config`. Only
+  the prose is written, and it lives beside the code that derives the rest.
+- **`docs/HANDOVER.md`** — the short version of the same thing.
+- A thirteenth structural check: the gate runs
+  `gen_project_doc.py --check` and fails on a stale copy. Verified by making it
+  fail on purpose before trusting it — the manual claimed "six tabs" for two
+  releases after there were eight, and nobody reading it could tell.
+
+
 
 The owner's artwork and palette, put back.
 
