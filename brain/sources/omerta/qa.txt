@@ -1,0 +1,53 @@
+# General-knowledge starter pack — Q: question | A: answer
+# These make the brain answer common questions out of the box, fully offline.
+
+# --- everyday / conversational ---
+Q: what can you help me with | A: I can remember and answer things you teach me, do quick math, tell the time and date, hold a conversation, follow your rules, and — if you turn on web search — look things up online. Teach me anything with "remember that …".
+Q: how do you work | A: I run on this device. I match what you say against what you've taught me and a small built-in knowledge pack; if I don't know and web search is on, I look it up. Nothing leaves your device unless you enable web search or an online provider.
+Q: are you free | A: Yes — the offline brain costs nothing and needs no account. Online providers like Claude use your own API key.
+Q: do you need internet | A: No. The brain works fully offline. Web search and online providers are optional extras you switch on.
+Q: what is your name | A: I'm Omerta — your offline operator brain.
+Q: what is omerta | A: Omerta means a code of silence. Here it's your private, offline AI — what you tell it stays on your device.
+
+# --- basic facts / science ---
+Q: how many days in a year | A: 365 days, or 366 in a leap year.
+Q: how many hours in a day | A: 24 hours.
+Q: how many minutes in an hour | A: 60 minutes.
+Q: how many seconds in a minute | A: 60 seconds.
+Q: how many days in a week | A: 7 days.
+Q: how many months in a year | A: 12 months.
+Q: how many continents are there | A: 7 continents: Africa, Antarctica, Asia, Europe, North America, Oceania and South America.
+Q: how many planets are in the solar system | A: 8 planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus and Neptune.
+Q: what is the speed of light | A: About 299,792 kilometres per second (300,000 km/s).
+Q: what is the boiling point of water | A: 100 degrees Celsius (212°F) at sea level.
+Q: what is the freezing point of water | A: 0 degrees Celsius (32°F).
+Q: how many bones are in the human body | A: An adult human has 206 bones.
+Q: what is the largest planet | A: Jupiter is the largest planet in our solar system.
+Q: what is the closest star to earth | A: The Sun. The next closest is Proxima Centauri.
+Q: what is the chemical formula for water | A: H2O — two hydrogen atoms and one oxygen atom.
+
+# --- geography ---
+Q: what is the capital of france | A: Paris.
+Q: what is the capital of england | A: London.
+Q: what is the capital of the united states | A: Washington, D.C.
+Q: what is the capital of australia | A: Canberra.
+Q: what is the capital of japan | A: Tokyo.
+Q: what is the capital of germany | A: Berlin.
+Q: what is the capital of italy | A: Rome.
+Q: what is the capital of spain | A: Madrid.
+Q: what is the capital of canada | A: Ottawa.
+Q: what is the largest ocean | A: The Pacific Ocean.
+Q: what is the tallest mountain | A: Mount Everest, about 8,849 metres above sea level.
+Q: what is the longest river | A: The Nile (about 6,650 km) — the Amazon is a close rival by some measures.
+
+# --- units / conversions (rules of thumb) ---
+Q: how many centimeters in a meter | A: 100 centimetres.
+Q: how many meters in a kilometer | A: 1,000 metres.
+Q: how many grams in a kilogram | A: 1,000 grams.
+Q: how many milliliters in a liter | A: 1,000 millilitres.
+Q: how many feet in a mile | A: 5,280 feet.
+Q: how do i convert celsius to fahrenheit | A: Multiply by 9/5 and add 32. (°F = °C × 1.8 + 32.)
+
+# --- productivity / how-to (offline useful) ---
+Q: how do i stay focused | A: Try short focused blocks (e.g. 25 minutes) with a 5-minute break — the Pomodoro method. Silence notifications and write down the one next action.
+Q: how do i learn something quickly | A: Teach it back in your own words, test yourself often, and space your practice over days rather than cramming.

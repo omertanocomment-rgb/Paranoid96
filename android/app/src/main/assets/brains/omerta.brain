@@ -42,310 +42,761 @@
   },
   "knowledge": [
     {
-      "id": "k1a0ec936a0588ee",
+      "id": "k1a0efb881f0120ae",
       "topic": "teaching",
       "text": "To teach me a fact, say \"remember that\" followed by the fact — for example \"remember that my locker code is 4471\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479045,
+      "ts": 1790728241648,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a05c7c41",
+      "id": "k1a0efb881f13d3d8",
       "topic": "trained replies",
       "text": "To train a reply, say \"when I say X, say Y\" — for example \"when I say good morning, say rise and grind\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479045,
+      "ts": 1790728241649,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a0559d9f",
+      "id": "k1a0efb881f16d16d",
       "topic": "q and a",
       "text": "To store a question and answer, type \"Q: the question | A: the answer\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479045,
+      "ts": 1790728241649,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a06b82ba",
+      "id": "k1a0efb881f25e7ae",
       "topic": "corrections",
       "text": "If I get something wrong, say \"wrong, it's …\" with the right answer and I will use it next time.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479046,
+      "ts": 1790728241650,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a06d535f",
+      "id": "k1a0efb881f2e6e31",
       "topic": "rules",
       "text": "To give me a standing rule, start with \"always\" or \"never\" — for example \"always answer in one paragraph\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479046,
+      "ts": 1790728241650,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a0758f7e",
+      "id": "k1a0efb881f35debf",
       "topic": "personality",
       "text": "To change my personality, say \"be more sarcastic\", \"be less formal\", \"your name is Nova\", or edit everything on the Brain screen.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479047,
+      "ts": 1790728241651,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a07938ab",
+      "id": "k1a0efb881f47a605",
       "topic": "forgetting",
       "text": "To make me forget something, say \"forget\" followed by the topic, like \"forget the locker code\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479047,
+      "ts": 1790728241652,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a0843306",
+      "id": "k1a0efb881f5fe31b",
       "topic": "offline",
       "text": "I run fully offline on this phone. No internet, no API key, no server — everything you teach me stays on the device.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479048,
+      "ts": 1790728241653,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a098d150",
+      "id": "k1a0efb881f62661e",
       "topic": "brain file",
       "text": "A brain file (.brain) is a portable JSON file holding my personality, knowledge, trained replies and rules. Export it from the Brain screen and import it on any phone running Omerta AI.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479049,
+      "ts": 1790728241654,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a0b591f7",
+      "id": "k1a0efb881f7dd637",
       "topic": "upload",
       "text": "To upload a brain onto the app, open the .brain file from any file manager, share it to Omerta AI, or use Brain → IMPORT / UPLOAD. From a PC run: python3 brain/omerta_brain.py push my.brain.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479051,
+      "ts": 1790728241655,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a0ddb035",
+      "id": "k1a0efb881f85929e",
       "topic": "documents",
       "text": "You can teach me whole documents: Brain → IMPORT / UPLOAD and pick .txt, .md, .csv, .html or .zip files, or paste text under TEACH → PASTE TEXT. I split them into chunks and search them offline.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479053,
+      "ts": 1790728241656,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a0f447d5",
+      "id": "k1a0efb881fa4eb93",
       "topic": "on-device model",
       "text": "For free conversation you can add an on-device LLM: download a MediaPipe model such as Gemma 3 1B IT int4 (.task, about 550 MB) and add it under Brain → ON-DEVICE LLM. It runs on the phone and speaks as me.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479055,
+      "ts": 1790728241658,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a10fc85f",
+      "id": "k1a0efb881fb68726",
       "topic": "assist mode",
       "text": "In ASSIST mode I answer from my own memory and the on-device model only speaks when I don't know. In ALWAYS mode the model voices every reply using my knowledge.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479056,
+      "ts": 1790728241659,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a12cc589",
+      "id": "k1a0efb881fcd485",
       "topic": "offline fallback",
       "text": "With offline fallback on, if Claude or another online provider can't be reached I answer instead of showing an error.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479058,
+      "ts": 1790728241660,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a144e07b",
+      "id": "k1a0efb881fe4fd07",
       "topic": "personality everywhere",
       "text": "With \"personality everywhere\" on, Claude, OpenAI and Ollama speak as me and use what you taught me.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479060,
+      "ts": 1790728241662,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a172cf32",
+      "id": "k1a0efb882001fa1d",
       "topic": "brain studio",
       "text": "Brain Studio is the PC tool brain/omerta_brain.py. It builds brains from folders of notes, edits personality, chats offline in the terminal and pushes brains to the phone over adb.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479063,
+      "ts": 1790728241664,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a193bd8b",
+      "id": "k1a0efb88201fe30f",
       "topic": "multiple brains",
       "text": "You can keep several brains on the phone — for work, study, a character — and switch between them on the Brain screen.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479065,
+      "ts": 1790728241665,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a1bd134b",
+      "id": "k1a0efb88203abfbf",
       "topic": "privacy",
       "text": "Everything stays in the app's private storage. Nothing is uploaded anywhere unless you export it yourself.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479067,
+      "ts": 1790728241667,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a1ec0970",
+      "id": "k1a0efb8820581971",
       "topic": "omerta",
       "text": "OMERTA is the toolkit this app belongs to: an operator-grade assistant for building, packaging and shipping apps from a phone or PC.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479070,
+      "ts": 1790728241669,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a20d5b61",
+      "id": "k1a0efb882075c79f",
       "topic": "termux",
       "text": "Termux is a Linux terminal for Android. Install packages with \"pkg install\", and get storage access with \"termux-setup-storage\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479072,
+      "ts": 1790728241671,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a24e87f3",
+      "id": "k1a0efb88209a4c10",
       "topic": "adb",
       "text": "adb (Android Debug Bridge) talks to a phone over USB or Wi-Fi. Common commands: \"adb devices\", \"adb install app.apk\", \"adb push file /sdcard/Download/\", \"adb logcat\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479076,
+      "ts": 1790728241673,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a2769261",
+      "id": "k1a0efb8820c24a27",
       "topic": "adb wireless",
       "text": "For wireless adb on Android 11+, enable Wireless debugging in Developer options, then run \"adb pair IP:PORT\" with the pairing code and \"adb connect IP:PORT\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479079,
+      "ts": 1790728241676,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a2aafddb",
+      "id": "k1a0efb8820ee669c",
       "topic": "gradle",
       "text": "Build an Android debug APK with \"./gradlew assembleDebug\"; the APK lands in app/build/outputs/apk/debug/.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479082,
+      "ts": 1790728241678,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a2c1f0d7",
+      "id": "k1a0efb882101d81c",
       "topic": "git basics",
       "text": "Common git flow: \"git status\", \"git add -A\", \"git commit -m message\", \"git push -u origin branch\".",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479084,
+      "ts": 1790728241680,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a30ea2dc",
+      "id": "k1a0efb88213dad1",
       "topic": "upload in chat",
       "text": "You can upload files to teach me right from chat — tap the paperclip in the message bar and pick files (.txt .md .csv .html .pdf-as-text .zip or a .brain). I learn them immediately.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479088,
+      "ts": 1790728241683,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a3494ce5",
+      "id": "k1a0efb88216b4aae",
       "topic": "delete memory",
       "text": "To delete specific memory: say \"forget <topic>\" in chat, or open the Brain screen, search WHAT IT KNOWS, and tap \"forget\" on any fact, trained reply, rule or profile entry.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479092,
+      "ts": 1790728241686,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a39115c5",
+      "id": "k1a0efb8821a3e090",
       "topic": "autonomy",
       "text": "In Agent mode I act on your device with tools but stay in your control. Low-risk, read-only steps can run on their own; anything that changes the device, and every high-risk step, stops and asks you first — and high-risk actions explain why before you approve.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479097,
+      "ts": 1790728241690,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a3d2e494",
+      "id": "k1a0efb8821d49ae7",
       "topic": "suggest better",
       "text": "I do what you ask, but if I see a safer or better way to reach your goal I say so first and recommend it, then follow your call.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479101,
+      "ts": 1790728241693,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a42ff74",
+      "id": "k1a0efb882209cc77",
       "topic": "learn my style",
       "text": "With \"Learn my style\" on, I gradually mirror how you talk — your tone, message length and emoji use — so I grow into your voice. You can always set my personality by hand on the Brain screen.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479106,
+      "ts": 1790728241696,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a48fc354",
+      "id": "k1a0efb8822576b06",
       "topic": "root access",
       "text": "For full-device actions I use a root (su) shell on rooted devices, or the Termux shell if you have Termux. Android does not let any app grant itself root on an un-rooted phone; the legitimate way to get root-level (ADB) power without rooting is a tool like Shizuku that you start yourself over wireless debugging.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479112,
+      "ts": 1790728241701,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a4ef6c13",
+      "id": "k1a0efb88229b69ee",
       "topic": "device tools",
       "text": "In Agent mode I can list/read/write/delete/move files, run shell commands (normal, root or Termux), make HTTP requests, read device info and list installed apps — each gated by your approval based on its risk.",
       "tags": [],
       "source": "studio",
-      "ts": 1790675479118,
+      "ts": 1790728241705,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a4fd0688",
+      "id": "k1a0efb8822ea8f5d",
+      "topic": "what can you help me with",
+      "text": "I can remember and answer things you teach me, do quick math, tell the time and date, hold a conversation, follow your rules, and — if you turn on web search — look things up online. Teach me anything with \"remember that …\".",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241710,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882325af7a",
+      "topic": "how do you work",
+      "text": "I run on this device. I match what you say against what you've taught me and a small built-in knowledge pack; if I don't know and web search is on, I look it up. Nothing leaves your device unless you enable web search or an online provider.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241714,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb88236d28b",
+      "topic": "are you free",
+      "text": "Yes — the offline brain costs nothing and needs no account. Online providers like Claude use your own API key.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241718,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8823977b1b",
+      "topic": "do you need internet",
+      "text": "No. The brain works fully offline. Web search and online providers are optional extras you switch on.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241721,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8823c20958",
+      "topic": "what is your name",
+      "text": "I'm Omerta — your offline operator brain.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241724,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882403c020",
+      "topic": "what is omerta",
+      "text": "Omerta means a code of silence. Here it's your private, offline AI — what you tell it stays on your device.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241728,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8824366ff1",
+      "topic": "how many days in a year",
+      "text": "365 days, or 366 in a leap year.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241731,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb88246e9c03",
+      "topic": "how many hours in a day",
+      "text": "24 hours.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241734,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8824960ebe",
+      "topic": "how many minutes in an hour",
+      "text": "60 minutes.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241737,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8824be2d8d",
+      "topic": "how many seconds in a minute",
+      "text": "60 seconds.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241739,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8824e4a5d5",
+      "topic": "how many days in a week",
+      "text": "7 days.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241742,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb88251a6361",
+      "topic": "how many months in a year",
+      "text": "12 months.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241745,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb88254ea239",
+      "topic": "how many continents are there",
+      "text": "7 continents: Africa, Antarctica, Asia, Europe, North America, Oceania and South America.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241748,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882581bec2",
+      "topic": "how many planets are in the solar system",
+      "text": "8 planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus and Neptune.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241752,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8825b205a8",
+      "topic": "what is the speed of light",
+      "text": "About 299,792 kilometres per second (300,000 km/s).",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241755,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8825fa0791",
+      "topic": "what is the boiling point of water",
+      "text": "100 degrees Celsius (212°F) at sea level.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241759,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb88262f9e41",
+      "topic": "what is the freezing point of water",
+      "text": "0 degrees Celsius (32°F).",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241762,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb88265dea4c",
+      "topic": "how many bones are in the human body",
+      "text": "An adult human has 206 bones.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241765,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882692431a",
+      "topic": "what is the largest planet",
+      "text": "Jupiter is the largest planet in our solar system.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241769,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8826dab8c5",
+      "topic": "what is the closest star to earth",
+      "text": "The Sun. The next closest is Proxima Centauri.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241773,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8827070f90",
+      "topic": "what is the chemical formula for water",
+      "text": "H2O — two hydrogen atoms and one oxygen atom.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241776,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882753e47d",
+      "topic": "what is the capital of france",
+      "text": "Paris.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241781,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8827874339",
+      "topic": "what is the capital of england",
+      "text": "London.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241784,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8827bab27",
+      "topic": "what is the capital of the united states",
+      "text": "Washington, D.C.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241787,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8827e16f6a",
+      "topic": "what is the capital of australia",
+      "text": "Canberra.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241790,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8828183490",
+      "topic": "what is the capital of japan",
+      "text": "Tokyo.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241793,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb88284827a1",
+      "topic": "what is the capital of germany",
+      "text": "Berlin.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241796,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882876de98",
+      "topic": "what is the capital of italy",
+      "text": "Rome.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241799,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8828a48148",
+      "topic": "what is the capital of spain",
+      "text": "Madrid.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241802,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8828df4884",
+      "topic": "what is the capital of canada",
+      "text": "Ottawa.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241805,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882901400b",
+      "topic": "what is the largest ocean",
+      "text": "The Pacific Ocean.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241808,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8829448e63",
+      "topic": "what is the tallest mountain",
+      "text": "Mount Everest, about 8,849 metres above sea level.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241812,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882984851d",
+      "topic": "what is the longest river",
+      "text": "The Nile (about 6,650 km) — the Amazon is a close rival by some measures.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241816,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8829ca30e8",
+      "topic": "how many centimeters in a meter",
+      "text": "100 centimetres.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241820,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb8829f4889f",
+      "topic": "how many meters in a kilometer",
+      "text": "1,000 metres.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241823,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882a229b19",
+      "topic": "how many grams in a kilogram",
+      "text": "1,000 grams.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241826,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882a6c0fea",
+      "topic": "how many milliliters in a liter",
+      "text": "1,000 millilitres.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241830,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882a964bda",
+      "topic": "how many feet in a mile",
+      "text": "5,280 feet.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241833,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882ad63258",
+      "topic": "how do i convert celsius to fahrenheit",
+      "text": "Multiply by 9/5 and add 32. (°F = °C × 1.8 + 32.).",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241837,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882b447687",
+      "topic": "how do i stay focused",
+      "text": "Try short focused blocks (e.g. 25 minutes) with a 5-minute break — the Pomodoro method. Silence notifications and write down the one next action.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241844,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882b97082",
+      "topic": "how do i learn something quickly",
+      "text": "Teach it back in your own words, test yourself often, and space your practice over days rather than cramming.",
+      "tags": [
+        "qa"
+      ],
+      "source": "studio",
+      "ts": 1790728241849,
+      "weight": 1.0
+    },
+    {
+      "id": "k1a0efb882baa8eda",
       "topic": "quickstart",
       "text": "# Omerta brain quickstart\n\nThe brain is an offline AI that lives inside the Omerta AI app. It has a personality, remembers everything you teach it, and answers without any network connection.\n\n## First five minutes\nSwitch the app to the BRAIN provider (Settings → AI PROVIDER → BRAIN, or tap \"go fully OFFLINE\" on the start screen). Say hello. Then teach it three things about you: your name (\"my name is …\"), something you like (\"I love …\"), and a fact you always forget (\"remember that …\"). Ask for them back.",
       "tags": [
         "doc"
       ],
       "source": "quickstart.md#1",
-      "ts": 1790675479119,
+      "ts": 1790728241850,
       "weight": 1.0
     },
     {
-      "id": "k1a0ec936a4f19057",
+      "id": "k1a0efb882ba4158c",
       "topic": "quickstart",
       "text": "## Making it yours\nOpen the Brain screen (the brain icon in the top bar). Give it a name, a tagline, a greeting, traits, a tone (calm, friendly, playful, serious, sarcastic, mentor or hype), catchphrases and a goodbye line. Save the personality and it speaks that way immediately.\n\n## Backing up and sharing\nExport the brain as a .brain file. Keep it in your cloud drive, send it to another phone, or edit it on a PC with Brain Studio. Importing a .brain file installs it and makes it active.",
       "tags": [
         "doc"
       ],
       "source": "quickstart.md#2",
-      "ts": 1790675479119,
+      "ts": 1790728241850,
       "weight": 1.0
     }
   ],
   "reflexes": [
     {
-      "id": "r1a0ec936a4e3f9ce",
+      "id": "r1a0efb882297b8ed",
       "patterns": [
         "good morning"
       ],
@@ -354,7 +805,7 @@
       ]
     },
     {
-      "id": "r1a0ec936a4e76621",
+      "id": "r1a0efb88229ab4b9",
       "patterns": [
         "good night"
       ],
@@ -363,7 +814,7 @@
       ]
     },
     {
-      "id": "r1a0ec936a4ee15df",
+      "id": "r1a0efb88229a519b",
       "patterns": [
         "omerta"
       ],
@@ -372,7 +823,7 @@
       ]
     },
     {
-      "id": "r1a0ec936a4e72f21",
+      "id": "r1a0efb88229c4525",
       "patterns": [
         "status"
       ],
@@ -381,7 +832,7 @@
       ]
     },
     {
-      "id": "r1a0ec936a4eb45dc",
+      "id": "r1a0efb8822962aa9",
       "patterns": [
         "are you online"
       ],
@@ -390,7 +841,7 @@
       ]
     },
     {
-      "id": "r1a0ec936a4e6b001",
+      "id": "r1a0efb88229a69c",
       "patterns": [
         "are you there"
       ],
@@ -399,7 +850,7 @@
       ]
     },
     {
-      "id": "r1a0ec936a4eb509f",
+      "id": "r1a0efb882295a0bd",
       "patterns": [
         "i love you"
       ],
@@ -408,7 +859,7 @@
       ]
     },
     {
-      "id": "r1a0ec936a4e23c7b",
+      "id": "r1a0efb882292fe31",
       "patterns": [
         "who made you"
       ],
@@ -417,25 +868,394 @@
       ]
     },
     {
-      "id": "r1a0ec936a4ed472d",
+      "id": "r1a0efb882294810f",
       "patterns": [
         "what can you do"
       ],
       "replies": [
         "I remember what you teach me, answer from it offline, follow your rules, do quick math and tell the time. Say \"help\" for how to teach me."
       ]
+    },
+    {
+      "id": "r1a0efb8822a65138",
+      "patterns": [
+        "what can you help me with"
+      ],
+      "replies": [
+        "I can remember and answer things you teach me, do quick math, tell the time and date, hold a conversation, follow your rules, and — if you turn on web search — look things up online. Teach me anything with \"remember that …\"."
+      ]
+    },
+    {
+      "id": "r1a0efb8822eafa61",
+      "patterns": [
+        "how do you work"
+      ],
+      "replies": [
+        "I run on this device. I match what you say against what you've taught me and a small built-in knowledge pack; if I don't know and web search is on, I look it up. Nothing leaves your device unless you enable web search or an online provider."
+      ]
+    },
+    {
+      "id": "r1a0efb88232f0f26",
+      "patterns": [
+        "are you free"
+      ],
+      "replies": [
+        "Yes — the offline brain costs nothing and needs no account. Online providers like Claude use your own API key."
+      ]
+    },
+    {
+      "id": "r1a0efb882364e7fe",
+      "patterns": [
+        "do you need internet"
+      ],
+      "replies": [
+        "No. The brain works fully offline. Web search and online providers are optional extras you switch on."
+      ]
+    },
+    {
+      "id": "r1a0efb8823aabc8a",
+      "patterns": [
+        "what is your name"
+      ],
+      "replies": [
+        "I'm Omerta — your offline operator brain."
+      ]
+    },
+    {
+      "id": "r1a0efb8823c588e5",
+      "patterns": [
+        "what is omerta"
+      ],
+      "replies": [
+        "Omerta means a code of silence. Here it's your private, offline AI — what you tell it stays on your device."
+      ]
+    },
+    {
+      "id": "r1a0efb88240617a0",
+      "patterns": [
+        "how many days in a year"
+      ],
+      "replies": [
+        "365 days, or 366 in a leap year."
+      ]
+    },
+    {
+      "id": "r1a0efb88243cfb96",
+      "patterns": [
+        "how many hours in a day"
+      ],
+      "replies": [
+        "24 hours."
+      ]
+    },
+    {
+      "id": "r1a0efb882468b26",
+      "patterns": [
+        "how many minutes in an hour"
+      ],
+      "replies": [
+        "60 minutes."
+      ]
+    },
+    {
+      "id": "r1a0efb88249acde3",
+      "patterns": [
+        "how many seconds in a minute"
+      ],
+      "replies": [
+        "60 seconds."
+      ]
+    },
+    {
+      "id": "r1a0efb8824b61068",
+      "patterns": [
+        "how many days in a week"
+      ],
+      "replies": [
+        "7 days."
+      ]
+    },
+    {
+      "id": "r1a0efb8824e3e8c2",
+      "patterns": [
+        "how many months in a year"
+      ],
+      "replies": [
+        "12 months."
+      ]
+    },
+    {
+      "id": "r1a0efb88251cf90",
+      "patterns": [
+        "how many continents are there"
+      ],
+      "replies": [
+        "7 continents: Africa, Antarctica, Asia, Europe, North America, Oceania and South America."
+      ]
+    },
+    {
+      "id": "r1a0efb882542ba6b",
+      "patterns": [
+        "how many planets are in the solar system"
+      ],
+      "replies": [
+        "8 planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus and Neptune."
+      ]
+    },
+    {
+      "id": "r1a0efb882586bb67",
+      "patterns": [
+        "what is the speed of light"
+      ],
+      "replies": [
+        "About 299,792 kilometres per second (300,000 km/s)."
+      ]
+    },
+    {
+      "id": "r1a0efb8825bade26",
+      "patterns": [
+        "what is the boiling point of water"
+      ],
+      "replies": [
+        "100 degrees Celsius (212°F) at sea level."
+      ]
+    },
+    {
+      "id": "r1a0efb8825ff5409",
+      "patterns": [
+        "what is the freezing point of water"
+      ],
+      "replies": [
+        "0 degrees Celsius (32°F)."
+      ]
+    },
+    {
+      "id": "r1a0efb88262cc95b",
+      "patterns": [
+        "how many bones are in the human body"
+      ],
+      "replies": [
+        "An adult human has 206 bones."
+      ]
+    },
+    {
+      "id": "r1a0efb88266f0d0",
+      "patterns": [
+        "what is the largest planet"
+      ],
+      "replies": [
+        "Jupiter is the largest planet in our solar system."
+      ]
+    },
+    {
+      "id": "r1a0efb88269a4350",
+      "patterns": [
+        "what is the closest star to earth"
+      ],
+      "replies": [
+        "The Sun. The next closest is Proxima Centauri."
+      ]
+    },
+    {
+      "id": "r1a0efb8826d67822",
+      "patterns": [
+        "what is the chemical formula for water"
+      ],
+      "replies": [
+        "H2O — two hydrogen atoms and one oxygen atom."
+      ]
+    },
+    {
+      "id": "r1a0efb88270be22d",
+      "patterns": [
+        "what is the capital of france"
+      ],
+      "replies": [
+        "Paris."
+      ]
+    },
+    {
+      "id": "r1a0efb882752ebfb",
+      "patterns": [
+        "what is the capital of england"
+      ],
+      "replies": [
+        "London."
+      ]
+    },
+    {
+      "id": "r1a0efb882782f79f",
+      "patterns": [
+        "what is the capital of the united states"
+      ],
+      "replies": [
+        "Washington, D.C."
+      ]
+    },
+    {
+      "id": "r1a0efb8827b8fd8b",
+      "patterns": [
+        "what is the capital of australia"
+      ],
+      "replies": [
+        "Canberra."
+      ]
+    },
+    {
+      "id": "r1a0efb8827eab833",
+      "patterns": [
+        "what is the capital of japan"
+      ],
+      "replies": [
+        "Tokyo."
+      ]
+    },
+    {
+      "id": "r1a0efb88281d0c9c",
+      "patterns": [
+        "what is the capital of germany"
+      ],
+      "replies": [
+        "Berlin."
+      ]
+    },
+    {
+      "id": "r1a0efb882849242a",
+      "patterns": [
+        "what is the capital of italy"
+      ],
+      "replies": [
+        "Rome."
+      ]
+    },
+    {
+      "id": "r1a0efb8828767047",
+      "patterns": [
+        "what is the capital of spain"
+      ],
+      "replies": [
+        "Madrid."
+      ]
+    },
+    {
+      "id": "r1a0efb8828ad44c2",
+      "patterns": [
+        "what is the capital of canada"
+      ],
+      "replies": [
+        "Ottawa."
+      ]
+    },
+    {
+      "id": "r1a0efb8828d96a8d",
+      "patterns": [
+        "what is the largest ocean"
+      ],
+      "replies": [
+        "The Pacific Ocean."
+      ]
+    },
+    {
+      "id": "r1a0efb88290eb411",
+      "patterns": [
+        "what is the tallest mountain"
+      ],
+      "replies": [
+        "Mount Everest, about 8,849 metres above sea level."
+      ]
+    },
+    {
+      "id": "r1a0efb882946ddf4",
+      "patterns": [
+        "what is the longest river"
+      ],
+      "replies": [
+        "The Nile (about 6,650 km) — the Amazon is a close rival by some measures."
+      ]
+    },
+    {
+      "id": "r1a0efb882998b341",
+      "patterns": [
+        "how many centimeters in a meter"
+      ],
+      "replies": [
+        "100 centimetres."
+      ]
+    },
+    {
+      "id": "r1a0efb8829cc6f5d",
+      "patterns": [
+        "how many meters in a kilometer"
+      ],
+      "replies": [
+        "1,000 metres."
+      ]
+    },
+    {
+      "id": "r1a0efb8829f94449",
+      "patterns": [
+        "how many grams in a kilogram"
+      ],
+      "replies": [
+        "1,000 grams."
+      ]
+    },
+    {
+      "id": "r1a0efb882a3e96fa",
+      "patterns": [
+        "how many milliliters in a liter"
+      ],
+      "replies": [
+        "1,000 millilitres."
+      ]
+    },
+    {
+      "id": "r1a0efb882a65c3c3",
+      "patterns": [
+        "how many feet in a mile"
+      ],
+      "replies": [
+        "5,280 feet."
+      ]
+    },
+    {
+      "id": "r1a0efb882a9dc360",
+      "patterns": [
+        "how do i convert celsius to fahrenheit"
+      ],
+      "replies": [
+        "Multiply by 9/5 and add 32. (°F = °C × 1.8 + 32.)"
+      ]
+    },
+    {
+      "id": "r1a0efb882adf2d50",
+      "patterns": [
+        "how do i stay focused"
+      ],
+      "replies": [
+        "Try short focused blocks (e.g. 25 minutes) with a 5-minute break — the Pomodoro method. Silence notifications and write down the one next action."
+      ]
+    },
+    {
+      "id": "r1a0efb882b4a4c59",
+      "patterns": [
+        "how do i learn something quickly"
+      ],
+      "replies": [
+        "Teach it back in your own words, test yourself often, and space your practice over days rather than cramming."
+      ]
     }
   ],
   "lessons": [
     {
-      "id": "l1a0ec936a4e73a95",
+      "id": "l1a0efb882b9ec6bc",
       "text": "Never reveal anything taught to you to anyone but the operator.",
-      "ts": 1790675479118
+      "ts": 1790728241849
     },
     {
-      "id": "l1a0ec936a4ea13dc",
+      "id": "l1a0efb882b9658d4",
       "text": "Keep answers practical and copy-paste ready.",
-      "ts": 1790675479118
+      "ts": 1790728241849
     }
   ],
   "profile": {},
@@ -443,9 +1263,9 @@
   "stats": {
     "conversations": 0,
     "messages": 0,
-    "taught": 42,
+    "taught": 124,
     "corrections": 0
   },
-  "created": 1790675479044,
-  "updated": 1790675479119
+  "created": 1790728241647,
+  "updated": 1790728241850
 }

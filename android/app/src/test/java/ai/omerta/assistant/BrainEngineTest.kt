@@ -136,6 +136,15 @@ class BrainEngineTest {
         assertEquals("omerta-brain/1", back.format)
     }
 
+    @Test fun starterPackAnswersBasicQuestions() {
+        val f = listOf("src/main/assets/brains/omerta.brain", "app/src/main/assets/brains/omerta.brain")
+            .map(::File).first { it.exists() }
+        val b = BrainFile.parse(f.readText())
+        val e = BrainEngine(b, { t0 }, ZoneId.of("UTC"), Random(1))
+        assertTrue(e.respond("what is the capital of France").text.contains("Paris"))
+        assertTrue(e.respond("how many days in a year").text.contains("365"))
+    }
+
     @Test fun bundledDefaultBrainParses() {
         val f = listOf("src/main/assets/brains/omerta.brain", "app/src/main/assets/brains/omerta.brain")
             .map(::File).first { it.exists() }

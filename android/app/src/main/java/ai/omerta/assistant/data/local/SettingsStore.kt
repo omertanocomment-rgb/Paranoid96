@@ -86,6 +86,8 @@ data class OmertaSettings(
     val autoBackupDir: String = "",   // SAF tree uri (persisted); blank = off
     val autoBackupHours: Int = 0,     // 0 = off, else min hours between backups
     val lastBackupMs: Long = 0L,
+    /** Opt-in: let the offline brain look up unknown questions on the web (DuckDuckGo/Wikipedia). */
+    val brainWebSearch: Boolean = false,
 ) {
     val embedded: Boolean get() = engineMode == EngineMode.EMBEDDED
 }
@@ -125,6 +127,7 @@ class SettingsStore(private val context: Context) {
         val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")
         val AUTO_BACKUP_HOURS = androidx.datastore.preferences.core.intPreferencesKey("auto_backup_hours")
         val LAST_BACKUP_MS = androidx.datastore.preferences.core.longPreferencesKey("last_backup_ms")
+        val BRAIN_WEB_SEARCH = booleanPreferencesKey("brain_web_search")
     }
 
     companion object {
@@ -174,6 +177,7 @@ class SettingsStore(private val context: Context) {
             autoBackupDir = p[Keys.AUTO_BACKUP_DIR] ?: "",
             autoBackupHours = p[Keys.AUTO_BACKUP_HOURS] ?: 0,
             lastBackupMs = p[Keys.LAST_BACKUP_MS] ?: 0L,
+            brainWebSearch = p[Keys.BRAIN_WEB_SEARCH] ?: false,
         )
     }
 
@@ -241,11 +245,13 @@ class SettingsStore(private val context: Context) {
         autonomy: String? = null,
         suggestBetter: Boolean? = null,
         adaptivePersona: Boolean? = null,
+        webSearch: Boolean? = null,
     ) {
         context.dataStore.edit { p ->
             autonomy?.let { p[Keys.AUTONOMY] = it }
             suggestBetter?.let { p[Keys.SUGGEST_BETTER] = it }
             adaptivePersona?.let { p[Keys.ADAPTIVE_PERSONA] = it }
+            webSearch?.let { p[Keys.BRAIN_WEB_SEARCH] = it }
             llmMode?.let { p[Keys.BRAIN_LLM] = it }
             model?.let { p[Keys.BRAIN_MODEL] = it }
             promptFormat?.let { p[Keys.BRAIN_FORMAT] = it }

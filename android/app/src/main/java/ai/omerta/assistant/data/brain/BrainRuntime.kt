@@ -27,6 +27,7 @@ class BrainRuntime private constructor(context: Context) {
 
     val store = BrainStore(context.applicationContext)
     val llm = OnDeviceLlm(context.applicationContext)
+    private val webSearch = WebSearch()
     private val inboxDir: File? = context.applicationContext.getExternalFilesDir("inbox")?.apply { mkdirs() }
     private val lock = Mutex()
     private val engine = BrainEngine(store.loadActive())
@@ -106,6 +107,18 @@ class BrainRuntime private constructor(context: Context) {
             } else {
                 _status.value = "model failed to load: ${loaded.exceptionOrNull()?.message}"
                 emit(StreamEvent.Delta("[on-device model unavailable — brain-only reply]\n"))
+            }
+        }
+        // Doesn't know + web search enabled → look it up online, answer, and remember it.
+        if (reply.deferToModel && s.brainWebSearch && input.isNotBlank()) {
+            _status.value = "searching the web…"
+            val hit = withContext(Dispatchers.IO) { runCatching { webSearch.search(input) }.getOrNull() }
+            _status.value = ""
+            if (hit != null) {
+                val answer = "${hit.text}\n\n— via web (${hit.source})"
+                lock.withLock { engine.addFact("$input — ${hit.text}", topic = input, tags = listOf("web")); commit() }
+                for (piece in answer.split(Regex("(?<=\\s)"))) { emit(StreamEvent.Delta(piece)); delay(6) }
+                emit(StreamEvent.Done("web · ${engine.brain.persona.name}", "stop")); return@flow
             }
         }
         // Pure brain reply, "typed" out so it feels alive.

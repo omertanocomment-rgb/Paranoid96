@@ -497,10 +497,11 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         gpu: Boolean? = null, temperature: Float? = null,
         personaEverywhere: Boolean? = null, offlineFallback: Boolean? = null,
         autonomy: String? = null, suggestBetter: Boolean? = null, adaptivePersona: Boolean? = null,
+        webSearch: Boolean? = null,
     ) {
         viewModelScope.launch {
             settingsStore.updateBrain(llmMode, model, promptFormat, gpu, temperature,
-                personaEverywhere, offlineFallback, autonomy, suggestBetter, adaptivePersona)
+                personaEverywhere, offlineFallback, autonomy, suggestBetter, adaptivePersona, webSearch)
             checkConnection()
         }
     }

@@ -488,6 +488,8 @@ fun BrainScreen(vm: ChatViewModel, onBack: () -> Unit) {
                 s.personaEverywhere) { vm.saveBrainSettings(personaEverywhere = it) }
             ToggleLine("Learn my style", "the brain mirrors how you talk (tone, length, emoji) over time",
                 s.adaptivePersona) { vm.saveBrainSettings(adaptivePersona = it) }
+            ToggleLine("Web search", "when I don't know, look it up online (DuckDuckGo/Wikipedia) and remember it",
+                s.brainWebSearch) { vm.saveBrainSettings(webSearch = it) }
 
             // ------------------------------------------------ danger
             // ------------------------------------------------ agent action log

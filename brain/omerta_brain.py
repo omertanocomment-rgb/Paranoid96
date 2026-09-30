@@ -135,6 +135,43 @@ def guess_topic(text: str) -> str:
     return " ".join(first.split()[:6]).rstrip(",.:")
 
 
+def web_lookup(query: str, timeout: float = 8.0):
+    """Opt-in online lookup (DuckDuckGo Instant Answer, then Wikipedia). Returns (text, source) or None.
+    Uses only the stdlib; no key. Callers gate this on a user setting."""
+    import json as _j, urllib.parse, urllib.request
+    def _get(url):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "OmertaAI/1.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", "replace")
+        except Exception:
+            return None
+    q = urllib.parse.quote(query)
+    body = _get(f"https://api.duckduckgo.com/?q={q}&format=json&no_html=1&skip_disambig=1")
+    if body:
+        try:
+            d = _j.loads(body)
+            ans = d.get("Answer") or d.get("AbstractText") or d.get("Definition")
+            if ans:
+                return ans.strip(), (d.get("AbstractURL") or "DuckDuckGo")
+            for t in d.get("RelatedTopics", []):
+                if isinstance(t, dict) and t.get("Text"):
+                    return t["Text"].strip(), "DuckDuckGo"
+        except Exception:
+            pass
+    title = urllib.parse.quote(query.strip().rstrip("?.!").replace(" ", "_"))
+    body = _get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{title}")
+    if body:
+        try:
+            d = _j.loads(body)
+            if d.get("type") != "disambiguation" and d.get("extract"):
+                url = (d.get("content_urls", {}).get("desktop", {}) or {}).get("page", "Wikipedia")
+                return d["extract"].strip()[:600], url
+        except Exception:
+            pass
+    return None
+
+
 def flip(s: str) -> str:
     pairs = [(r"\bI am\b", "you are"), (r"\bI'm\b", "you're"), (r"\bI was\b", "you were"),
              (r"\bI have\b", "you have"), (r"\bmy\b", "your"), (r"\bmine\b", "yours"),

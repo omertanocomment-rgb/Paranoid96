@@ -86,6 +86,13 @@ UI**, and **every theme is derived from the OMERTA Design System** (`design/`):
   the UI (Brain header, personality editor accent chips). The UI base stays amber.
 - First-run onboarding: a one-time dialog (SettingsStore `onboarded` flag) points to going
   offline, teaching, the Brain screen, and encrypted keys.
+- Starter knowledge: the bundled brain (`brain/sources/omerta/qa.txt`) answers common
+  questions offline (capitals, basic science, units, conversions, how-to). Rebuild the
+  asset after editing sources (see Brain format).
+- Web search (opt-in, off by default): `data/brain/WebSearch.kt` (Android) / `web_lookup`
+  (Python) look up unknown questions via DuckDuckGo Instant Answer + Wikipedia (no key) and
+  remember the answer. Gated by `brainWebSearch` / `BrainLibrary.web_search`; only fires on
+  a brain fallback, so the offline promise holds unless the operator enables it.
 - On-device LLM model install: `BrainStore.importModel` (pick a file) **or**
   `BrainStore.downloadModel` (paste an https URL, resumable) drop a MediaPipe `.task`/`.bin`
   into the model dir; `OnDeviceLlm` then answers grounded in the brain (ASSIST/ALWAYS).

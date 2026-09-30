@@ -157,8 +157,17 @@ class BrainLibrary:
         self.save(self.brain)
 
     # -- ops
+    web_search = False
+
     def respond(self, text: str) -> str:
         out = self.engine.respond(text)
+        # If it fell back and web search is on, look it up and remember it.
+        if self.web_search and ("don't know" in out.lower() or "not in my" in out.lower() or "blank on" in out.lower()):
+            hit = ob.web_lookup(text)
+            if hit:
+                ob.add_fact(self.brain, f"{text} — {hit[0]}", topic=text, tags=["web"])
+                self.engine._index()
+                out = f"{hit[0]}\n\n— via web ({hit[1]})"
         self.commit()
         return out
 
