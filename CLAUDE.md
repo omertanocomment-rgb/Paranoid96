@@ -1,8 +1,12 @@
 # Instructions for Claude in this repository
 
-New to this project? `docs/HANDOVER.md` is where it stands, what was decided
-on purpose, and what has never been verified. A conversation does not travel
-between sessions; that file is what does. These rules outrank it.
+New to this project? Read `docs/PROJECT.md` — the architecture, every module,
+the whole API surface, the approval model, what was decided on purpose, what
+has never been verified, and the bugs that shaped the design. It is GENERATED
+(`scripts/gen_project_doc.py`) so its tables cannot drift from the code, and
+the gate fails if the checked-in copy is stale. `docs/HANDOVER.md` is the
+short version. A conversation does not travel between sessions; those files
+are what does. These rules outrank both.
 
 ## Every release ships three executables
 

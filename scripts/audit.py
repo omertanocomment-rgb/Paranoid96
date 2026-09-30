@@ -670,6 +670,25 @@ def check_bridge():
         note(f"bridge: {sites} Java->Python call site(s) match omerta_boot")
 
 
+# ── 13. the project brief ───────────────────────────────────────────────────
+def check_project_doc():
+    """docs/PROJECT.md must still match what the code says.
+
+    It is generated: the module map comes from each module's docstring, the API
+    surface from core/dispatch, the tiers from core/policy. A documentation
+    file that drifts is worse than none, because it is believed -- the manual
+    claimed "six tabs" for two releases after there were eight, and nobody
+    reading it had any way to know.
+    """
+    r = run([sys.executable, "scripts/gen_project_doc.py", "--check"],
+            timeout=120)
+    if r.returncode != 0:
+        finding("docs", (r.stderr or r.stdout).strip()[:300] or
+                "docs/PROJECT.md is stale")
+    else:
+        note("project brief: docs/PROJECT.md matches the code")
+
+
 CHECKS = [
     ("syntax", check_syntax),
     ("dangerous constructs", check_dangerous),
@@ -683,6 +702,7 @@ CHECKS = [
     ("packaging", check_packaging),
     ("android xml", check_xml),
     ("java/python bridge", check_bridge),
+    ("project brief", check_project_doc),
 ]
 
 
