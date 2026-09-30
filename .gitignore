@@ -48,3 +48,6 @@ desktop/dist/
 
 # brain last-good backups (runtime only)
 *.brain.bak
+
+# generated docs/zip bundles in dist
+dist/*.zip
